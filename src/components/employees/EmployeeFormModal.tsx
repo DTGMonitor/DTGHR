@@ -13,7 +13,6 @@ interface Props {
 }
 
 const EMPTY_FORM = {
-    employee_id: "",
     first_name: "",
     last_name: "",
     email: "",
@@ -33,7 +32,6 @@ export default function EmployeeFormModal({ employee, onClose, onSaved }: Props)
     useEffect(() => {
         if (employee) {
             setForm({
-                employee_id: employee.employee_id,
                 first_name: employee.first_name,
                 last_name: employee.last_name,
                 email: employee.email,
@@ -77,7 +75,6 @@ export default function EmployeeFormModal({ employee, onClose, onSaved }: Props)
                 onSaved(res.data);
             } else {
                 const payload: EmployeeCreateData = {
-                    employee_id: form.employee_id,
                     first_name: form.first_name,
                     last_name: form.last_name,
                     email: form.email,
@@ -134,21 +131,6 @@ export default function EmployeeFormModal({ employee, onClose, onSaved }: Props)
                         {error && (
                             <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
                                 {error}
-                            </div>
-                        )}
-
-                        {/* Employee ID (create only) */}
-                        {!isEdit && (
-                            <div>
-                                <label className={labelClass}>Employee ID *</label>
-                                <input
-                                    className={inputClass}
-                                    name="employee_id"
-                                    value={form.employee_id}
-                                    onChange={handleChange}
-                                    placeholder="e.g. DTG-001"
-                                    required
-                                />
                             </div>
                         )}
 

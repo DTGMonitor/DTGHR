@@ -11,6 +11,7 @@ export default function RegisterPage() {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
+    const [employeeId, setEmployeeId] = useState("");
     const [error, setError] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -31,7 +32,7 @@ export default function RegisterPage() {
         setIsSubmitting(true);
 
         try {
-            await register(email, password, fullName);
+            await register(email, password, fullName, employeeId || undefined);
             navigate("/", { replace: true });
         } catch (err) {
             if (axios.isAxiosError(err)) {
@@ -145,6 +146,25 @@ export default function RegisterPage() {
                                 value={confirmPassword}
                                 onChange={(e) => setConfirmPassword(e.target.value)}
                                 placeholder="••••••••"
+                                className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-gray-500 outline-none transition-all focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                            />
+                        </div>
+
+                        {/* Employee ID (optional) */}
+                        <div>
+                            <label
+                                htmlFor="employeeId"
+                                className="mb-1.5 block text-sm font-medium text-gray-300"
+                            >
+                                Employee ID
+                                <span className="ml-1.5 text-xs font-normal text-gray-500">(optional — links your account to your employee profile)</span>
+                            </label>
+                            <input
+                                id="employeeId"
+                                type="text"
+                                value={employeeId}
+                                onChange={(e) => setEmployeeId(e.target.value)}
+                                placeholder="e.g. DTG-001"
                                 className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-gray-500 outline-none transition-all focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
                             />
                         </div>

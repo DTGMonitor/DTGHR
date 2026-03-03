@@ -48,19 +48,57 @@ npm run dev
 
 > When running locally, Vite's proxy forwards `/api` to `http://localhost:8000` by default.
 
+## Authentication Flow
+
+There is **no public registration**. Only HR (superusers) can create employee accounts.
+
+1. HR logs in → navigates to **Employees** page
+2. Clicks **"+ Add Employee"** → employee is created with an auto-generated ID (`DTG-001`, `DTG-002`, …)
+3. Clicks the **person+ icon** on an employee row → a login account is created with a temporary password
+4. HR shares the temp password → employee logs in
+5. Employee is redirected to the **Set Password** page on first login
+6. After setting their password, the employee has full access
+
 ## Project Structure
 
 ```
 src/
-├── components/      # Shared UI components
-├── contexts/        # React context providers (auth, etc.)
+├── components/
+│   ├── layout/              # Sidebar, header, Layout wrapper
+│   ├── employees/
+│   │   ├── EmployeeFormModal.tsx   # Add/edit employee drawer
+│   │   ├── DeleteConfirmModal.tsx  # Deactivation confirmation
+│   │   └── CreateAccountModal.tsx  # Temp password display modal
+│   └── ProtectedRoute.tsx          # Auth guard + password-change redirect
+├── contexts/
+│   └── AuthContext.tsx       # Auth state, login, logout, changePassword
 ├── lib/
-│   └── api.ts       # Axios instance with JWT interceptor
-├── pages/           # Route-level page components
-├── types/           # TypeScript type definitions
-├── App.tsx          # Router & layout
-└── main.tsx         # App entrypoint
+│   └── api.ts               # Axios instance with JWT interceptor
+├── pages/
+│   ├── LoginPage.tsx         # Login form (no registration link)
+│   ├── SetPasswordPage.tsx   # First-login password setup
+│   ├── DashboardPage.tsx     # Dashboard overview
+│   ├── EmployeesPage.tsx     # Employee CRUD + account creation
+│   └── LeavesPage.tsx        # Leave management
+├── services/
+│   └── employeeService.ts    # Employee API + createAccount
+├── types/
+│   ├── auth.ts               # UserResponse (includes password_change_required)
+│   ├── employee.ts           # Employee (includes has_account)
+│   └── leave.ts              # Leave types
+├── App.tsx                   # Router & layout
+└── main.tsx                  # App entrypoint
 ```
+
+## Key Features
+
+| Feature | Description |
+|---------|-------------|
+| **HR-controlled registration** | No public signup — only superusers create accounts |
+| **First-login password change** | Employees must set their own password on first login |
+| **Auto-generated employee IDs** | IDs follow `DTG-NNN` format, assigned server-side |
+| **Leave management** | Submit, view, and manage leave requests |
+| **Role-based UI** | Create-account button only visible to HR/superusers |
 
 ## Environment Variables
 

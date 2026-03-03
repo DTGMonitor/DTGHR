@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { Link, useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import axios from "axios";
 
@@ -120,17 +120,6 @@ export default function LoginPage() {
                         </button>
                     </form>
 
-                    <div className="mt-6 text-center">
-                        <p className="text-sm text-gray-400">
-                            Don't have an account?{" "}
-                            <Link
-                                to="/register"
-                                className="font-medium text-indigo-400 transition-colors hover:text-indigo-300"
-                            >
-                                Create account
-                            </Link>
-                        </p>
-                    </div>
                 </div>
             </div>
         </div>

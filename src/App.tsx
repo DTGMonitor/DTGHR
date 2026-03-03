@@ -3,7 +3,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import Layout from "@/components/layout/Layout";
 import LoginPage from "@/pages/LoginPage";
-import RegisterPage from "@/pages/RegisterPage";
+import SetPasswordPage from "@/pages/SetPasswordPage";
 import DashboardPage from "@/pages/DashboardPage";
 import EmployeesPage from "@/pages/EmployeesPage";
 import LeavesPage from "@/pages/LeavesPage";
@@ -15,7 +15,16 @@ export default function App() {
                 <Routes>
                     {/* Public routes */}
                     <Route path="/login" element={<LoginPage />} />
-                    <Route path="/register" element={<RegisterPage />} />
+
+                    {/* Set-password: accessible to authenticated users only */}
+                    <Route
+                        path="/set-password"
+                        element={
+                            <ProtectedRoute>
+                                <SetPasswordPage />
+                            </ProtectedRoute>
+                        }
+                    />
 
                     {/* Protected routes with layout */}
                     <Route

@@ -3,12 +3,6 @@ export interface LoginRequest {
     password: string;
 }
 
-export interface RegisterRequest {
-    email: string;
-    password: string;
-    full_name: string;
-}
-
 export interface TokenResponse {
     access_token: string;
     token_type: string;
@@ -20,5 +14,6 @@ export interface UserResponse {
     full_name: string;
     is_active: boolean;
     is_superuser: boolean;
+    password_change_required: boolean;
     created_at: string;
 }

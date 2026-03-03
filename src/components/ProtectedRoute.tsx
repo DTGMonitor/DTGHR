@@ -6,7 +6,7 @@ interface ProtectedRouteProps {
 }
 
 export default function ProtectedRoute({ children }: ProtectedRouteProps) {
-    const { isAuthenticated, isLoading } = useAuth();
+    const { isAuthenticated, isLoading, user } = useAuth();
     const location = useLocation();
 
     if (isLoading) {
@@ -19,6 +19,11 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
 
     if (!isAuthenticated) {
         return <Navigate to="/login" state={{ from: location }} replace />;
+    }
+
+    // First-time login: force password change before anything else
+    if (user?.password_change_required && location.pathname !== "/set-password") {
+        return <Navigate to="/set-password" replace />;
     }
 
     return <>{children}</>;

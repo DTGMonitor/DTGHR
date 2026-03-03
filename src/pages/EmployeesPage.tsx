@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { Employee } from "@/types/employee";
-import { employeeService } from "@/services/employeeService";
+import { employeeService, type CreateAccountResult } from "@/services/employeeService";
+import { useAuth } from "@/contexts/AuthContext";
 import EmployeeFormModal from "@/components/employees/EmployeeFormModal";
 import DeleteConfirmModal from "@/components/employees/DeleteConfirmModal";
+import CreateAccountModal from "@/components/employees/CreateAccountModal";
 
 const PAGE_SIZE = 20;
 
@@ -10,8 +12,8 @@ function StatusBadge({ active }: { active: boolean }) {
     return (
         <span
             className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${active
-                    ? "bg-emerald-500/15 text-emerald-400"
-                    : "bg-gray-500/15 text-gray-400"
+                ? "bg-emerald-500/15 text-emerald-400"
+                : "bg-gray-500/15 text-gray-400"
                 }`}
         >
             <span className={`h-1.5 w-1.5 rounded-full ${active ? "bg-emerald-400" : "bg-gray-400"}`} />
@@ -29,9 +31,13 @@ export default function EmployeesPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
+    const { user } = useAuth();
+    const isHR = !!user?.is_superuser;
+
     const [formTarget, setFormTarget] = useState<Employee | null | undefined>(undefined);
     // undefined = modal closed, null = create mode, Employee = edit mode
     const [deleteTarget, setDeleteTarget] = useState<Employee | null>(null);
+    const [createAccountResult, setCreateAccountResult] = useState<CreateAccountResult | null>(null);
 
     const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -92,6 +98,19 @@ export default function EmployeesPage() {
         setDeleteTarget(null);
         setEmployees((prev) => prev.filter((e) => e.id !== id));
         setTotal((t) => t - 1);
+    };
+
+    const handleCreateAccount = async (emp: Employee) => {
+        try {
+            const res = await employeeService.createAccount(emp.id);
+            setCreateAccountResult(res.data);
+            // Mark employee as having an account in the local list
+            setEmployees((prev) =>
+                prev.map((e) => (e.id === emp.id ? { ...e, has_account: true } : e))
+            );
+        } catch {
+            alert("Failed to create account. The employee may already have one.");
+        }
     };
 
     const totalPages = Math.ceil(total / PAGE_SIZE);
@@ -228,6 +247,24 @@ export default function EmployeesPage() {
                                                         <path strokeLinecap="round" strokeLinejoin="round" d="M22 10.5h-6m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM4 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109A12.318 12.318 0 0 1 10.374 21c-2.331 0-4.512-.645-6.374-1.766Z" />
                                                     </svg>
                                                 </button>
+                                                {isHR && !emp.has_account && (
+                                                    <button
+                                                        onClick={() => handleCreateAccount(emp)}
+                                                        className="rounded-lg p-1.5 text-gray-500 hover:bg-emerald-500/10 hover:text-emerald-400 transition"
+                                                        title="Create Login Account"
+                                                    >
+                                                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
+                                                        </svg>
+                                                    </button>
+                                                )}
+                                                {emp.has_account && (
+                                                    <span title="Account active" className="rounded-lg p-1.5 text-emerald-500">
+                                                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                                                        </svg>
+                                                    </span>
+                                                )}
                                             </div>
                                         </td>
                                     </tr>
@@ -278,6 +315,15 @@ export default function EmployeesPage() {
                     employee={deleteTarget}
                     onClose={() => setDeleteTarget(null)}
                     onDeleted={handleDeleted}
+                />
+            )}
+
+            {/* Create Account result modal */}
+            {createAccountResult && (
+                <CreateAccountModal
+                    email={createAccountResult.email}
+                    tempPassword={createAccountResult.temp_password}
+                    onClose={() => setCreateAccountResult(null)}
                 />
             )}
         </div>

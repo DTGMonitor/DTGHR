@@ -18,12 +18,8 @@ interface AuthContextValue {
     isAuthenticated: boolean;
     isLoading: boolean;
     login: (email: string, password: string) => Promise<void>;
-    register: (
-        email: string,
-        password: string,
-        fullName: string
-    ) => Promise<void>;
     logout: () => void;
+    changePassword: (newPassword: string) => Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
@@ -65,26 +61,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(meRes.data);
     }, []);
 
-    const register = useCallback(
-        async (email: string, password: string, fullName: string) => {
-            const { data } = await api.post<{ access_token: string }>(
-                "/auth/register",
-                {
-                    email,
-                    password,
-                    full_name: fullName,
-                }
-            );
-            localStorage.setItem(TOKEN_KEY, data.access_token);
-            const meRes = await api.get<UserResponse>("/auth/me");
-            setUser(meRes.data);
-        },
-        []
-    );
-
     const logout = useCallback(() => {
         localStorage.removeItem(TOKEN_KEY);
         setUser(null);
+    }, []);
+
+    const changePassword = useCallback(async (newPassword: string) => {
+        const res = await api.post<UserResponse>("/auth/change-password", {
+            new_password: newPassword,
+        });
+        // Update the user object so password_change_required is now false
+        setUser(res.data);
     }, []);
 
     return (
@@ -94,8 +81,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 isAuthenticated: !!user,
                 isLoading,
                 login,
-                register,
                 logout,
+                changePassword,
             }}
         >
             {children}
