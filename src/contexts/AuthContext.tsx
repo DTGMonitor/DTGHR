@@ -18,6 +18,12 @@ interface AuthContextValue {
     isAuthenticated: boolean;
     isLoading: boolean;
     login: (email: string, password: string) => Promise<void>;
+    register: (
+        email: string,
+        password: string,
+        fullName: string,
+        employeeId?: string,
+    ) => Promise<void>;
     logout: () => void;
     changePassword: (newPassword: string) => Promise<void>;
 }
@@ -61,6 +67,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(meRes.data);
     }, []);
 
+    const register = useCallback(
+        async (
+            email: string,
+            password: string,
+            fullName: string,
+            employeeId?: string,
+        ) => {
+            const { data } = await api.post<{ access_token: string }>(
+                "/auth/register",
+                {
+                    email,
+                    password,
+                    full_name: fullName,
+                    ...(employeeId ? { employee_id: employeeId } : {}),
+                },
+            );
+            localStorage.setItem(TOKEN_KEY, data.access_token);
+            const meRes = await api.get<UserResponse>("/auth/me");
+            setUser(meRes.data);
+        },
+        [],
+    );
+
     const logout = useCallback(() => {
         localStorage.removeItem(TOKEN_KEY);
         setUser(null);
@@ -81,6 +110,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 isAuthenticated: !!user,
                 isLoading,
                 login,
+                register,
                 logout,
                 changePassword,
             }}
