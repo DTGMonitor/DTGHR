@@ -10,6 +10,7 @@ export interface Employee {
     date_of_joining: string;
     is_active: boolean;
     has_account: boolean;
+    on_leave_today: boolean;
     created_at: string;
     updated_at: string;
 }

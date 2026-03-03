@@ -8,7 +8,15 @@ import CreateAccountModal from "@/components/employees/CreateAccountModal";
 
 const PAGE_SIZE = 20;
 
-function StatusBadge({ active }: { active: boolean }) {
+function StatusBadge({ active, onLeave }: { active: boolean; onLeave?: boolean }) {
+    if (active && onLeave) {
+        return (
+            <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium bg-amber-500/15 text-amber-400">
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+                On Leave
+            </span>
+        );
+    }
     return (
         <span
             className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${active
@@ -227,7 +235,7 @@ export default function EmployeesPage() {
                                             })}
                                         </td>
                                         <td className="px-4 py-3">
-                                            <StatusBadge active={emp.is_active} />
+                                            <StatusBadge active={emp.is_active} onLeave={emp.on_leave_today} />
                                         </td>
                                         <td className="px-4 py-3 text-right">
                                             <div className="inline-flex gap-1">
