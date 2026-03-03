@@ -150,7 +150,7 @@ export default function LeavesPage() {
 
     const handleAction = async () => {
         if (!actionState) return;
-        setActionState((s) => s && { ...s, loading: true });
+        setActionState((s) => s && ({ ...s, loading: true }));
         try {
             if (actionState.action === "approve") {
                 await leaveService.approveRequest(actionState.id, { note: actionState.note || undefined });
@@ -160,7 +160,7 @@ export default function LeavesPage() {
             setActionState(null);
             fetchApprovals();
         } catch {
-            setActionState((s) => s && { ...s, loading: false });
+            setActionState((s) => s && ({ ...s, loading: false }));
         }
     };
 
@@ -240,7 +240,7 @@ export default function LeavesPage() {
                             <tbody className="divide-y divide-white/5">
                                 {pendingApprovals.map((req) => (
                                     <tr key={req.id} className="bg-gray-900/20">
-                                        <td className="px-4 py-3 text-gray-300 font-mono text-xs">{req.employee_id}</td>
+                                        <td className="px-4 py-3 text-gray-300 text-sm font-medium">{req.employee_name ?? req.employee_id.slice(0, 8)}</td>
                                         <td className="px-4 py-3 text-gray-300">
                                             {LEAVE_TYPE_LABELS[req.leave_type]} Leave
                                         </td>
@@ -264,8 +264,8 @@ export default function LeavesPage() {
                                                         onClick={handleAction}
                                                         disabled={actionState.loading}
                                                         className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${actionState.action === "approve"
-                                                                ? "bg-emerald-600 hover:bg-emerald-700 text-white"
-                                                                : "bg-red-600 hover:bg-red-700 text-white"
+                                                            ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                                                            : "bg-red-600 hover:bg-red-700 text-white"
                                                             } disabled:opacity-60`}
                                                     >
                                                         {actionState.loading ? "…" : "Confirm"}
