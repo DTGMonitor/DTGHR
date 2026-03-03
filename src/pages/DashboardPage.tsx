@@ -33,7 +33,41 @@ interface StatCard {
     border: string;
 }
 
+interface ActivityItem {
+    id: string;
+    action: string;
+    description: string;
+    actor_name: string;
+    created_at: string;
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const ACTION_ICONS: Record<string, string> = {
+    EMPLOYEE_CREATED: "👤",
+    EMPLOYEE_UPDATED: "✏️",
+    EMPLOYEE_DEACTIVATED: "🚫",
+    ACCOUNT_CREATED: "🔑",
+    LEAVE_REQUESTED: "📝",
+    LEAVE_APPROVED: "✅",
+    LEAVE_REJECTED: "❌",
+    LEAVE_CANCELLED: "🔄",
+};
+
+function timeAgo(dateStr: string): string {
+    const now = new Date();
+    const date = new Date(dateStr);
+    const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+    if (seconds < 60) return "just now";
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    if (days < 30) return `${days}d ago`;
+    return date.toLocaleDateString();
+}
 
 function buildAdminCards(s: AdminStats): StatCard[] {
     return [
@@ -109,13 +143,18 @@ function buildEmployeeCards(s: EmployeeStats): StatCard[] {
 export default function DashboardPage() {
     const { user } = useAuth();
     const [stats, setStats] = useState<DashboardStats | null>(null);
+    const [activity, setActivity] = useState<ActivityItem[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         (async () => {
             try {
-                const res = await api.get("/dashboard/stats");
-                setStats(res.data);
+                const [statsRes, activityRes] = await Promise.all([
+                    api.get("/dashboard/stats"),
+                    api.get("/activity/recent"),
+                ]);
+                setStats(statsRes.data);
+                setActivity(activityRes.data);
             } catch {
                 // silently ignore
             } finally {
@@ -177,14 +216,50 @@ export default function DashboardPage() {
                     ))}
             </div>
 
-            {/* Recent Activity placeholder */}
+            {/* Recent Activity */}
             <div className="rounded-2xl border border-white/10 bg-gray-900/30 p-6">
                 <h2 className="text-lg font-semibold text-white">Recent Activity</h2>
-                <p className="mt-2 text-sm text-gray-500">
-                    No recent activity to display. This section will show leave requests,
-                    approvals, and other updates.
-                </p>
+                {loading ? (
+                    <div className="mt-4 space-y-3">
+                        {[...Array(3)].map((_, i) => (
+                            <div
+                                key={i}
+                                className="animate-pulse h-12 rounded-xl bg-white/5"
+                            />
+                        ))}
+                    </div>
+                ) : activity.length === 0 ? (
+                    <p className="mt-3 text-sm text-gray-500">
+                        No recent activity yet. Actions like leave requests and approvals will
+                        appear here.
+                    </p>
+                ) : (
+                    <div className="mt-4 space-y-2">
+                        {activity.map((item) => (
+                            <div
+                                key={item.id}
+                                className="flex items-center gap-3 rounded-xl border border-white/5 bg-white/[0.02] px-4 py-3 transition-colors hover:bg-white/[0.04]"
+                            >
+                                <span className="flex-shrink-0 text-xl">
+                                    {ACTION_ICONS[item.action] || "📌"}
+                                </span>
+                                <div className="min-w-0 flex-1">
+                                    <p className="truncate text-sm text-gray-200">
+                                        {item.description}
+                                    </p>
+                                    <p className="text-xs text-gray-500">
+                                        by {item.actor_name}
+                                    </p>
+                                </div>
+                                <span className="flex-shrink-0 text-xs text-gray-500">
+                                    {timeAgo(item.created_at)}
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+                )}
             </div>
         </div>
     );
 }
+

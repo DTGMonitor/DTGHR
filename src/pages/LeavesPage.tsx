@@ -326,7 +326,7 @@ export default function LeavesPage() {
                                                         placeholder="Note (optional)"
                                                         value={actionState.note}
                                                         onChange={(e) =>
-                                                            setActionState((s) => s && { ...s, note: e.target.value })
+                                                            setActionState((s) => s && ({ ...s, note: e.target.value }))
                                                         }
                                                         className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500"
                                                     />
