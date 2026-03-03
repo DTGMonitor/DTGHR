@@ -97,8 +97,9 @@ src/
 | **HR-controlled registration** | No public signup — only superusers create accounts |
 | **First-login password change** | Employees must set their own password on first login |
 | **Auto-generated employee IDs** | IDs follow `DTG-NNN` format, assigned server-side |
-| **Leave management** | Submit, view, and manage leave requests |
-| **Role-based UI** | Create-account button only visible to HR/superusers |
+| **Leave management** | Employees: submit, view, cancel own requests. Admin: see aggregate stats |
+| **Leave approval** | Admin/HR can approve or reject any leave request |
+| **Role-based UI** | Admin sees summary cards + pending approvals; employees see personal balances + own requests. Only admin can add employees |
 
 ## Environment Variables
 

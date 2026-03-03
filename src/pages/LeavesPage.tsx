@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { LeaveType, LeaveStatus } from "@/types/leave";
 import type { LeaveRequest, LeaveBalance } from "@/types/leave";
 import { leaveService } from "@/services/leaveService";
+import { useAuth } from "@/contexts/AuthContext";
 import LeaveRequestModal from "@/components/leaves/LeaveRequestModal";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -72,13 +73,18 @@ function BalanceCard({ balance }: { balance: LeaveBalance }) {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function LeavesPage() {
+    const { user } = useAuth();
+    const isAdmin = !!user?.is_superuser;
+
     const [balances, setBalances] = useState<LeaveBalance[]>([]);
     const [requests, setRequests] = useState<LeaveRequest[]>([]);
     const [pendingApprovals, setPendingApprovals] = useState<LeaveRequest[]>([]);
+    const [summary, setSummary] = useState<Record<string, Record<string, number>>>({});
 
     const [loadingBalances, setLoadingBalances] = useState(true);
     const [loadingRequests, setLoadingRequests] = useState(true);
     const [loadingApprovals, setLoadingApprovals] = useState(true);
+    const [loadingSummary, setLoadingSummary] = useState(true);
 
     const [noEmployeeProfile, setNoEmployeeProfile] = useState(false);
     const [showModal, setShowModal] = useState(false);
@@ -129,8 +135,28 @@ export default function LeavesPage() {
         }
     }, []);
 
-    useEffect(() => { fetchBalances(); fetchApprovals(); }, [fetchBalances, fetchApprovals]);
-    useEffect(() => { fetchRequests(); }, [fetchRequests]);
+    const fetchSummary = useCallback(async () => {
+        if (!isAdmin) { setLoadingSummary(false); return; }
+        try {
+            const res = await leaveService.getSummary();
+            setSummary(res.data);
+        } catch {
+            // ignore
+        } finally {
+            setLoadingSummary(false);
+        }
+    }, [isAdmin]);
+
+    useEffect(() => {
+        if (isAdmin) {
+            fetchSummary();
+            fetchApprovals();
+        } else {
+            fetchBalances();
+            fetchApprovals();
+        }
+    }, [isAdmin, fetchBalances, fetchApprovals, fetchSummary]);
+    useEffect(() => { if (!isAdmin) fetchRequests(); }, [isAdmin, fetchRequests]);
 
     const handleSubmitted = () => {
         setShowModal(false);
@@ -167,8 +193,8 @@ export default function LeavesPage() {
     const formatDate = (d: string) =>
         new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 
-    // ── No employee profile banner ──────────────────────────────────────────
-    if (!loadingBalances && noEmployeeProfile) {
+    // ── No employee profile banner (only for non-admin) ─────────────────────
+    if (!isAdmin && !loadingBalances && noEmployeeProfile) {
         return (
             <div className="space-y-6">
                 <h1 className="text-2xl font-bold text-white">Leave Management</h1>
@@ -190,18 +216,62 @@ export default function LeavesPage() {
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-2xl font-bold text-white">Leave Management</h1>
-                    <p className="mt-1 text-sm text-gray-400">Submit, track, and manage leave requests.</p>
+                    <p className="mt-1 text-sm text-gray-400">
+                        {isAdmin ? "Overview of all leave requests across the organisation." : "Submit, track, and manage leave requests."}
+                    </p>
                 </div>
-                <button
-                    onClick={() => setShowModal(true)}
-                    className="rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 transition-all hover:from-indigo-600 hover:to-purple-700"
-                >
-                    + New Request
-                </button>
+                {!isAdmin && (
+                    <button
+                        onClick={() => setShowModal(true)}
+                        className="rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 transition-all hover:from-indigo-600 hover:to-purple-700"
+                    >
+                        + New Request
+                    </button>
+                )}
             </div>
 
-            {/* Balance Cards */}
-            {loadingBalances ? (
+            {/* Admin Summary Cards */}
+            {isAdmin && (
+                loadingSummary ? (
+                    <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+                        {[...Array(4)].map((_, i) => (
+                            <div key={i} className="animate-pulse rounded-2xl border border-white/10 bg-white/5 p-5 h-32" />
+                        ))}
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+                        {Object.values(LeaveType).map((lt) => {
+                            const stats = summary[lt] || {};
+                            const total = Object.values(stats).reduce((a: number, b: number) => a + b, 0);
+                            const pending = stats["pending"] || 0;
+                            const approved = stats["approved"] || 0;
+                            const rejected = stats["rejected"] || 0;
+                            return (
+                                <div
+                                    key={lt}
+                                    className={`rounded-2xl border bg-gradient-to-br p-5 ${LEAVE_TYPE_COLORS[lt]}`}
+                                >
+                                    <div className="flex items-center justify-between">
+                                        <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+                                            {LEAVE_TYPE_LABELS[lt]} Leave
+                                        </h3>
+                                        <span className="text-xs text-gray-500">{total} total</span>
+                                    </div>
+                                    <p className="mt-2 text-3xl font-bold text-white">{pending}</p>
+                                    <p className="text-xs text-gray-400">pending</p>
+                                    <div className="mt-3 flex gap-4 text-xs">
+                                        <span className="text-emerald-400">{approved} approved</span>
+                                        <span className="text-red-400">{rejected} rejected</span>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )
+            )}
+
+            {/* Employee Balance Cards */}
+            {!isAdmin && (loadingBalances ? (
                 <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
                     {[...Array(4)].map((_, i) => (
                         <div key={i} className="animate-pulse rounded-2xl border border-white/10 bg-white/5 p-5 h-32" />
@@ -215,9 +285,9 @@ export default function LeavesPage() {
                 <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-center text-sm text-gray-500">
                     No leave balances configured for this year yet.
                 </div>
-            )}
+            ))}
 
-            {/* Pending Approvals (manager only) */}
+            {/* Pending Approvals (manager/admin) */}
             {!loadingApprovals && pendingApprovals.length > 0 && (
                 <section>
                     <h2 className="mb-3 text-lg font-semibold text-white">
@@ -302,102 +372,104 @@ export default function LeavesPage() {
                 </section>
             )}
 
-            {/* My Leave History */}
-            <section>
-                <div className="mb-3 flex items-center justify-between">
-                    <h2 className="text-lg font-semibold text-white">My Requests</h2>
-                    <div className="flex gap-2">
-                        <select
-                            value={statusFilter}
-                            onChange={(e) => setStatusFilter(e.target.value as LeaveStatus | "")}
-                            className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-gray-300 focus:outline-none focus:border-indigo-500 cursor-pointer"
-                        >
-                            <option value="" className="bg-gray-900">All statuses</option>
-                            {Object.values(LeaveStatus).map((s) => (
-                                <option key={s} value={s} className="bg-gray-900 capitalize">{s}</option>
-                            ))}
-                        </select>
-                        <select
-                            value={typeFilter}
-                            onChange={(e) => setTypeFilter(e.target.value as LeaveType | "")}
-                            className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-gray-300 focus:outline-none focus:border-indigo-500 cursor-pointer"
-                        >
-                            <option value="" className="bg-gray-900">All types</option>
-                            {Object.values(LeaveType).map((t) => (
-                                <option key={t} value={t} className="bg-gray-900">{LEAVE_TYPE_LABELS[t]}</option>
-                            ))}
-                        </select>
-                    </div>
-                </div>
-
-                <div className="overflow-hidden rounded-2xl border border-white/10">
-                    {loadingRequests ? (
-                        <div className="flex items-center justify-center py-16 text-gray-500 text-sm">
-                            <svg className="mr-2 h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                            </svg>
-                            Loading requests…
-                        </div>
-                    ) : requests.length === 0 ? (
-                        <div className="py-16 text-center">
-                            <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-800 text-3xl">🗓</div>
-                            <p className="text-sm text-gray-400">No leave requests found</p>
-                            <button
-                                onClick={() => setShowModal(true)}
-                                className="mt-2 text-xs text-indigo-400 hover:underline"
+            {/* My Leave History (employees only) */}
+            {!isAdmin && (
+                <section>
+                    <div className="mb-3 flex items-center justify-between">
+                        <h2 className="text-lg font-semibold text-white">My Requests</h2>
+                        <div className="flex gap-2">
+                            <select
+                                value={statusFilter}
+                                onChange={(e) => setStatusFilter(e.target.value as LeaveStatus | "")}
+                                className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-gray-300 focus:outline-none focus:border-indigo-500 cursor-pointer"
                             >
-                                Submit your first request
-                            </button>
-                        </div>
-                    ) : (
-                        <table className="w-full text-sm">
-                            <thead>
-                                <tr className="border-b border-white/10 bg-white/5 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                                    <th className="px-4 py-3">Type</th>
-                                    <th className="px-4 py-3">Dates</th>
-                                    <th className="px-4 py-3">Days</th>
-                                    <th className="px-4 py-3">Reason</th>
-                                    <th className="px-4 py-3">Status</th>
-                                    <th className="px-4 py-3 text-right">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-white/5">
-                                {requests.map((req) => (
-                                    <tr key={req.id} className="bg-gray-900/20 hover:bg-white/5 transition">
-                                        <td className="px-4 py-3 text-gray-300">
-                                            {LEAVE_TYPE_LABELS[req.leave_type]} Leave
-                                        </td>
-                                        <td className="px-4 py-3 text-gray-400 whitespace-nowrap">
-                                            {formatDate(req.start_date)} – {formatDate(req.end_date)}
-                                        </td>
-                                        <td className="px-4 py-3 text-gray-400">{req.days_requested}d</td>
-                                        <td className="px-4 py-3 text-gray-500 max-w-[180px] truncate">
-                                            {req.reason ?? <span className="text-gray-700">—</span>}
-                                        </td>
-                                        <td className="px-4 py-3">
-                                            <StatusBadge status={req.status} />
-                                        </td>
-                                        <td className="px-4 py-3 text-right">
-                                            {req.status === LeaveStatus.PENDING && (
-                                                <button
-                                                    onClick={() => handleCancel(req.id)}
-                                                    className="rounded-lg px-3 py-1 text-xs font-medium text-gray-400 hover:bg-white/10 hover:text-red-400 transition"
-                                                >
-                                                    Cancel
-                                                </button>
-                                            )}
-                                        </td>
-                                    </tr>
+                                <option value="" className="bg-gray-900">All statuses</option>
+                                {Object.values(LeaveStatus).map((s) => (
+                                    <option key={s} value={s} className="bg-gray-900 capitalize">{s}</option>
                                 ))}
-                            </tbody>
-                        </table>
-                    )}
-                </div>
-            </section>
+                            </select>
+                            <select
+                                value={typeFilter}
+                                onChange={(e) => setTypeFilter(e.target.value as LeaveType | "")}
+                                className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-gray-300 focus:outline-none focus:border-indigo-500 cursor-pointer"
+                            >
+                                <option value="" className="bg-gray-900">All types</option>
+                                {Object.values(LeaveType).map((t) => (
+                                    <option key={t} value={t} className="bg-gray-900">{LEAVE_TYPE_LABELS[t]}</option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div className="overflow-hidden rounded-2xl border border-white/10">
+                        {loadingRequests ? (
+                            <div className="flex items-center justify-center py-16 text-gray-500 text-sm">
+                                <svg className="mr-2 h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                                </svg>
+                                Loading requests…
+                            </div>
+                        ) : requests.length === 0 ? (
+                            <div className="py-16 text-center">
+                                <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-800 text-3xl">🗓</div>
+                                <p className="text-sm text-gray-400">No leave requests found</p>
+                                <button
+                                    onClick={() => setShowModal(true)}
+                                    className="mt-2 text-xs text-indigo-400 hover:underline"
+                                >
+                                    Submit your first request
+                                </button>
+                            </div>
+                        ) : (
+                            <table className="w-full text-sm">
+                                <thead>
+                                    <tr className="border-b border-white/10 bg-white/5 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                                        <th className="px-4 py-3">Type</th>
+                                        <th className="px-4 py-3">Dates</th>
+                                        <th className="px-4 py-3">Days</th>
+                                        <th className="px-4 py-3">Reason</th>
+                                        <th className="px-4 py-3">Status</th>
+                                        <th className="px-4 py-3 text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-white/5">
+                                    {requests.map((req) => (
+                                        <tr key={req.id} className="bg-gray-900/20 hover:bg-white/5 transition">
+                                            <td className="px-4 py-3 text-gray-300">
+                                                {LEAVE_TYPE_LABELS[req.leave_type]} Leave
+                                            </td>
+                                            <td className="px-4 py-3 text-gray-400 whitespace-nowrap">
+                                                {formatDate(req.start_date)} – {formatDate(req.end_date)}
+                                            </td>
+                                            <td className="px-4 py-3 text-gray-400">{req.days_requested}d</td>
+                                            <td className="px-4 py-3 text-gray-500 max-w-[180px] truncate">
+                                                {req.reason ?? <span className="text-gray-700">—</span>}
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                <StatusBadge status={req.status} />
+                                            </td>
+                                            <td className="px-4 py-3 text-right">
+                                                {req.status === LeaveStatus.PENDING && (
+                                                    <button
+                                                        onClick={() => handleCancel(req.id)}
+                                                        className="rounded-lg px-3 py-1 text-xs font-medium text-gray-400 hover:bg-white/10 hover:text-red-400 transition"
+                                                    >
+                                                        Cancel
+                                                    </button>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )}
+                    </div>
+                </section>
+            )}
 
             {/* Leave Request Modal */}
-            {showModal && (
+            {!isAdmin && showModal && (
                 <LeaveRequestModal
                     balances={balances}
                     onClose={() => setShowModal(false)}

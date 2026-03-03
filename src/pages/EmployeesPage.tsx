@@ -125,12 +125,14 @@ export default function EmployeesPage() {
                         {total} employee{total !== 1 ? "s" : ""} in your organisation
                     </p>
                 </div>
-                <button
-                    onClick={() => setFormTarget(null)}
-                    className="rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 transition-all hover:from-indigo-600 hover:to-purple-700"
-                >
-                    + Add Employee
-                </button>
+                {isHR && (
+                    <button
+                        onClick={() => setFormTarget(null)}
+                        className="rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 transition-all hover:from-indigo-600 hover:to-purple-700"
+                    >
+                        + Add Employee
+                    </button>
+                )}
             </div>
 
             {/* Filters */}

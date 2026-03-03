@@ -48,4 +48,8 @@ export const leaveService = {
     rejectRequest(id: string, data?: LeaveActionData): Promise<{ data: LeaveRequest }> {
         return api.post(`/leaves/${id}/reject`, data ?? {});
     },
+
+    getSummary(): Promise<{ data: Record<string, Record<string, number>> }> {
+        return api.get("/leaves/summary");
+    },
 };
