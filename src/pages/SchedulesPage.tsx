@@ -10,6 +10,7 @@ import {
     type WorkSchedule,
     type WorkScheduleDetail,
     type ShiftAssignment,
+    type LeaveOverlay,
 } from "@/types/schedule";
 import type { ShiftAssignmentInput } from "@/services/scheduleService";
 
@@ -36,6 +37,35 @@ function formatDay(iso: string) {
 
 const SHIFT_CODES = Object.values(ShiftCode);
 
+/** Build a set of "empId|date" keys from leave overlays for O(1) lookup. */
+function buildLeaveMap(leaves: LeaveOverlay[], scheduleDates: string[]) {
+    const map = new Map<string, string>(); // key → leave_type abbreviation
+    for (const l of leaves) {
+        const lStart = new Date(l.start_date);
+        const lEnd = new Date(l.end_date);
+        for (const d of scheduleDates) {
+            const cur = new Date(d);
+            if (cur >= lStart && cur <= lEnd) {
+                // Map leave_type to short code
+                let code = l.leave_type.toUpperCase();
+                if (code === "ANNUAL") code = "AL";
+                else if (code === "SICK") code = "SL";
+                else if (code === "PERSONAL") code = "PL";
+                else if (code === "UNPAID") code = "UL";
+                map.set(`${l.employee_id}|${d}`, code);
+            }
+        }
+    }
+    return map;
+}
+
+const LEAVE_COLORS: Record<string, { bg: string; text: string }> = {
+    AL: { bg: "bg-rose-500/30", text: "text-rose-300" },
+    SL: { bg: "bg-orange-500/30", text: "text-orange-300" },
+    PL: { bg: "bg-pink-500/30", text: "text-pink-300" },
+    UL: { bg: "bg-gray-500/30", text: "text-gray-400" },
+};
+
 /* ------------------------------------------------------------------ */
 /*  Page                                                              */
 /* ------------------------------------------------------------------ */
@@ -53,6 +83,9 @@ export default function SchedulesPage() {
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [grid, setGrid] = useState<Record<string, ShiftCode | null>>({});
     const [saving, setSaving] = useState(false);
+
+    /* ---- paint mode ---- */
+    const [activeBrush, setActiveBrush] = useState<ShiftCode | "eraser" | null>(null);
 
     /* ---- create modal state ---- */
     const [showCreate, setShowCreate] = useState(false);
@@ -122,16 +155,33 @@ export default function SchedulesPage() {
     }, [selected]);
 
     /* ============================================================== */
-    /*  Grid cell click (admin only, draft only)                     */
+    /*  Leave overlay map                                             */
     /* ============================================================== */
 
-    const cycleShift = (empId: string, date: string) => {
+    const leaveMap = useMemo(() => {
+        if (!selected) return new Map<string, string>();
+        return buildLeaveMap(selected.leaves ?? [], dates);
+    }, [selected, dates]);
+
+    /* ============================================================== */
+    /*  Grid cell click — paint mode                                 */
+    /* ============================================================== */
+
+    const paintCell = (empId: string, date: string) => {
         if (!isAdmin || selected?.status !== ScheduleStatus.DRAFT) return;
+
         const key = `${empId}|${date}`;
-        const current = grid[key] ?? null;
-        const idx = current ? SHIFT_CODES.indexOf(current) : -1;
-        const next = idx < SHIFT_CODES.length - 1 ? SHIFT_CODES[idx + 1] : null;
-        setGrid((prev) => ({ ...prev, [key]: next ?? null }));
+
+        // Don't allow painting over leave cells
+        if (leaveMap.has(key)) return;
+
+        if (activeBrush === null) return; // no brush selected — do nothing
+
+        if (activeBrush === "eraser") {
+            setGrid((prev) => ({ ...prev, [key]: null }));
+        } else {
+            setGrid((prev) => ({ ...prev, [key]: activeBrush }));
+        }
     };
 
     /* ============================================================== */
@@ -159,7 +209,7 @@ export default function SchedulesPage() {
     };
 
     /* ============================================================== */
-    /*  Publish / unpublish                                          */
+    /*  Publish / unpublish (auto-save before publish)               */
     /* ============================================================== */
 
     const togglePublish = async () => {
@@ -168,6 +218,14 @@ export default function SchedulesPage() {
         setError("");
         try {
             if (selected.status === ScheduleStatus.DRAFT) {
+                // AUTO-SAVE before publishing
+                const assignments: ShiftAssignmentInput[] = [];
+                for (const [key, code] of Object.entries(grid)) {
+                    if (!code) continue;
+                    const [empId, date] = key.split("|") as [string, string];
+                    assignments.push({ employee_id: empId, date, shift_code: code });
+                }
+                await scheduleService.saveAssignments(selected.id, assignments);
                 await scheduleService.publish(selected.id);
             } else {
                 await scheduleService.unpublish(selected.id);
@@ -325,6 +383,16 @@ export default function SchedulesPage() {
                                         {code}
                                     </span>
                                 ))}
+                                {/* Leave legend */}
+                                {Object.entries(LEAVE_COLORS).map(([code, c]) => (
+                                    <span
+                                        key={code}
+                                        className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${c.bg} ${c.text}`}
+                                        title={`${code} (Leave)`}
+                                    >
+                                        {code}
+                                    </span>
+                                ))}
                             </div>
                             {isAdmin && selected.status === ScheduleStatus.DRAFT && (
                                 <button
@@ -344,11 +412,51 @@ export default function SchedulesPage() {
                                         : "bg-amber-500 text-white hover:bg-amber-600"
                                         }`}
                                 >
-                                    {selected.status === ScheduleStatus.DRAFT ? "Publish" : "Unpublish"}
+                                    {saving
+                                        ? "Processing…"
+                                        : selected.status === ScheduleStatus.DRAFT
+                                            ? "Save & Publish"
+                                            : "Unpublish"}
                                 </button>
                             )}
                         </div>
                     </div>
+
+                    {/* ---- Paint Mode Toolbar (admin + draft only) ---- */}
+                    {isAdmin && selected.status === ScheduleStatus.DRAFT && (
+                        <div className="sticky top-0 z-20 flex flex-wrap items-center gap-2 border-b border-white/10 bg-gray-900/95 backdrop-blur px-5 py-3">
+                            <span className="mr-1 text-xs font-medium text-gray-400">🎨 Paint:</span>
+                            {SHIFT_CODES.map((code) => (
+                                <button
+                                    key={code}
+                                    onClick={() => setActiveBrush(activeBrush === code ? null : code)}
+                                    className={`rounded-lg px-2.5 py-1.5 text-xs font-bold transition-all ${activeBrush === code
+                                        ? `${SHIFT_COLORS[code].bg} ${SHIFT_COLORS[code].text} ring-2 ring-white/50 shadow-lg scale-110`
+                                        : `${SHIFT_COLORS[code].bg} ${SHIFT_COLORS[code].text} opacity-60 hover:opacity-100`
+                                        }`}
+                                    title={SHIFT_COLORS[code].label}
+                                >
+                                    {code}
+                                </button>
+                            ))}
+                            <div className="mx-1 h-5 w-px bg-white/20" />
+                            <button
+                                onClick={() => setActiveBrush(activeBrush === "eraser" ? null : "eraser")}
+                                className={`rounded-lg px-2.5 py-1.5 text-xs font-bold transition-all ${activeBrush === "eraser"
+                                    ? "bg-red-500/80 text-white ring-2 ring-white/50 shadow-lg scale-110"
+                                    : "bg-red-500/30 text-red-300 opacity-60 hover:opacity-100"
+                                    }`}
+                                title="Eraser — click cells to clear them"
+                            >
+                                ✕ Clear
+                            </button>
+                            {activeBrush && (
+                                <span className="ml-2 text-[11px] text-gray-500">
+                                    Click cells to apply • Click active brush again to deselect
+                                </span>
+                            )}
+                        </div>
+                    )}
 
                     {/* The grid table */}
                     <div className="overflow-x-auto">
@@ -395,14 +503,35 @@ export default function SchedulesPage() {
                                                 {dates.map((d) => {
                                                     const key = `${empId}|${d}`;
                                                     const code = grid[key] ?? null;
+                                                    const leaveCode = leaveMap.get(key);
                                                     if (code && code !== ShiftCode.B && code !== ShiftCode.O) total++;
                                                     const { isWeekend } = formatDay(d);
+
+                                                    // If employee is on leave this day
+                                                    if (leaveCode) {
+                                                        const lc = LEAVE_COLORS[leaveCode] ?? { bg: "bg-gray-500/30", text: "text-gray-400" };
+                                                        return (
+                                                            <td
+                                                                key={d}
+                                                                className={`border-b border-r border-white/10 px-0.5 py-0.5 text-center ${isWeekend ? "bg-white/[0.03]" : ""}`}
+                                                                title={`On leave (${leaveCode})`}
+                                                            >
+                                                                <span
+                                                                    className={`inline-block rounded px-1 py-0.5 text-[10px] font-bold leading-none ${lc.bg} ${lc.text}`}
+                                                                    style={{ backgroundImage: "repeating-linear-gradient(135deg, transparent, transparent 2px, rgba(255,255,255,0.08) 2px, rgba(255,255,255,0.08) 4px)" }}
+                                                                >
+                                                                    {leaveCode}
+                                                                </span>
+                                                            </td>
+                                                        );
+                                                    }
+
                                                     return (
                                                         <td
                                                             key={d}
-                                                            onClick={() => cycleShift(empId, d)}
+                                                            onClick={() => paintCell(empId, d)}
                                                             className={`border-b border-r border-white/10 px-0.5 py-0.5 text-center ${isWeekend ? "bg-white/[0.03]" : ""
-                                                                } ${isAdmin && selected.status === ScheduleStatus.DRAFT ? "cursor-pointer hover:bg-white/10" : ""}`}
+                                                                } ${isAdmin && selected.status === ScheduleStatus.DRAFT && activeBrush ? "cursor-pointer hover:bg-white/10" : ""}`}
                                                         >
                                                             {code && (
                                                                 <span
@@ -429,7 +558,7 @@ export default function SchedulesPage() {
                     {isAdmin && selected.status === ScheduleStatus.DRAFT && (
                         <div className="border-t border-white/10 px-5 py-3">
                             <p className="text-xs text-gray-500">
-                                💡 Click a cell to cycle through shift codes: DS → NS → C → B → D → O → (empty)
+                                🎨 Select a shift code from the toolbar above, then click cells to paint. Use the eraser to clear cells.
                             </p>
                         </div>
                     )}

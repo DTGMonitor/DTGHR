@@ -35,6 +35,14 @@ export interface WorkSchedule {
 
 export interface WorkScheduleDetail extends WorkSchedule {
     assignments: ShiftAssignment[];
+    leaves: LeaveOverlay[];
+}
+
+export interface LeaveOverlay {
+    employee_id: string;
+    leave_type: string;
+    start_date: string;
+    end_date: string;
 }
 
 export interface WorkScheduleListResponse {

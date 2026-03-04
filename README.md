@@ -113,7 +113,8 @@ src/
 | **Auto-generated employee IDs** | IDs follow `DTG-NNN` format, assigned server-side |
 | **Leave management** | Employees: submit, view, cancel own requests. Admin: see aggregate stats |
 | **Leave approval** | Admin/HR can approve or reject any leave request |
-| **Roster Management (Schedules)** | Excel-like interactive grid for HR to plan/draft monthly shifts. Color-coded shifts (DS, NS, etc.). Published status for employees to view. |
+| **Roster Management (Schedules)** | Excel-like grid with paint-mode toolbar for fast shift assignment. Approved leaves overlaid as read-only cells. Auto-save on publish. |
+| **Paginated Activity Log** | Dashboard shows paginated recent activity with Previous/Next navigation |
 | **Role-based UI** | Admin sees summary cards + pending approvals; employees see personal balances + own requests. Only admin can add employees |
 
 ## Environment Variables
