@@ -6,7 +6,7 @@ import {
     useCallback,
     type ReactNode,
 } from "react";
-import { useMsal, useIsAuthenticated } from "@azure/msal-react";
+import { useMsal } from "@azure/msal-react";
 import { InteractionRequiredAuthError } from "@azure/msal-browser";
 import api, { TOKEN_KEY } from "@/lib/api";
 import { loginRequest } from "@/lib/msalConfig";
@@ -40,8 +40,7 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 // ---------------------------------------------------------------------------
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-    const { instance, accounts } = useMsal();
-    const isMsalAuthenticated = useIsAuthenticated();
+    const { instance } = useMsal();
     const [user, setUser] = useState<UserResponse | null>(null);
     const [isLoading, setIsLoading] = useState(true);
 
@@ -50,36 +49,53 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // -----------------------------------------------------------------------
     useEffect(() => {
         const localToken = localStorage.getItem(TOKEN_KEY);
+        const msalAccounts = instance.getAllAccounts();
+        console.log("[AuthContext] init — localToken:", !!localToken, "msalAccounts:", msalAccounts.length, msalAccounts.map(a => a.username));
 
         // Case 1: Local JWT exists (admin email/password login)
         if (localToken) {
             api
                 .get<UserResponse>("/auth/me")
-                .then((res) => setUser(res.data))
-                .catch(() => localStorage.removeItem(TOKEN_KEY))
+                .then((res) => {
+                    console.log("[AuthContext] /auth/me OK (local):", res.data.email);
+                    setUser(res.data);
+                })
+                .catch((err) => {
+                    console.error("[AuthContext] /auth/me FAIL (local):", err?.response?.status, err?.response?.data);
+                    localStorage.removeItem(TOKEN_KEY);
+                })
                 .finally(() => setIsLoading(false));
             return;
         }
 
         // Case 2: MSAL session exists (Microsoft login)
-        if (isMsalAuthenticated && accounts.length > 0) {
+        // Use instance.getAllAccounts() directly — it's synchronous and always
+        // up-to-date after handleRedirectPromise() has resolved (which we
+        // await in main.tsx before rendering). The useIsAuthenticated() hook
+        // may lag behind by one render cycle after a redirect, causing a
+        // race condition where ProtectedRoute redirects to /login.
+        // msalAccounts already computed above
+        if (msalAccounts.length > 0) {
             const fetchUser = async () => {
                 try {
                     const tokenResponse = await instance.acquireTokenSilent({
                         ...loginRequest,
-                        account: accounts[0],
+                        account: msalAccounts[0],
                     });
 
                     // Use the ID token (signed JWT with user claims)
                     const token = tokenResponse.idToken;
+                    console.log("[AuthContext] Got ID token, length:", token.length);
                     localStorage.setItem(TOKEN_KEY, token);
+
                     const res = await api.get<UserResponse>("/auth/me");
+                    console.log("[AuthContext] /auth/me OK (MSAL):", res.data.email);
                     setUser(res.data);
                 } catch (err) {
                     if (err instanceof InteractionRequiredAuthError) {
                         await instance.acquireTokenRedirect(loginRequest);
                     } else {
-                        console.error("Failed to acquire token or fetch user", err);
+                        console.error("[AuthContext] MSAL token/me FAIL:", err);
                     }
                 } finally {
                     setIsLoading(false);
@@ -91,7 +107,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         // Neither — user is not logged in
         setIsLoading(false);
-    }, [isMsalAuthenticated, accounts, instance]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [instance]);
 
     // -----------------------------------------------------------------------
     // Login: email + password (admin)
@@ -124,19 +141,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }, []);
 
     // -----------------------------------------------------------------------
-    // Logout (handles both types)
+    // Logout — only clears the HR Hub session.
+    // We intentionally do NOT call instance.logoutRedirect() so the user
+    // stays signed in to their Microsoft / Entra account.  On re-login the
+    // existing MSAL session token is reused if still valid.
     // -----------------------------------------------------------------------
     const logout = useCallback(() => {
         localStorage.removeItem(TOKEN_KEY);
         setUser(null);
-
-        // If logged in via MSAL, also sign out of Microsoft
-        if (accounts.length > 0) {
-            instance.logoutRedirect({
-                postLogoutRedirectUri: window.location.origin + "/login",
-            });
-        }
-    }, [instance, accounts]);
+    }, []);
 
     return (
         <AuthContext.Provider

@@ -1,10 +1,10 @@
 import { useState, type FormEvent } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation, Navigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import axios from "axios";
 
 export default function LoginPage() {
-    const { loginWithEmail, loginWithMicrosoft } = useAuth();
+    const { loginWithEmail, loginWithMicrosoft, isAuthenticated, isLoading } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
     const from = (location.state as { from?: { pathname: string } })?.from?.pathname ?? "/";
@@ -13,6 +13,20 @@ export default function LoginPage() {
     const [password, setPassword] = useState("");
     const [error, setError] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // If already authenticated (e.g. after MSAL redirect), go to dashboard
+    if (isAuthenticated) {
+        return <Navigate to={from} replace />;
+    }
+
+    // Show a loading spinner while auth state is being resolved
+    if (isLoading) {
+        return (
+            <div className="flex min-h-screen items-center justify-center bg-gray-950">
+                <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-500 border-t-transparent" />
+            </div>
+        );
+    }
 
     const handleEmailLogin = async (e: FormEvent) => {
         e.preventDefault();

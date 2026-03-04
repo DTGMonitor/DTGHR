@@ -15,13 +15,16 @@ const msalConfig: Configuration = {
 export const msalInstance = new PublicClientApplication(msalConfig);
 
 // Initialize MSAL — must be awaited before the app renders
-export const msalReady = msalInstance.initialize().then(() =>
-    msalInstance.handleRedirectPromise().then((response) => {
+export const msalReady = msalInstance.initialize().then(() => {
+    console.log("[MSAL] initialized, now handling redirect promise...");
+    return msalInstance.handleRedirectPromise().then((response) => {
+        console.log("[MSAL] handleRedirectPromise result:", response ? `account=${response.account?.username}` : "null (no redirect)");
         if (response?.account) {
             msalInstance.setActiveAccount(response.account);
         }
-    })
-);
+        console.log("[MSAL] allAccounts after redirect:", msalInstance.getAllAccounts().map(a => a.username));
+    });
+});
 
 /**
  * Scopes requested when acquiring a token.
