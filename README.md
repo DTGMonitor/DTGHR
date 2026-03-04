@@ -89,13 +89,17 @@ src/
 │   ├── SetPasswordPage.tsx   # First-login password setup
 │   ├── DashboardPage.tsx     # Dashboard overview
 │   ├── EmployeesPage.tsx     # Employee CRUD + account creation
-│   └── LeavesPage.tsx        # Leave management
+│   ├── LeavesPage.tsx        # Leave management
+│   └── SchedulesPage.tsx     # Shift roster management + grid editor
 ├── services/
-│   └── employeeService.ts    # Employee API + createAccount
+│   ├── employeeService.ts    # Employee API + createAccount
+│   ├── leaveService.ts       # Leaves API
+│   └── scheduleService.ts    # Schedules + Shift Assignments API
 ├── types/
-│   ├── auth.ts               # UserResponse (includes password_change_required)
-│   ├── employee.ts           # Employee (includes has_account)
-│   └── leave.ts              # Leave types
+│   ├── auth.ts               # UserResponse
+│   ├── employee.ts           # Employee interface
+│   ├── leave.ts              # Leave types
+│   └── schedule.ts           # Schedule & Shift enums/types
 ├── App.tsx                   # Router & layout
 └── main.tsx                  # App entrypoint
 ```
@@ -109,6 +113,7 @@ src/
 | **Auto-generated employee IDs** | IDs follow `DTG-NNN` format, assigned server-side |
 | **Leave management** | Employees: submit, view, cancel own requests. Admin: see aggregate stats |
 | **Leave approval** | Admin/HR can approve or reject any leave request |
+| **Roster Management (Schedules)** | Excel-like interactive grid for HR to plan/draft monthly shifts. Color-coded shifts (DS, NS, etc.). Published status for employees to view. |
 | **Role-based UI** | Admin sees summary cards + pending approvals; employees see personal balances + own requests. Only admin can add employees |
 
 ## Environment Variables
