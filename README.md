@@ -50,12 +50,22 @@ npm run dev
 
 ## Authentication Flow
 
-There is **no public registration**. Only HR (superusers) can create employee accounts.
+There are two authentication paths:
 
-1. HR logs in → navigates to **Employees** page
+### 1. Microsoft Entra ID (Employees)
+Most users log in via Single Sign-On (SSO) using their Microsoft organizational accounts.
+1. User clicks **Sign in with Microsoft** on the login page.
+2. MSAL redirects to the Azure Active Directory login.
+3. Upon successful callback, the frontend acquires an ID token and logs the user into the HR Hub dashboard.
+4. **Logout Flow:** When an employee logs out from HR Hub, only the local session is cleared. They are not forced to completely sign out of their Entra/Microsoft account.
+
+### 2. Email & Password (HR/Admins)
+There is **no public registration**. Only HR (superusers) can create employee accounts or use email/password auth directly.
+
+1. HR logs in (or uses the default superuser) → navigates to **Employees** page
 2. Clicks **"+ Add Employee"** → employee is created with an auto-generated ID (`DTG-001`, `DTG-002`, …)
 3. Clicks the **person+ icon** on an employee row → a login account is created with a temporary password
-4. HR shares the temp password → employee logs in
+4. HR shares the temp password → employee logs in with email
 5. Employee is redirected to the **Set Password** page on first login
 6. After setting their password, the employee has full access
 
@@ -106,5 +116,7 @@ src/
 | Variable | Description |
 |----------|-------------|
 | `VITE_API_BASE_URL` | API base URL for local dev (not used in Docker) |
+| `VITE_AZURE_CLIENT_ID` | Application (client) ID from the Azure portal |
+| `VITE_AZURE_TENANT_ID` | Directory (tenant) ID from the Azure portal |
 
 > In Docker, API routing is handled entirely by Vite's server-side proxy — `VITE_API_BASE_URL` is not needed.
