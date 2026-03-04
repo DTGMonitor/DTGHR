@@ -4,7 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import axios from "axios";
 
 export default function LoginPage() {
-    const { login } = useAuth();
+    const { loginWithEmail, loginWithMicrosoft } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
     const from = (location.state as { from?: { pathname: string } })?.from?.pathname ?? "/";
@@ -14,13 +14,13 @@ export default function LoginPage() {
     const [error, setError] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const handleSubmit = async (e: FormEvent) => {
+    const handleEmailLogin = async (e: FormEvent) => {
         e.preventDefault();
         setError("");
         setIsSubmitting(true);
 
         try {
-            await login(email, password);
+            await loginWithEmail(email, password);
             navigate(from, { replace: true });
         } catch (err) {
             if (axios.isAxiosError(err)) {
@@ -48,16 +48,39 @@ export default function LoginPage() {
                         H
                     </div>
                     <h1 className="text-2xl font-bold tracking-tight text-white">
-                        Welcome back
+                        Welcome to HR Hub
                     </h1>
                     <p className="mt-1 text-sm text-gray-400">
-                        Sign in to your HR Hub account
+                        Sign in to your account
                     </p>
                 </div>
 
                 {/* Card */}
                 <div className="rounded-2xl border border-white/10 bg-gray-900/50 p-8 shadow-2xl backdrop-blur-xl">
-                    <form onSubmit={handleSubmit} className="space-y-5">
+                    {/* Microsoft login button */}
+                    <button
+                        id="microsoft-login-button"
+                        onClick={() => loginWithMicrosoft()}
+                        className="flex w-full items-center justify-center gap-3 rounded-xl bg-[#2f2f2f] px-4 py-3 text-sm font-semibold text-white shadow-lg transition-all hover:bg-[#3f3f3f] active:scale-[0.98]"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 21 21">
+                            <rect x="1" y="1" width="9" height="9" fill="#f25022" />
+                            <rect x="1" y="11" width="9" height="9" fill="#00a4ef" />
+                            <rect x="11" y="1" width="9" height="9" fill="#7fba00" />
+                            <rect x="11" y="11" width="9" height="9" fill="#ffb900" />
+                        </svg>
+                        Sign in with Microsoft
+                    </button>
+
+                    {/* Divider */}
+                    <div className="my-6 flex items-center gap-3">
+                        <div className="h-px flex-1 bg-white/10" />
+                        <span className="text-xs font-medium uppercase tracking-wider text-gray-500">or</span>
+                        <div className="h-px flex-1 bg-white/10" />
+                    </div>
+
+                    {/* Email / Password form */}
+                    <form onSubmit={handleEmailLogin} className="space-y-5">
                         {error && (
                             <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
                                 {error}
@@ -115,11 +138,10 @@ export default function LoginPage() {
                                     Signing in...
                                 </span>
                             ) : (
-                                "Sign in"
+                                "Sign in with Email"
                             )}
                         </button>
                     </form>
-
                 </div>
             </div>
         </div>

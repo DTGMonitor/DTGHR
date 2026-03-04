@@ -21,7 +21,7 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
         return <Navigate to="/login" state={{ from: location }} replace />;
     }
 
-    // First-time login: force password change before anything else
+    // Redirect email/password users who must set their password on first login
     if (user?.password_change_required && location.pathname !== "/set-password") {
         return <Navigate to="/set-password" replace />;
     }
