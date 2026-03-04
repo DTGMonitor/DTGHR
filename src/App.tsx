@@ -9,6 +9,7 @@ import SetPasswordPage from "@/pages/SetPasswordPage";
 import DashboardPage from "@/pages/DashboardPage";
 import EmployeesPage from "@/pages/EmployeesPage";
 import LeavesPage from "@/pages/LeavesPage";
+import SchedulesPage from "@/pages/SchedulesPage";
 
 export default function App() {
     return (
@@ -40,6 +41,7 @@ export default function App() {
                             <Route path="/" element={<DashboardPage />} />
                             <Route path="/employees" element={<EmployeesPage />} />
                             <Route path="/leaves" element={<LeavesPage />} />
+                            <Route path="/schedules" element={<SchedulesPage />} />
                         </Route>
 
                         {/* Catch-all */}

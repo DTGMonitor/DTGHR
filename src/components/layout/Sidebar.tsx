@@ -28,6 +28,15 @@ const navItems = [
             </svg>
         ),
     },
+    {
+        label: "Schedules",
+        to: "/schedules",
+        icon: (
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+            </svg>
+        ),
+    },
 ];
 
 export default function Sidebar() {
