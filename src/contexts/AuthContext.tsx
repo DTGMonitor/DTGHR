@@ -9,7 +9,7 @@ import {
 import { useMsal } from "@azure/msal-react";
 import { InteractionRequiredAuthError } from "@azure/msal-browser";
 import api, { TOKEN_KEY } from "@/lib/api";
-import { loginRequest } from "@/lib/msalConfig";
+import { isAzureSsoConfigured, loginRequest } from "@/lib/msalConfig";
 import type { UserResponse } from "@/types/auth";
 
 // ---------------------------------------------------------------------------
@@ -24,6 +24,8 @@ interface AuthContextValue {
     loginWithEmail: (email: string, password: string) => Promise<void>;
     /** Microsoft Entra ID login (employees) */
     loginWithMicrosoft: () => Promise<void>;
+    /** Whether Entra SSO is configured in this build */
+    isSsoAvailable: boolean;
     /** Change password (first-time email/password users) */
     changePassword: (newPassword: string) => Promise<void>;
     logout: () => void;
@@ -49,21 +51,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // -----------------------------------------------------------------------
     useEffect(() => {
         const localToken = localStorage.getItem(TOKEN_KEY);
-        const msalAccounts = instance.getAllAccounts();
-        console.log("[AuthContext] init — localToken:", !!localToken, "msalAccounts:", msalAccounts.length, msalAccounts.map(a => a.username));
+        // MSAL v3 throws if the instance was never initialised, which is the
+        // case whenever Entra SSO is not configured for this build.
+        const msalAccounts = isAzureSsoConfigured ? instance.getAllAccounts() : [];
 
         // Case 1: Local JWT exists (admin email/password login)
         if (localToken) {
             api
                 .get<UserResponse>("/auth/me")
-                .then((res) => {
-                    console.log("[AuthContext] /auth/me OK (local):", res.data.email);
-                    setUser(res.data);
-                })
-                .catch((err) => {
-                    console.error("[AuthContext] /auth/me FAIL (local):", err?.response?.status, err?.response?.data);
-                    localStorage.removeItem(TOKEN_KEY);
-                })
+                .then((res) => setUser(res.data))
+                .catch(() => localStorage.removeItem(TOKEN_KEY))
                 .finally(() => setIsLoading(false));
             return;
         }
@@ -85,11 +82,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
                     // Use the ID token (signed JWT with user claims)
                     const token = tokenResponse.idToken;
-                    console.log("[AuthContext] Got ID token, length:", token.length);
                     localStorage.setItem(TOKEN_KEY, token);
 
                     const res = await api.get<UserResponse>("/auth/me");
-                    console.log("[AuthContext] /auth/me OK (MSAL):", res.data.email);
                     setUser(res.data);
                 } catch (err) {
                     if (err instanceof InteractionRequiredAuthError) {
@@ -127,6 +122,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Login: Microsoft Entra ID (employees)
     // -----------------------------------------------------------------------
     const loginWithMicrosoft = useCallback(async () => {
+        if (!isAzureSsoConfigured) {
+            throw new Error(
+                "Microsoft sign-in is not configured. Set VITE_AZURE_CLIENT_ID and " +
+                    "VITE_AZURE_TENANT_ID and redeploy the frontend."
+            );
+        }
         await instance.loginRedirect(loginRequest);
     }, [instance]);
 
@@ -159,6 +160,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 isLoading,
                 loginWithEmail,
                 loginWithMicrosoft,
+                isSsoAvailable: isAzureSsoConfigured,
                 changePassword,
                 logout,
             }}

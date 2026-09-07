@@ -11,9 +11,8 @@ export default defineConfig({
     },
     server: {
         port: 5173,
-        watch: {
-            usePolling: true,
-        },
+        // Proxies the relative /api base URL to the backend so dev requests stay
+        // same-origin, matching how production works behind a Vercel rewrite.
         proxy: {
             "/api": {
                 target: process.env.VITE_BACKEND_URL ?? "http://localhost:8000",

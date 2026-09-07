@@ -4,7 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import axios from "axios";
 
 export default function LoginPage() {
-    const { loginWithEmail, loginWithMicrosoft, isAuthenticated, isLoading } = useAuth();
+    const { loginWithEmail, loginWithMicrosoft, isSsoAvailable, isAuthenticated, isLoading } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
     const from = (location.state as { from?: { pathname: string } })?.from?.pathname ?? "/";
@@ -71,27 +71,32 @@ export default function LoginPage() {
 
                 {/* Card */}
                 <div className="rounded-2xl border border-white/10 bg-gray-900/50 p-8 shadow-2xl backdrop-blur-xl">
-                    {/* Microsoft login button */}
-                    <button
-                        id="microsoft-login-button"
-                        onClick={() => loginWithMicrosoft()}
-                        className="flex w-full items-center justify-center gap-3 rounded-xl bg-[#2f2f2f] px-4 py-3 text-sm font-semibold text-white shadow-lg transition-all hover:bg-[#3f3f3f] active:scale-[0.98]"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 21 21">
-                            <rect x="1" y="1" width="9" height="9" fill="#f25022" />
-                            <rect x="1" y="11" width="9" height="9" fill="#00a4ef" />
-                            <rect x="11" y="1" width="9" height="9" fill="#7fba00" />
-                            <rect x="11" y="11" width="9" height="9" fill="#ffb900" />
-                        </svg>
-                        Sign in with Microsoft
-                    </button>
+                    {/* Microsoft login — hidden when Entra SSO is not configured
+                        for this build, so the button never leads to a dead end. */}
+                    {isSsoAvailable && (
+                        <>
+                            <button
+                                id="microsoft-login-button"
+                                onClick={() => loginWithMicrosoft()}
+                                className="flex w-full items-center justify-center gap-3 rounded-xl bg-[#2f2f2f] px-4 py-3 text-sm font-semibold text-white shadow-lg transition-all hover:bg-[#3f3f3f] active:scale-[0.98]"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 21 21">
+                                    <rect x="1" y="1" width="9" height="9" fill="#f25022" />
+                                    <rect x="1" y="11" width="9" height="9" fill="#00a4ef" />
+                                    <rect x="11" y="1" width="9" height="9" fill="#7fba00" />
+                                    <rect x="11" y="11" width="9" height="9" fill="#ffb900" />
+                                </svg>
+                                Sign in with Microsoft
+                            </button>
 
-                    {/* Divider */}
-                    <div className="my-6 flex items-center gap-3">
-                        <div className="h-px flex-1 bg-white/10" />
-                        <span className="text-xs font-medium uppercase tracking-wider text-gray-500">or</span>
-                        <div className="h-px flex-1 bg-white/10" />
-                    </div>
+                            {/* Divider */}
+                            <div className="my-6 flex items-center gap-3">
+                                <div className="h-px flex-1 bg-white/10" />
+                                <span className="text-xs font-medium uppercase tracking-wider text-gray-500">or</span>
+                                <div className="h-px flex-1 bg-white/10" />
+                            </div>
+                        </>
+                    )}
 
                     {/* Email / Password form */}
                     <form onSubmit={handleEmailLogin} className="space-y-5">
