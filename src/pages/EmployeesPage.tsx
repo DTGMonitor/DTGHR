@@ -239,6 +239,7 @@ export default function EmployeesPage() {
                                         </td>
                                         <td className="px-4 py-3 text-right">
                                             <div className="inline-flex gap-1">
+                                                {isHR && (
                                                 <button
                                                     onClick={() => setFormTarget(emp)}
                                                     className="rounded-lg p-1.5 text-gray-500 hover:bg-white/10 hover:text-indigo-400 transition"
@@ -248,6 +249,8 @@ export default function EmployeesPage() {
                                                         <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Z" />
                                                     </svg>
                                                 </button>
+                                                )}
+                                                {isHR && (
                                                 <button
                                                     onClick={() => setDeleteTarget(emp)}
                                                     className="rounded-lg p-1.5 text-gray-500 hover:bg-red-500/10 hover:text-red-400 transition"
@@ -257,6 +260,7 @@ export default function EmployeesPage() {
                                                         <path strokeLinecap="round" strokeLinejoin="round" d="M22 10.5h-6m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM4 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109A12.318 12.318 0 0 1 10.374 21c-2.331 0-4.512-.645-6.374-1.766Z" />
                                                     </svg>
                                                 </button>
+                                                )}
                                                 {isHR && !emp.has_account && (
                                                     <button
                                                         onClick={() => handleCreateAccount(emp)}

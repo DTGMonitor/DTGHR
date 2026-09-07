@@ -15,6 +15,8 @@ export interface EmployeeCreateData {
     department: string;
     position: string;
     date_of_joining: string;
+    /** Days of annual leave carried in on the joining date. */
+    annual_leave_opening_balance?: number;
 }
 
 export interface EmployeeUpdateData {
@@ -25,6 +27,7 @@ export interface EmployeeUpdateData {
     department?: string;
     position?: string;
     date_of_joining?: string;
+    annual_leave_opening_balance?: number;
     is_active?: boolean;
 }
 

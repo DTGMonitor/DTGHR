@@ -8,6 +8,8 @@ export interface Employee {
     department: string;
     position: string;
     date_of_joining: string;
+    /** Annual leave carried in on the joining date, set by HR. */
+    annual_leave_opening_balance: number;
     is_active: boolean;
     has_account: boolean;
     on_leave_today: boolean;

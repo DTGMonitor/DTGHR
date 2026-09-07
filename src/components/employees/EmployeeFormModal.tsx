@@ -20,6 +20,7 @@ const EMPTY_FORM = {
     department: "",
     position: "",
     date_of_joining: "",
+    annual_leave_opening_balance: 0,
     is_active: true,
 };
 
@@ -39,6 +40,8 @@ export default function EmployeeFormModal({ employee, onClose, onSaved }: Props)
                 department: employee.department,
                 position: employee.position,
                 date_of_joining: employee.date_of_joining,
+                annual_leave_opening_balance:
+                    employee.annual_leave_opening_balance ?? 0,
                 is_active: employee.is_active,
             });
         } else {
@@ -69,6 +72,9 @@ export default function EmployeeFormModal({ employee, onClose, onSaved }: Props)
                     department: form.department,
                     position: form.position,
                     date_of_joining: form.date_of_joining,
+                    annual_leave_opening_balance: Number(
+                        form.annual_leave_opening_balance,
+                    ),
                     is_active: form.is_active,
                 };
                 const res = await employeeService.update(employee.id, payload);
@@ -82,6 +88,9 @@ export default function EmployeeFormModal({ employee, onClose, onSaved }: Props)
                     department: form.department,
                     position: form.position,
                     date_of_joining: form.date_of_joining,
+                    annual_leave_opening_balance: Number(
+                        form.annual_leave_opening_balance,
+                    ),
                 };
                 const res = await employeeService.create(payload);
                 onSaved(res.data);
@@ -166,9 +175,27 @@ export default function EmployeeFormModal({ employee, onClose, onSaved }: Props)
                             </div>
                         </div>
 
-                        <div>
-                            <label className={labelClass}>Date of Joining *</label>
-                            <input className={inputClass} name="date_of_joining" type="date" value={form.date_of_joining} onChange={handleChange} required />
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            <div>
+                                <label className={labelClass}>Date of Joining *</label>
+                                <input className={inputClass} name="date_of_joining" type="date" value={form.date_of_joining} onChange={handleChange} required />
+                            </div>
+                            <div>
+                                <label className={labelClass}>Opening annual leave</label>
+                                <input
+                                    className={inputClass}
+                                    name="annual_leave_opening_balance"
+                                    type="number"
+                                    step="0.5"
+                                    value={form.annual_leave_opening_balance}
+                                    onChange={handleChange}
+                                />
+                                <p className="mt-1 text-[10px] leading-tight text-gray-500">
+                                    Days carried in on the joining date. Leave accrues at
+                                    1/month on top of this; set it to match the balance
+                                    the roster workbook shows.
+                                </p>
+                            </div>
                         </div>
 
                         {/* Active toggle (edit only) */}
