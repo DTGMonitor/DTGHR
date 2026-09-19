@@ -223,6 +223,38 @@ export const scheduleService = {
         return { data: (data ?? []) as PublicHoliday[] };
     },
 
+    /** Holidays from a date onwards -- national and cuti bersama both. */
+    async upcomingHolidays(fromIso: string, limit = 5): Promise<{ data: PublicHoliday[] }> {
+        const { data, error } = await supabase
+            .from("public_holidays")
+            .select("*")
+            .gte("date", fromIso)
+            .order("date", { ascending: true })
+            .limit(limit);
+        if (error) throw toApiError(error);
+        return { data: (data ?? []) as PublicHoliday[] };
+    },
+
+    /**
+     * One employee's codes over a date range. RLS only returns cells in
+     * published periods (everything, for HR), so a draft month reads as empty.
+     */
+    async shiftsFor(
+        employeeId: string,
+        fromIso: string,
+        toIso: string
+    ): Promise<{ data: Pick<ShiftAssignment, "date" | "shift_code">[] }> {
+        const { data, error } = await supabase
+            .from("shift_assignments")
+            .select("date, shift_code")
+            .eq("employee_id", employeeId)
+            .gte("date", fromIso)
+            .lte("date", toIso)
+            .order("date", { ascending: true });
+        if (error) throw toApiError(error);
+        return { data: (data ?? []) as Pick<ShiftAssignment, "date" | "shift_code">[] };
+    },
+
     async publish(id: string): Promise<{ data: WorkSchedule }> {
         return { data: await rpc<WorkSchedule>("publish_schedule", { p_schedule_id: id }) };
     },

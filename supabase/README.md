@@ -21,6 +21,7 @@ that returns one document.
 | `20260916000400_rpc_session_and_employees.sql` | `bootstrap_session()` (replaces `GET /auth/me`), plus the five employee endpoints. |
 | `20260916000500_rpc_leaves_and_dashboard.sql` | Leave balances, submit/approve/reject/cancel, `dashboard_stats()`, `leave_summary()`. |
 | `20260916000600_rpc_schedules.sql` | The roster: `get_schedule_detail()`, proposals and review, `apply_roster_pattern()`, and the annual-leave accrual maths ported from `schedule_service.py`. |
+| `20260919000100_holidays_offboarding_leave_activity.sql` | Upserts the SKB 3 Menteri holiday calendar for 2026 (corrected) and 2027. `deactivate_employee()` now also revokes sign-in (profile inactive, auth user banned, sessions dropped); new `reactivate_employee()`. `leave_activity_view` for the Leaves page feeds. PH loading gains a year-to-date count and the dates behind it. |
 
 They are ordered and must be run in order. Each one is wrapped in a
 transaction and is safe to re-run.

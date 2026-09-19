@@ -12,6 +12,8 @@ export interface Employee {
     annual_leave_opening_balance: number;
     is_active: boolean;
     has_account: boolean;
+    /** The linked login. Only employees_view carries it; the RPCs leave it out. */
+    user_id?: string | null;
     on_leave_today: boolean;
     created_at: string;
     updated_at: string;

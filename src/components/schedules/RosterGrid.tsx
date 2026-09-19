@@ -38,6 +38,11 @@ interface Props {
 const CELL_W = "2.25rem";
 const NAME_W = "13rem";
 
+function holidayTitle(h: PublicHoliday | null): string | undefined {
+    if (!h) return undefined;
+    return h.is_national ? `${h.name} (national holiday)` : `${h.name} (cuti bersama)`;
+}
+
 function employeeName(e: Employee) {
     return `${e.first_name} ${e.last_name}`;
 }
@@ -92,11 +97,13 @@ export default function RosterGrid({
                                 style={{ width: CELL_W, minWidth: CELL_W }}
                                 className={`border-b border-r border-white/5 px-0 py-1 text-center text-[9px] font-medium ${d.holiday?.is_national
                                     ? "bg-emerald-500/20 text-emerald-300"
-                                    : d.isWeekend
+                                    : d.holiday
+                                        ? "bg-amber-500/15 text-amber-300"
+                                        : d.isWeekend
                                         ? "bg-white/[0.06] text-gray-400"
                                         : "text-gray-500"
                                     }`}
-                                title={d.holiday ? d.holiday.name : undefined}
+                                title={holidayTitle(d.holiday)}
                             >
                                 {d.dayName}
                             </th>
@@ -126,7 +133,7 @@ export default function RosterGrid({
                             rowSpan={2}
                             style={{ width: "3.75rem", minWidth: "3.75rem" }}
                             className="sticky right-0 z-20 border-b border-l border-white/10 bg-gray-900 px-2 py-2 text-center align-bottom font-semibold text-gray-300"
-                            title="National public holidays this employee was rostered to work"
+                            title="National public holidays worked this month: DS, NS, C or D on a libur nasional. Cuti bersama does not count."
                         >
                             PH
                             <span className="block text-[10px] font-normal text-gray-500">
@@ -142,11 +149,13 @@ export default function RosterGrid({
                                 style={{ width: CELL_W, minWidth: CELL_W }}
                                 className={`border-b border-r border-white/10 px-0 py-1 text-center font-semibold ${d.holiday?.is_national
                                     ? "bg-emerald-500/20 text-emerald-300"
-                                    : d.isWeekend
+                                    : d.holiday
+                                        ? "bg-amber-500/15 text-amber-300"
+                                        : d.isWeekend
                                         ? "bg-white/[0.06] text-gray-300"
                                         : "text-gray-400"
                                     }`}
-                                title={d.holiday ? d.holiday.name : undefined}
+                                title={holidayTitle(d.holiday)}
                             >
                                 {d.dayNumber}
                             </th>
@@ -186,7 +195,7 @@ export default function RosterGrid({
                                                     : undefined
                                             }
                                             isWeekend={d.isWeekend}
-                                            isHoliday={!!d.holiday?.is_national}
+                                            holiday={d.holiday ? (d.holiday.is_national ? "national" : "cuti") : null}
                                             editable={editable}
                                             active={activeCell === key}
                                             onClick={(rect) =>
@@ -225,7 +234,7 @@ function RosterCell({
     proposal,
     stagedCode,
     isWeekend,
-    isHoliday,
+    holiday,
     editable,
     active,
     onClick,
@@ -235,7 +244,7 @@ function RosterCell({
     proposal: ShiftChangeItem | null;
     stagedCode: ShiftCode | null | undefined;
     isWeekend: boolean;
-    isHoliday: boolean;
+    holiday: "national" | "cuti" | null;
     editable: boolean;
     active: boolean;
     onClick: (rect: DOMRect) => void;
@@ -244,9 +253,11 @@ function RosterCell({
     // The workbook draws a break day as a plain cyan block with no letter.
     const text = style?.blankInGrid ? "" : code ?? "";
 
-    const emptyBg = isHoliday
+    const emptyBg = holiday === "national"
         ? "rgba(16,185,129,0.12)"
-        : isWeekend
+        : holiday === "cuti"
+            ? "rgba(245,158,11,0.08)"
+            : isWeekend
             ? "rgba(255,255,255,0.05)"
             : "transparent";
 
@@ -329,11 +340,22 @@ function TotalCells({ summary }: { summary: WorkingDaysSummary | undefined }) {
     const leave = summary?.annual_leave_days ?? 0;
     const taken = summary?.annual_leave_taken ?? 0;
     const loading = summary?.public_holiday_loading ?? 0;
+    const loadingYtd = summary?.public_holiday_loading_ytd ?? loading;
+    const loadingDates = summary?.public_holiday_dates ?? [];
 
     // A negative balance means leave was granted beyond the entitlement, which
     // only a superuser can do. It should read as an exception, not an error.
     const leaveColour =
         leave < 0 ? "text-amber-400" : leave < 1 ? "text-red-400" : "text-gray-200";
+
+    const loadingTitle =
+        (loading
+            ? `${loading} public holiday(s) worked this month: ` +
+              loadingDates
+                  .map((d) => new Date(`${d}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short" }))
+                  .join(", ")
+            : "No public holidays worked this month") + `
+${loadingYtd} worked so far this year`;
 
     return (
         <>
@@ -350,10 +372,15 @@ function TotalCells({ summary }: { summary: WorkingDaysSummary | undefined }) {
                 {leave.toFixed(1)}
             </td>
             <td
-                className="sticky right-0 z-10 border-b border-l border-white/10 bg-gray-900 px-2 py-1.5 text-center font-semibold text-gray-200"
-                title={`${loading} public holiday(s) worked`}
+                className="sticky right-0 z-10 border-b border-l border-white/10 bg-gray-900 px-1 py-1 text-center leading-tight"
+                title={loadingTitle}
             >
-                {loading || ""}
+                <span className={`block font-semibold ${loading ? "text-emerald-300" : "text-gray-600"}`}>
+                    {loading}
+                </span>
+                {loadingYtd > 0 && (
+                    <span className="block text-[9px] text-gray-500">{loadingYtd} YTD</span>
+                )}
             </td>
         </>
     );

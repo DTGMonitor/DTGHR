@@ -33,21 +33,42 @@ export interface EmployeeUpdateData {
 
 const SEARCH_COLUMNS = ["first_name", "last_name", "email", "employee_id"];
 
+export type EmployeeSortKey = "name" | "employee_id" | "department" | "position" | "date_of_joining";
+export type EmployeeStatusFilter = "active" | "inactive" | "all";
+export type EmployeeAccountFilter = "all" | "with" | "without";
+
+/** Sorting by name orders on first then last, the way the directory reads. */
+const SORT_COLUMNS: Record<EmployeeSortKey, string[]> = {
+    name: ["first_name", "last_name"],
+    employee_id: ["employee_id"],
+    department: ["department", "first_name"],
+    position: ["position", "first_name"],
+    date_of_joining: ["date_of_joining"],
+};
+
 export const employeeService = {
     async list(params: {
         page?: number;
         page_size?: number;
         search?: string;
         department?: string;
+        status?: EmployeeStatusFilter;
+        account?: EmployeeAccountFilter;
+        on_leave_only?: boolean;
+        sort?: EmployeeSortKey;
+        ascending?: boolean;
     }): Promise<{ data: EmployeeListResponse }> {
         const page = params.page ?? 1;
         const pageSize = params.page_size ?? 20;
         const from = (page - 1) * pageSize;
 
-        let query = supabase
-            .from("employees_view")
-            .select("*", { count: "exact" })
-            .eq("is_active", true);
+        let query = supabase.from("employees_view").select("*", { count: "exact" });
+
+        const status = params.status ?? "active";
+        if (status !== "all") query = query.eq("is_active", status === "active");
+        if (params.account === "with") query = query.eq("has_account", true);
+        if (params.account === "without") query = query.eq("has_account", false);
+        if (params.on_leave_only) query = query.eq("on_leave_today", true);
 
         const search = sanitiseFilterValue(params.search ?? "");
         if (search) {
@@ -56,12 +77,18 @@ export const employeeService = {
 
         const department = sanitiseFilterValue(params.department ?? "");
         if (department) {
-            query = query.ilike("department", `%${department}%`);
+            query = query.eq("department", department);
         }
 
-        const { data, error, count } = await query
-            .order("created_at", { ascending: false })
-            .range(from, from + pageSize - 1);
+        if (params.sort) {
+            for (const column of SORT_COLUMNS[params.sort]) {
+                query = query.order(column, { ascending: params.ascending ?? true });
+            }
+        } else {
+            query = query.order("created_at", { ascending: false });
+        }
+
+        const { data, error, count } = await query.range(from, from + pageSize - 1);
 
         if (error) throw toApiError(error);
 
@@ -73,6 +100,14 @@ export const employeeService = {
                 page_size: pageSize,
             },
         };
+    },
+
+    /** Every department in use, for the filter dropdown. */
+    async departments(): Promise<string[]> {
+        const { data, error } = await supabase.from("employees_view").select("department");
+        if (error) throw toApiError(error);
+        const names = new Set((data ?? []).map((r) => (r as { department: string }).department));
+        return [...names].filter(Boolean).sort((a, b) => a.localeCompare(b));
     },
 
     async get(id: string): Promise<{ data: Employee }> {
@@ -98,8 +133,13 @@ export const employeeService = {
         };
     },
 
+    /** Off-boarding: hides them from the directory and revokes their sign-in. */
     async delete(id: string): Promise<void> {
         await rpc<null>("deactivate_employee", { p_employee_id: id });
+    },
+
+    async reactivate(id: string): Promise<{ data: Employee }> {
+        return { data: await rpc<Employee>("reactivate_employee", { p_employee_id: id }) };
     },
 
     async createAccount(id: string): Promise<{ data: CreateAccountResult }> {

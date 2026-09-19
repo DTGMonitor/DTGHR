@@ -18,8 +18,9 @@ export default function DeleteConfirmModal({ employee, onClose, onDeleted }: Pro
         try {
             await employeeService.delete(employee.id);
             onDeleted(employee.id);
-        } catch {
-            setError("Failed to deactivate employee. Please try again.");
+        } catch (err) {
+            const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+            setError(detail ?? "Failed to deactivate employee. Please try again.");
             setLoading(false);
         }
     };
@@ -44,8 +45,13 @@ export default function DeleteConfirmModal({ employee, onClose, onDeleted }: Pro
                     <span className="font-medium text-white">
                         {employee.first_name} {employee.last_name}
                     </span>
-                    ? They will be removed from the active directory.
+                    ? Use this when someone has left the company.
                 </p>
+                <ul className="mt-3 space-y-1 rounded-xl border border-white/5 bg-white/[0.03] px-4 py-3 text-xs text-gray-400">
+                    <li>• Removed from the active directory and roster</li>
+                    <li>• {employee.has_account ? "Their sign-in is revoked immediately" : "They have no login to revoke"}</li>
+                    <li>• Leave and roster history is kept; you can reactivate later</li>
+                </ul>
 
                 {error && (
                     <p className="mt-3 text-center text-sm text-red-400">{error}</p>

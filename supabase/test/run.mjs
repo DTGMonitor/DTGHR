@@ -522,6 +522,78 @@ await step("complete_password_change clears the flag", async () => {
     if (r.rows[0].j.password_change_required !== false) throw new Error("flag still set");
 });
 
+// --- 20260919000100: holidays, off-boarding, leave activity ---------------
+
+await step("2026 holidays match the SKB, 2027 is loaded", async () => {
+    const r = await db.query(`select extract(year from date)::int y, is_national, count(*)::int n
+                                from public.public_holidays
+                               where date between '2026-01-01' and '2027-12-31'
+                                 and name <> 'Test National Holiday' and name <> 'Cuti Bersama'
+                               group by 1, 2 order by 1, 2`);
+    const got = r.rows.map((x) => `${x.y}:${x.is_national}:${x.n}`).join(" ");
+    if (got !== "2026:false:8 2026:true:17 2027:false:8 2027:true:18") throw new Error(got);
+    const idul = await db.query(`select is_national from public.public_holidays where date = '2026-03-20'`);
+    if (idul.rows[0].is_national !== false) throw new Error("20 Mar 2026 should be cuti bersama");
+});
+
+await step("PH loading carries a year-to-date figure and the dates", async () => {
+    const r = await db.query(
+        `select * from public.annual_leave_state(array['aaaaaaaa-0000-0000-0000-000000000001'::uuid],
+                                                 '2026-09-01','2026-09-30')`);
+    const row = r.rows[0];
+    if (row.ph_loading !== 1 || row.ph_loading_ytd < 1) throw new Error(`${row.ph_loading}/${row.ph_loading_ytd}`);
+    const d = await tx(RINA, `select public.get_schedule_detail('bbbbbbbb-0000-0000-0000-000000000001') j`);
+    const w = d.rows[0].j.working_days.find((x) => x.employee_id === "aaaaaaaa-0000-0000-0000-000000000001");
+    if (w.public_holiday_loading_ytd !== row.ph_loading_ytd) throw new Error("detail ytd mismatch");
+    if (JSON.stringify(w.public_holiday_dates) !== '["2026-09-07"]') throw new Error(JSON.stringify(w.public_holiday_dates));
+});
+
+await step("leave_activity_view joins the request and scopes it", async () => {
+    const a = await tx(ADMIN, `select action, employee_id, leave_type, status from public.leave_activity_view`);
+    if (!a.rows.some((x) => x.action === "LEAVE_APPROVED")) throw new Error("approval missing");
+    if (!a.rows.every((x) => x.leave_type)) throw new Error("request not joined");
+    const sari = await db.query(`select user_id from public.employees where employee_id='DTG-003'`);
+    const s = await tx(sari.rows[0].user_id, `select count(*)::int n from public.leave_activity_view`);
+    if (s.rows[0].n !== 0) throw new Error(`Sari sees ${s.rows[0].n} rows of Rina's leave`);
+});
+
+await step("deactivating an employee revokes their sign-in; reactivating restores it", async () => {
+    const emp = await db.query(`select id, user_id from public.employees where employee_id='DTG-003'`);
+    const { id, user_id } = emp.rows[0];
+    await tx(ADMIN, `select public.deactivate_employee($1::uuid)`, [id]);
+    let u = await db.query(`select p.is_active, a.banned_until from public.users p join auth.users a using (id) where id=$1`, [user_id]);
+    if (u.rows[0].is_active !== false || u.rows[0].banned_until === null) throw new Error("login still open");
+    try {
+        await tx(user_id, `select public.bootstrap_session()`);
+        throw new Error("expected a raise");
+    } catch (e) {
+        if (!/inactive/.test(e.message)) throw new Error(`wrong error: ${e.message}`);
+    }
+    const r = await tx(ADMIN, `select public.reactivate_employee($1::uuid) j`, [id]);
+    if (r.rows[0].j.is_active !== true) throw new Error("employee not active");
+    u = await db.query(`select p.is_active, a.banned_until from public.users p join auth.users a using (id) where id=$1`, [user_id]);
+    if (u.rows[0].is_active !== true || u.rows[0].banned_until !== null) throw new Error("login not restored");
+});
+
+await step("an employee cannot reactivate, and HR cannot deactivate themselves", async () => {
+    const emp = await db.query(`select id from public.employees where employee_id='DTG-003'`);
+    try {
+        await tx(RINA, `select public.reactivate_employee($1::uuid)`, [emp.rows[0].id]);
+        throw new Error("expected a raise");
+    } catch (e) {
+        if (!/Only admin\/HR/.test(e.message)) throw new Error(`wrong error: ${e.message}`);
+    }
+    await db.query(`update public.users set is_superuser = true where id = $1`, [RINA]);
+    try {
+        await tx(RINA, `select public.deactivate_employee('aaaaaaaa-0000-0000-0000-000000000001')`);
+        throw new Error("expected a raise");
+    } catch (e) {
+        if (!/your own account/.test(e.message)) throw new Error(`wrong error: ${e.message}`);
+    } finally {
+        await db.query(`update public.users set is_superuser = false where id = $1`, [RINA]);
+    }
+});
+
 console.log("\n=====================================");
 if (fail.length) {
     console.log(`${fail.length} FAILURE(S)`);

@@ -1,5 +1,13 @@
-import { getSessionFacts, rpc, supabase, toApiError } from "@/lib/supabase";
-import type { LeaveRequest, LeaveBalance, LeaveType, LeaveStatus } from "@/types/leave";
+import { ApiError, getSessionFacts, rpc, supabase, toApiError } from "@/lib/supabase";
+import {
+    LeaveType,
+    type LeaveActivity,
+    type LeaveBalance,
+    type LeaveOverview,
+    type LeaveRequest,
+    type LeaveStatus,
+} from "@/types/leave";
+import { isoDate } from "@/lib/dates";
 
 export interface LeaveRequestCreateData {
     leave_type: LeaveType;
@@ -11,6 +19,13 @@ export interface LeaveRequestCreateData {
 
 export interface LeaveActionData {
     note?: string;
+}
+
+interface ActivityList {
+    items: LeaveActivity[];
+    total: number;
+    page: number;
+    page_size: number;
 }
 
 interface LeaveList {
@@ -137,6 +152,105 @@ export const leaveService = {
                 p_id: id,
                 p_note: data?.note ?? null,
             }),
+        };
+    },
+
+    /**
+     * Balances plus every one of the caller's requests, folded into the
+     * figures the summary cards show. Requests are fetched unfiltered and
+     * unpaginated -- a person has a handful a year -- so the cards do not move
+     * when the table below them is filtered.
+     */
+    async getMyOverview(): Promise<{ data: LeaveOverview }> {
+        const year = new Date().getFullYear();
+        const { employeeId } = getSessionFacts();
+        if (!employeeId) {
+            throw new ApiError("No employee profile linked to this user account", 403);
+        }
+
+        const [balancesRes, requestsRes] = await Promise.all([
+            this.getMyBalances(year),
+            supabase
+                .from("leave_requests_view")
+                .select("*")
+                .eq("employee_id", employeeId)
+                .order("start_date", { ascending: true }),
+        ]);
+        if (requestsRes.error) throw toApiError(requestsRes.error);
+
+        const balances = balancesRes.data;
+        const requests = (requestsRes.data ?? []) as LeaveRequest[];
+        const today = isoDate(new Date());
+        const yearStart = `${year}-01-01`;
+        const yearEnd = `${year}-12-31`;
+
+        const pick = (type: LeaveType) => {
+            const b = balances.find((x) => x.leave_type === type);
+            return {
+                total: b?.total_days ?? 0,
+                used: b?.used_days ?? 0,
+                remaining: b?.remaining_days ?? 0,
+            };
+        };
+
+        const pending = requests.filter((r) => r.status === "pending");
+        const approvedThisYear = requests.filter(
+            (r) => r.status === "approved" && r.start_date >= yearStart && r.start_date <= yearEnd
+        );
+        const usedByType = Object.fromEntries(
+            Object.values(LeaveType).map((t) => [t, 0])
+        ) as Record<LeaveType, number>;
+        for (const r of approvedThisYear) usedByType[r.leave_type] += r.days_requested;
+
+        return {
+            data: {
+                year,
+                annual: pick(LeaveType.ANNUAL),
+                sick: pick(LeaveType.SICK),
+                pending_count: pending.length,
+                pending_days: pending.reduce((n, r) => n + r.days_requested, 0),
+                used_days: approvedThisYear.reduce((n, r) => n + r.days_requested, 0),
+                used_by_type: usedByType,
+                next_leave:
+                    requests.find((r) => r.status === "approved" && r.end_date >= today) ?? null,
+                balances,
+            },
+        };
+    },
+
+    /**
+     * Leave activity. "mine" is what happened to the caller's own requests --
+     * submitted, approved, rejected, cancelled. "all" is everything the view
+     * lets the caller see, which for HR is the whole organisation.
+     */
+    async listActivity(params: {
+        scope: "mine" | "all";
+        page?: number;
+        page_size?: number;
+    }): Promise<{ data: ActivityList }> {
+        const page = params.page ?? 1;
+        const pageSize = params.page_size ?? 10;
+        const from = (page - 1) * pageSize;
+        const { employeeId } = getSessionFacts();
+
+        let query = supabase.from("leave_activity_view").select("*", { count: "exact" });
+        if (params.scope === "mine") {
+            if (!employeeId) return { data: { items: [], total: 0, page, page_size: pageSize } };
+            query = query.eq("employee_id", employeeId);
+        }
+
+        const { data, error, count } = await query
+            .order("created_at", { ascending: false })
+            .range(from, from + pageSize - 1);
+        if (error) throw toApiError(error);
+
+        return {
+            data: {
+                items: (data ?? []) as LeaveActivity[],
+                total: count ?? 0,
+                page,
+                page_size: pageSize,
+            },
         };
     },
 

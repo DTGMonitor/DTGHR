@@ -21,6 +21,7 @@ import CellEditor from "@/components/schedules/CellEditor";
 import ShiftLegend from "@/components/schedules/ShiftLegend";
 import ApprovalsPanel from "@/components/schedules/ApprovalsPanel";
 import RosterPatternModal from "@/components/schedules/RosterPatternModal";
+import HolidayCalendar from "@/components/schedules/HolidayCalendar";
 import { isoDate } from "@/lib/dates";
 
 /* ------------------------------------------------------------------ */
@@ -60,6 +61,7 @@ export default function SchedulesPage() {
     const [busyRequestId, setBusyRequestId] = useState<string | null>(null);
     const [error, setError] = useState("");
     const [notice, setNotice] = useState("");
+    const [showHolidays, setShowHolidays] = useState(false);
 
     /**
      * Edits made in this sitting but not yet sent. A roster edit is a session,
@@ -669,7 +671,7 @@ export default function SchedulesPage() {
                             {monthHolidays.map((h) => (
                                 <span key={h.id} className="text-[11px] text-gray-400">
                                     <span
-                                        className={`mr-1 inline-block h-2 w-2 rounded-full ${h.is_national ? "bg-emerald-500" : "bg-emerald-500/40"
+                                        className={`mr-1 inline-block h-2 w-2 rounded-full ${h.is_national ? "bg-emerald-500" : "bg-amber-500"
                                             }`}
                                     />
                                     {new Date(`${h.date}T00:00:00`).getDate()} — {h.name}
@@ -682,6 +684,33 @@ export default function SchedulesPage() {
                     )}
                 </div>
             )}
+
+            {/* ---- Year view of the Indonesian holiday calendar ---- */}
+            <div className="rounded-2xl border border-white/10 bg-gray-900/40">
+                <button
+                    onClick={() => setShowHolidays((v) => !v)}
+                    aria-expanded={showHolidays}
+                    className="flex w-full items-center justify-between px-5 py-3 text-left"
+                >
+                    <span className="text-sm font-semibold text-white">
+                        🇮🇩 Public holiday calendar
+                        <span className="ml-2 text-xs font-normal text-gray-500">
+                            SKB 3 Menteri — libur nasional &amp; cuti bersama
+                        </span>
+                    </span>
+                    <span className="text-xs text-gray-400">{showHolidays ? "Hide ▲" : "Show ▼"}</span>
+                </button>
+                {showHolidays && (
+                    <div className="border-t border-white/10 p-5">
+                        <HolidayCalendar
+                            years={[2026, 2027]}
+                            initialYear={
+                                detail ? Number(detail.start_date.slice(0, 4)) : new Date().getFullYear()
+                            }
+                        />
+                    </div>
+                )}
+            </div>
 
             {/* ---- Staged edits: submit the sitting as one proposal ---- */}
             {staged.size > 0 && (

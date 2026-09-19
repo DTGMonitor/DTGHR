@@ -103,6 +103,10 @@ export interface WorkingDaysSummary {
     annual_leave_taken: number;
     /** National public holidays this employee was rostered to work. */
     public_holiday_loading: number;
+    /** The same count from 1 January to the end of this period. */
+    public_holiday_loading_ytd: number;
+    /** The holidays behind `public_holiday_loading`, as ISO dates. */
+    public_holiday_dates: string[];
 }
 
 export interface WorkSchedule {

@@ -1,12 +1,39 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { Employee } from "@/types/employee";
-import { employeeService, type CreateAccountResult } from "@/services/employeeService";
+import {
+    employeeService,
+    type CreateAccountResult,
+    type EmployeeAccountFilter,
+    type EmployeeSortKey,
+    type EmployeeStatusFilter,
+} from "@/services/employeeService";
 import { useAuth } from "@/contexts/AuthContext";
 import EmployeeFormModal from "@/components/employees/EmployeeFormModal";
 import DeleteConfirmModal from "@/components/employees/DeleteConfirmModal";
 import CreateAccountModal from "@/components/employees/CreateAccountModal";
 
 const PAGE_SIZE = 20;
+
+const SELECT_CLS =
+    "rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-gray-300 focus:border-indigo-500 focus:outline-none cursor-pointer";
+
+interface Filters {
+    department: string;
+    status: EmployeeStatusFilter;
+    account: EmployeeAccountFilter;
+    onLeaveOnly: boolean;
+    sort: EmployeeSortKey;
+    ascending: boolean;
+}
+
+const DEFAULT_FILTERS: Filters = {
+    department: "",
+    status: "active",
+    account: "all",
+    onLeaveOnly: false,
+    sort: "name",
+    ascending: true,
+};
 
 function StatusBadge({ active, onLeave }: { active: boolean; onLeave?: boolean }) {
     if (active && onLeave) {
@@ -30,12 +57,41 @@ function StatusBadge({ active, onLeave }: { active: boolean; onLeave?: boolean }
     );
 }
 
+function SortHeader({
+    label,
+    column,
+    filters,
+    onSort,
+}: {
+    label: string;
+    column: EmployeeSortKey;
+    filters: Filters;
+    onSort: (column: EmployeeSortKey) => void;
+}) {
+    const active = filters.sort === column;
+    return (
+        <th
+            className="px-4 py-3"
+            aria-sort={active ? (filters.ascending ? "ascending" : "descending") : "none"}
+        >
+            <button
+                onClick={() => onSort(column)}
+                className={`inline-flex items-center gap-1 uppercase tracking-wider transition hover:text-gray-300 ${active ? "text-indigo-300" : ""}`}
+            >
+                {label}
+                <span className="text-[10px]">{active ? (filters.ascending ? "▲" : "▼") : "↕"}</span>
+            </button>
+        </th>
+    );
+}
+
 export default function EmployeesPage() {
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [total, setTotal] = useState(0);
     const [page, setPage] = useState(1);
     const [search, setSearch] = useState("");
-    const [department, setDepartment] = useState("");
+    const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
+    const [departments, setDepartments] = useState<string[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -49,7 +105,7 @@ export default function EmployeesPage() {
 
     const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    const fetchEmployees = useCallback(async (p: number, s: string, d: string) => {
+    const fetchEmployees = useCallback(async (p: number, s: string, f: Filters) => {
         setLoading(true);
         setError(null);
         try {
@@ -57,7 +113,12 @@ export default function EmployeesPage() {
                 page: p,
                 page_size: PAGE_SIZE,
                 search: s || undefined,
-                department: d || undefined,
+                department: f.department || undefined,
+                status: f.status,
+                account: f.account,
+                on_leave_only: f.onLeaveOnly,
+                sort: f.sort,
+                ascending: f.ascending,
             });
             setEmployees(res.data.items);
             setTotal(res.data.total);
@@ -69,8 +130,21 @@ export default function EmployeesPage() {
     }, []);
 
     useEffect(() => {
-        fetchEmployees(page, search, department);
-    }, [page, department, fetchEmployees]); // search handled by debounce below
+        fetchEmployees(page, search, filters);
+        // search is handled by the debounce below
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [page, filters, fetchEmployees]);
+
+    useEffect(() => {
+        employeeService.departments().then(setDepartments).catch(() => {});
+    }, []);
+
+    const refresh = () => fetchEmployees(page, search, filters);
+
+    const updateFilters = (patch: Partial<Filters>) => {
+        setFilters((f) => ({ ...f, ...patch }));
+        setPage(1);
+    };
 
     const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const val = e.target.value;
@@ -78,13 +152,33 @@ export default function EmployeesPage() {
         setPage(1);
         if (searchDebounce.current) clearTimeout(searchDebounce.current);
         searchDebounce.current = setTimeout(() => {
-            fetchEmployees(1, val, department);
+            fetchEmployees(1, val, filters);
         }, 400);
     };
 
-    const handleDeptChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setDepartment(e.target.value);
-        setPage(1);
+    const handleSort = (column: EmployeeSortKey) => {
+        updateFilters(
+            filters.sort === column
+                ? { ascending: !filters.ascending }
+                : { sort: column, ascending: true }
+        );
+    };
+
+    const isFiltered =
+        !!search ||
+        !!filters.department ||
+        filters.status !== "active" ||
+        filters.account !== "all" ||
+        filters.onLeaveOnly;
+
+    const clearFilters = () => {
+        setSearch("");
+        updateFilters({
+            department: "",
+            status: "active",
+            account: "all",
+            onLeaveOnly: false,
+        });
     };
 
     const handleSaved = (saved: Employee) => {
@@ -102,10 +196,20 @@ export default function EmployeesPage() {
         });
     };
 
-    const handleDeleted = (id: string) => {
+    const handleDeactivated = () => {
         setDeleteTarget(null);
-        setEmployees((prev) => prev.filter((e) => e.id !== id));
-        setTotal((t) => t - 1);
+        refresh();
+    };
+
+    const handleReactivate = async (emp: Employee) => {
+        if (!confirm(`Reactivate ${emp.first_name} ${emp.last_name}? Their sign-in will work again.`)) return;
+        try {
+            await employeeService.reactivate(emp.id);
+            refresh();
+        } catch (err) {
+            const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+            alert(detail ?? "Failed to reactivate employee.");
+        }
     };
 
     const handleCreateAccount = async (emp: Employee) => {
@@ -122,6 +226,8 @@ export default function EmployeesPage() {
     };
 
     const totalPages = Math.ceil(total / PAGE_SIZE);
+    const statusWord =
+        filters.status === "inactive" ? "inactive " : filters.status === "active" ? "active " : "";
 
     return (
         <div className="space-y-6">
@@ -130,7 +236,8 @@ export default function EmployeesPage() {
                 <div>
                     <h1 className="text-2xl font-bold text-white">Employees</h1>
                     <p className="mt-1 text-sm text-gray-400">
-                        {total} employee{total !== 1 ? "s" : ""} in your organisation
+                        {total} {statusWord}employee{total !== 1 ? "s" : ""}
+                        {isFiltered ? " matching your filters" : " in your organisation"}
                     </p>
                 </div>
                 {isHR && (
@@ -144,7 +251,7 @@ export default function EmployeesPage() {
             </div>
 
             {/* Filters */}
-            <div className="flex flex-col gap-3 sm:flex-row">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
                 <div className="relative flex-1">
                     <svg
                         className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500"
@@ -160,13 +267,57 @@ export default function EmployeesPage() {
                         className="w-full rounded-xl border border-white/10 bg-white/5 py-2.5 pl-10 pr-4 text-sm text-white placeholder-gray-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition"
                     />
                 </div>
-                <input
-                    type="text"
-                    placeholder="Filter by department…"
-                    value={department}
-                    onChange={handleDeptChange}
-                    className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-gray-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition sm:w-52"
-                />
+                <div className="flex flex-wrap items-center gap-2">
+                    <select
+                        aria-label="Department"
+                        value={filters.department}
+                        onChange={(e) => updateFilters({ department: e.target.value })}
+                        className={SELECT_CLS}
+                    >
+                        <option value="" className="bg-gray-900">All departments</option>
+                        {departments.map((d) => (
+                            <option key={d} value={d} className="bg-gray-900">{d}</option>
+                        ))}
+                    </select>
+                    {isHR && (
+                        <>
+                            <select
+                                aria-label="Status"
+                                value={filters.status}
+                                onChange={(e) => updateFilters({ status: e.target.value as EmployeeStatusFilter })}
+                                className={SELECT_CLS}
+                            >
+                                <option value="active" className="bg-gray-900">Active</option>
+                                <option value="inactive" className="bg-gray-900">Inactive</option>
+                                <option value="all" className="bg-gray-900">All statuses</option>
+                            </select>
+                            <select
+                                aria-label="Login account"
+                                value={filters.account}
+                                onChange={(e) => updateFilters({ account: e.target.value as EmployeeAccountFilter })}
+                                className={SELECT_CLS}
+                            >
+                                <option value="all" className="bg-gray-900">Any login</option>
+                                <option value="with" className="bg-gray-900">Has login</option>
+                                <option value="without" className="bg-gray-900">No login</option>
+                            </select>
+                        </>
+                    )}
+                    <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-gray-300">
+                        <input
+                            type="checkbox"
+                            checked={filters.onLeaveOnly}
+                            onChange={(e) => updateFilters({ onLeaveOnly: e.target.checked })}
+                            className="accent-indigo-500"
+                        />
+                        On leave today
+                    </label>
+                    {isFiltered && (
+                        <button onClick={clearFilters} className="px-2 text-xs text-indigo-400 hover:underline">
+                            Clear filters
+                        </button>
+                    )}
+                </div>
             </div>
 
             {/* Table */}
@@ -185,9 +336,9 @@ export default function EmployeesPage() {
                     <div className="py-20 text-center">
                         <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-800 text-3xl">👥</div>
                         <p className="text-sm text-gray-400">No employees found</p>
-                        {(search || department) && (
+                        {isFiltered && (
                             <button
-                                onClick={() => { setSearch(""); setDepartment(""); fetchEmployees(1, "", ""); }}
+                                onClick={clearFilters}
                                 className="mt-2 text-xs text-indigo-400 hover:underline"
                             >
                                 Clear filters
@@ -199,18 +350,21 @@ export default function EmployeesPage() {
                         <table className="w-full text-sm">
                             <thead>
                                 <tr className="border-b border-white/10 bg-white/5 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                                    <th className="px-4 py-3">Employee</th>
-                                    <th className="px-4 py-3">ID</th>
-                                    <th className="px-4 py-3">Department</th>
-                                    <th className="px-4 py-3">Position</th>
-                                    <th className="px-4 py-3">Joined</th>
+                                    <SortHeader label="Employee" column="name" filters={filters} onSort={handleSort} />
+                                    <SortHeader label="ID" column="employee_id" filters={filters} onSort={handleSort} />
+                                    <SortHeader label="Department" column="department" filters={filters} onSort={handleSort} />
+                                    <SortHeader label="Position" column="position" filters={filters} onSort={handleSort} />
+                                    <SortHeader label="Joined" column="date_of_joining" filters={filters} onSort={handleSort} />
                                     <th className="px-4 py-3">Status</th>
                                     <th className="px-4 py-3 text-right">Actions</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-white/5">
                                 {employees.map((emp) => (
-                                    <tr key={emp.id} className="bg-gray-900/20 transition hover:bg-white/5">
+                                    <tr
+                                        key={emp.id}
+                                        className={`bg-gray-900/20 transition hover:bg-white/5 ${emp.is_active ? "" : "opacity-60"}`}
+                                    >
                                         <td className="px-4 py-3">
                                             <div className="flex items-center gap-3">
                                                 <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-xs font-bold text-white">
@@ -238,30 +392,38 @@ export default function EmployeesPage() {
                                             <StatusBadge active={emp.is_active} onLeave={emp.on_leave_today} />
                                         </td>
                                         <td className="px-4 py-3 text-right">
-                                            <div className="inline-flex gap-1">
+                                            <div className="inline-flex items-center gap-1">
                                                 {isHR && (
-                                                <button
-                                                    onClick={() => setFormTarget(emp)}
-                                                    className="rounded-lg p-1.5 text-gray-500 hover:bg-white/10 hover:text-indigo-400 transition"
-                                                    title="Edit"
-                                                >
-                                                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Z" />
-                                                    </svg>
-                                                </button>
+                                                    <button
+                                                        onClick={() => setFormTarget(emp)}
+                                                        className="rounded-lg p-1.5 text-gray-500 hover:bg-white/10 hover:text-indigo-400 transition"
+                                                        title="Edit"
+                                                    >
+                                                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Z" />
+                                                        </svg>
+                                                    </button>
                                                 )}
-                                                {isHR && (
-                                                <button
-                                                    onClick={() => setDeleteTarget(emp)}
-                                                    className="rounded-lg p-1.5 text-gray-500 hover:bg-red-500/10 hover:text-red-400 transition"
-                                                    title="Deactivate"
-                                                >
-                                                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M22 10.5h-6m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM4 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109A12.318 12.318 0 0 1 10.374 21c-2.331 0-4.512-.645-6.374-1.766Z" />
-                                                    </svg>
-                                                </button>
+                                                {isHR && emp.is_active && emp.user_id !== user?.id && (
+                                                    <button
+                                                        onClick={() => setDeleteTarget(emp)}
+                                                        className="rounded-lg p-1.5 text-gray-500 hover:bg-red-500/10 hover:text-red-400 transition"
+                                                        title="Deactivate (left the company)"
+                                                    >
+                                                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M22 10.5h-6m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM4 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109A12.318 12.318 0 0 1 10.374 21c-2.331 0-4.512-.645-6.374-1.766Z" />
+                                                        </svg>
+                                                    </button>
                                                 )}
-                                                {isHR && !emp.has_account && (
+                                                {isHR && !emp.is_active && (
+                                                    <button
+                                                        onClick={() => handleReactivate(emp)}
+                                                        className="rounded-lg px-2 py-1 text-xs font-medium text-emerald-400 hover:bg-emerald-500/10 transition"
+                                                    >
+                                                        Reactivate
+                                                    </button>
+                                                )}
+                                                {isHR && emp.is_active && !emp.has_account && (
                                                     <button
                                                         onClick={() => handleCreateAccount(emp)}
                                                         className="rounded-lg p-1.5 text-gray-500 hover:bg-emerald-500/10 hover:text-emerald-400 transition"
@@ -272,7 +434,7 @@ export default function EmployeesPage() {
                                                         </svg>
                                                     </button>
                                                 )}
-                                                {emp.has_account && (
+                                                {emp.has_account && emp.is_active && (
                                                     <span title="Account active" className="rounded-lg p-1.5 text-emerald-500">
                                                         <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                                                             <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
@@ -323,12 +485,12 @@ export default function EmployeesPage() {
                 />
             )}
 
-            {/* Delete modal */}
+            {/* Deactivate modal */}
             {deleteTarget && (
                 <DeleteConfirmModal
                     employee={deleteTarget}
                     onClose={() => setDeleteTarget(null)}
-                    onDeleted={handleDeleted}
+                    onDeleted={handleDeactivated}
                 />
             )}
 
