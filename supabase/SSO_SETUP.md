@@ -107,22 +107,24 @@ Supabase dashboard → **Authentication** → **Sign In / Providers** → **Azur
 5. **Save**, then confirm the callback URL shown on that page matches what you
    registered in Entra, character for character.
 
-### Before you test: check account linking
+### Before you test: understand what should happen
 
-Still in **Authentication**, find **"Allow multiple accounts with the same
-email address"** and make sure it is **off** (the default).
+Your ten existing accounts already live in `auth.users` with a password
+identity. Signing in with Microsoft should **add an Entra identity to the
+existing account**, keeping the same user id — so `employees.user_id`,
+`is_superuser` and every audit-log reference keep pointing at the right person.
 
-This matters more than it sounds. Your ten existing accounts already live in
-`auth.users` with a password identity. With this setting off, signing in with
-Microsoft **adds an Entra identity to the existing account**, keeping the same
-user id — so `employees.user_id`, `is_superuser` and every audit-log reference
-keep pointing at the right person.
+That is Supabase's default: an OAuth identity is linked onto an existing
+account when the email matches and is already confirmed, which every account
+here is. There is nothing to configure — older dashboards exposed an "Allow
+multiple accounts with the same email address" toggle, but current ones do not.
 
-With it on, you get a *second* account for the same human. The new one gets a
-fresh uuid, the trigger builds it a profile, and that profile has
-`is_superuser = false` and no employee row — because the employee is still
-linked to the original id. You would then have HR admins who cannot see the
-Employees page and roster rows nobody can propose against.
+The failure mode, if linking ever does not happen, is a *second* account for the
+same human: a fresh uuid, a profile built by the trigger with
+`is_superuser = false`, and no employee row, because the employee is still
+linked to the original id. That would leave you with HR admins who cannot see
+the Employees page and roster rows nobody can propose against. The query in
+Part 5 is what tells you which of the two you got — do not skip it.
 
 ---
 
@@ -191,10 +193,13 @@ left join public.employees e on e.user_id = u.id
 order by u.email;
 ```
 
-**If the person who just signed in has two rows in `auth.users`,** linking did
-not happen. Stop before anyone else signs in — the duplicate has to be removed
-and the setting from Part 2 corrected, and untangling ten of them is far worse
-than untangling one.
+Read that first result carefully. **Two rows is the correct answer** — one
+`email`, one `azure` — provided both show the *same* `id`. That is one account
+with two ways into it.
+
+**Two different ids for the same address means linking did not happen.** Stop
+before anyone else signs in: the duplicate has to be removed, and untangling
+ten of them is far worse than untangling one.
 
 ---
 
