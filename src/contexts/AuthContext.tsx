@@ -73,6 +73,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setSessionFacts(null);
             await supabase.auth.signOut();
             if (mounted.current) setUser(null);
+            // Rethrow so a failure here during sign-in reaches the login form.
+            // Swallowing it bounces the user back to /login with nothing shown,
+            // which is indistinguishable from a rejected password.
+            throw err;
         }
     }, []);
 
@@ -87,9 +91,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         mounted.current = true;
 
         (async () => {
-            const { data } = await supabase.auth.getSession();
-            if (data.session) await loadProfile();
-            if (mounted.current) setIsLoading(false);
+            try {
+                const { data } = await supabase.auth.getSession();
+                if (data.session) await loadProfile();
+            } catch {
+                // loadProfile has already dropped the session; nothing to show.
+            } finally {
+                if (mounted.current) setIsLoading(false);
+            }
         })();
 
         const { data: subscription } = supabase.auth.onAuthStateChange((event, session) => {
@@ -104,7 +113,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     return;
                 }
                 if (event === "SIGNED_IN" || event === "USER_UPDATED") {
-                    await loadProfile();
+                    try {
+                        await loadProfile();
+                    } catch {
+                        // Already handled inside loadProfile. The login form
+                        // reports it; this listener has nowhere to put it.
+                    }
                 }
             });
         });
@@ -123,12 +137,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const { error } = await supabase.auth.signInWithPassword({ email, password });
             if (error) {
                 // GoTrue says "Invalid login credentials"; the old API said
-                // "Incorrect email or password". Keep the wording people know.
+                // "Incorrect email or password". Keep the wording people know --
+                // but only for that one case. GoTrue returns 400 for several
+                // other things too (the email provider being switched off, an
+                // unconfirmed address, rate limiting), and calling those a bad
+                // password sends whoever is debugging it in the wrong direction.
+                const isBadCredentials =
+                    error.code === "invalid_credentials" ||
+                    /invalid login credentials/i.test(error.message);
+
                 throw toApiError({
-                    message:
-                        error.status === 400
-                            ? "Incorrect email or password"
-                            : error.message,
+                    message: isBadCredentials
+                        ? "Incorrect email or password"
+                        : error.message,
                     ...(error.status ? { status: error.status } : {}),
                 } as { message: string; status?: number });
             }

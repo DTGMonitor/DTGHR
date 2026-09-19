@@ -129,16 +129,14 @@ variables (`DATABASE_URL`, `SECRET_KEY`, …) go with it.
 ### 4. Microsoft SSO, when you want it
 
 It was never switched on — `AZURE_CLIENT_ID` and `AZURE_TENANT_ID` were blank —
-so nothing regresses by leaving it off. To enable it now:
+so nothing regresses by leaving it off. The application code is already in
+place; enabling it is configuration in two dashboards plus a build-time flag.
 
-1. Supabase → Authentication → Providers → Azure. Enter the Entra application
-   (client) ID, a client secret, and the tenant URL
-   `https://login.microsoftonline.com/<tenant-id>`.
-2. On the Entra app registration → Authentication, add
-   `https://mapacifoqcybetzglhow.supabase.co/auth/v1/callback` as a **Web**
-   redirect URI. (The old SPA redirect URIs pointing at the Vercel domains are
-   no longer used — Supabase handles the redirect now.)
-3. Set `VITE_AZURE_SSO_ENABLED=true` in Vercel and redeploy.
+**[SSO_SETUP.md](SSO_SETUP.md)** is the step-by-step guide, including the three
+things that reliably go wrong: registering the Entra app as a single-page
+application instead of **Web**, leaving the Azure Tenant URL blank, and letting
+Supabase create duplicate accounts instead of linking the Entra identity onto
+the existing ones.
 
 The trigger in migration `...000100` provisions a profile on first SSO sign-in
 and links the roster row whose email matches, which is what the old backend did
