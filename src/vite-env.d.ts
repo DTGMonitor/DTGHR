@@ -1,18 +1,21 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
+    /** Supabase project URL, e.g. https://xxxx.supabase.co */
+    readonly VITE_SUPABASE_URL: string;
+
     /**
-     * Base URL for the backend API. Optional — defaults to the relative path
-     * "/api/v1", which is proxied to the backend by Vite in development and by
-     * a vercel.json rewrite in production.
+     * Supabase anon (publishable) key. Safe to ship in the bundle: it grants
+     * nothing on its own, because every table is behind row-level security.
+     * The service_role key must never appear here.
      */
-    readonly VITE_API_BASE_URL?: string;
+    readonly VITE_SUPABASE_ANON_KEY: string;
 
-    /** Microsoft Entra ID application (client) ID. Omit to disable SSO. */
-    readonly VITE_AZURE_CLIENT_ID?: string;
-
-    /** Microsoft Entra ID directory (tenant) ID. Omit to disable SSO. */
-    readonly VITE_AZURE_TENANT_ID?: string;
+    /**
+     * "true" to show the Microsoft sign-in button. The Azure provider itself
+     * is configured in the Supabase dashboard, not in this bundle.
+     */
+    readonly VITE_AZURE_SSO_ENABLED?: string;
 }
 
 interface ImportMeta {

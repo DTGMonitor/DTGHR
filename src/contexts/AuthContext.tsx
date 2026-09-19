@@ -4,12 +4,16 @@ import {
     useState,
     useEffect,
     useCallback,
+    useRef,
     type ReactNode,
 } from "react";
-import { useMsal } from "@azure/msal-react";
-import { InteractionRequiredAuthError } from "@azure/msal-browser";
-import api, { TOKEN_KEY } from "@/lib/api";
-import { isAzureSsoConfigured, loginRequest } from "@/lib/msalConfig";
+import {
+    isAzureSsoConfigured,
+    rpc,
+    setSessionFacts,
+    supabase,
+    toApiError,
+} from "@/lib/supabase";
 import type { UserResponse } from "@/types/auth";
 
 // ---------------------------------------------------------------------------
@@ -20,20 +24,16 @@ interface AuthContextValue {
     user: UserResponse | null;
     isAuthenticated: boolean;
     isLoading: boolean;
-    /** Email/password login (admin) */
+    /** Email/password login */
     loginWithEmail: (email: string, password: string) => Promise<void>;
-    /** Microsoft Entra ID login (employees) */
+    /** Microsoft Entra ID login, through Supabase's Azure provider */
     loginWithMicrosoft: () => Promise<void>;
-    /** Whether Entra SSO is configured in this build */
+    /** Whether Entra SSO is offered in this build */
     isSsoAvailable: boolean;
-    /** Change password (first-time email/password users) */
+    /** Change password (first-time users on a temporary password) */
     changePassword: (newPassword: string) => Promise<void>;
     logout: () => void;
 }
-
-// ---------------------------------------------------------------------------
-// Context
-// ---------------------------------------------------------------------------
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
@@ -42,114 +42,154 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 // ---------------------------------------------------------------------------
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-    const { instance } = useMsal();
     const [user, setUser] = useState<UserResponse | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const mounted = useRef(true);
 
-    // -----------------------------------------------------------------------
-    // On mount: hydrate from stored local token OR from MSAL session
-    // -----------------------------------------------------------------------
-    useEffect(() => {
-        const localToken = localStorage.getItem(TOKEN_KEY);
-        // MSAL v3 throws if the instance was never initialised, which is the
-        // case whenever Entra SSO is not configured for this build.
-        const msalAccounts = isAzureSsoConfigured ? instance.getAllAccounts() : [];
-
-        // Case 1: Local JWT exists (admin email/password login)
-        if (localToken) {
-            api
-                .get<UserResponse>("/auth/me")
-                .then((res) => setUser(res.data))
-                .catch(() => localStorage.removeItem(TOKEN_KEY))
-                .finally(() => setIsLoading(false));
-            return;
+    /**
+     * Resolve the profile behind the current Supabase session.
+     *
+     * bootstrap_session() is the replacement for GET /auth/me. It also does
+     * what the backend used to do on every single request: link the roster row
+     * whose email matches this account, so somebody imported from the workbook
+     * can propose changes to their own row without HR pairing them up by hand.
+     */
+    const loadProfile = useCallback(async () => {
+        try {
+            const profile = await rpc<UserResponse & { employee_id: string | null }>(
+                "bootstrap_session"
+            );
+            setSessionFacts({
+                userId: profile.id,
+                employeeId: profile.employee_id,
+                isSuperuser: profile.is_superuser,
+            });
+            if (mounted.current) setUser(profile);
+        } catch (err) {
+            // An inactive account, or a session whose user no longer exists.
+            // Either way there is nothing to show, so drop the session rather
+            // than leave the app in a half-signed-in state.
+            console.error("[AuthContext] could not load profile:", err);
+            setSessionFacts(null);
+            await supabase.auth.signOut();
+            if (mounted.current) setUser(null);
         }
-
-        // Case 2: MSAL session exists (Microsoft login)
-        // Use instance.getAllAccounts() directly — it's synchronous and always
-        // up-to-date after handleRedirectPromise() has resolved (which we
-        // await in main.tsx before rendering). The useIsAuthenticated() hook
-        // may lag behind by one render cycle after a redirect, causing a
-        // race condition where ProtectedRoute redirects to /login.
-        // msalAccounts already computed above
-        if (msalAccounts.length > 0) {
-            const fetchUser = async () => {
-                try {
-                    const tokenResponse = await instance.acquireTokenSilent({
-                        ...loginRequest,
-                        account: msalAccounts[0],
-                    });
-
-                    // Use the ID token (signed JWT with user claims)
-                    const token = tokenResponse.idToken;
-                    localStorage.setItem(TOKEN_KEY, token);
-
-                    const res = await api.get<UserResponse>("/auth/me");
-                    setUser(res.data);
-                } catch (err) {
-                    if (err instanceof InteractionRequiredAuthError) {
-                        await instance.acquireTokenRedirect(loginRequest);
-                    } else {
-                        console.error("[AuthContext] MSAL token/me FAIL:", err);
-                    }
-                } finally {
-                    setIsLoading(false);
-                }
-            };
-            fetchUser();
-            return;
-        }
-
-        // Neither — user is not logged in
-        setIsLoading(false);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [instance]);
-
-    // -----------------------------------------------------------------------
-    // Login: email + password (admin)
-    // -----------------------------------------------------------------------
-    const loginWithEmail = useCallback(async (email: string, password: string) => {
-        const { data } = await api.post<{ access_token: string }>("/auth/login", {
-            email,
-            password,
-        });
-        localStorage.setItem(TOKEN_KEY, data.access_token);
-        const meRes = await api.get<UserResponse>("/auth/me");
-        setUser(meRes.data);
     }, []);
 
     // -----------------------------------------------------------------------
-    // Login: Microsoft Entra ID (employees)
+    // On mount: pick up an existing session, then follow it.
+    //
+    // onAuthStateChange also fires for token refreshes and for the redirect
+    // back from Microsoft, which is what makes SSO work without any explicit
+    // handling of the callback URL.
+    // -----------------------------------------------------------------------
+    useEffect(() => {
+        mounted.current = true;
+
+        (async () => {
+            const { data } = await supabase.auth.getSession();
+            if (data.session) await loadProfile();
+            if (mounted.current) setIsLoading(false);
+        })();
+
+        const { data: subscription } = supabase.auth.onAuthStateChange((event, session) => {
+            // Supabase warns against awaiting its own calls inside this
+            // callback -- doing so can deadlock the client's internal lock.
+            // Defer instead.
+            queueMicrotask(async () => {
+                if (!mounted.current) return;
+                if (event === "SIGNED_OUT" || !session) {
+                    setSessionFacts(null);
+                    setUser(null);
+                    return;
+                }
+                if (event === "SIGNED_IN" || event === "USER_UPDATED") {
+                    await loadProfile();
+                }
+            });
+        });
+
+        return () => {
+            mounted.current = false;
+            subscription.subscription.unsubscribe();
+        };
+    }, [loadProfile]);
+
+    // -----------------------------------------------------------------------
+    // Login: email + password
+    // -----------------------------------------------------------------------
+    const loginWithEmail = useCallback(
+        async (email: string, password: string) => {
+            const { error } = await supabase.auth.signInWithPassword({ email, password });
+            if (error) {
+                // GoTrue says "Invalid login credentials"; the old API said
+                // "Incorrect email or password". Keep the wording people know.
+                throw toApiError({
+                    message:
+                        error.status === 400
+                            ? "Incorrect email or password"
+                            : error.message,
+                    ...(error.status ? { status: error.status } : {}),
+                } as { message: string; status?: number });
+            }
+            await loadProfile();
+        },
+        [loadProfile]
+    );
+
+    // -----------------------------------------------------------------------
+    // Login: Microsoft Entra ID
+    //
+    // The provider is configured in the Supabase dashboard rather than in this
+    // bundle, so there is no client id here any more. Supabase handles the
+    // redirect and hands back its own session.
     // -----------------------------------------------------------------------
     const loginWithMicrosoft = useCallback(async () => {
         if (!isAzureSsoConfigured) {
             throw new Error(
-                "Microsoft sign-in is not configured. Set VITE_AZURE_CLIENT_ID and " +
-                    "VITE_AZURE_TENANT_ID and redeploy the frontend."
+                "Microsoft sign-in is not enabled. Configure the Azure provider in the " +
+                    "Supabase dashboard, set VITE_AZURE_SSO_ENABLED=true and redeploy."
             );
         }
-        await instance.loginRedirect(loginRequest);
-    }, [instance]);
-
-    // -----------------------------------------------------------------------
-    // Change password (first-time email/password users)
-    // -----------------------------------------------------------------------
-    const changePassword = useCallback(async (newPassword: string) => {
-        await api.post("/auth/change-password", { new_password: newPassword });
-        // Refresh user profile so password_change_required becomes false
-        const meRes = await api.get<UserResponse>("/auth/me");
-        setUser(meRes.data);
+        const { error } = await supabase.auth.signInWithOAuth({
+            provider: "azure",
+            options: {
+                scopes: "openid profile email",
+                redirectTo: window.location.origin,
+            },
+        });
+        if (error) throw toApiError(error);
     }, []);
 
     // -----------------------------------------------------------------------
-    // Logout — only clears the HR Hub session.
-    // We intentionally do NOT call instance.logoutRedirect() so the user
-    // stays signed in to their Microsoft / Entra account.  On re-login the
-    // existing MSAL session token is reused if still valid.
+    // Change password
+    // -----------------------------------------------------------------------
+    const changePassword = useCallback(async (newPassword: string) => {
+        const { error } = await supabase.auth.updateUser({ password: newPassword });
+        if (error) throw toApiError(error);
+
+        // The password itself is GoTrue's business now; this clears the
+        // "must change it" flag the old endpoint reset alongside the hash.
+        const profile = await rpc<UserResponse & { employee_id: string | null }>(
+            "complete_password_change"
+        );
+        setSessionFacts({
+            userId: profile.id,
+            employeeId: profile.employee_id,
+            isSuperuser: profile.is_superuser,
+        });
+        setUser(profile);
+    }, []);
+
+    // -----------------------------------------------------------------------
+    // Logout — clears the HR Hub session only. As before, we do not sign the
+    // user out of Microsoft: an SSO user going back to /login should be able
+    // to come straight back in.
     // -----------------------------------------------------------------------
     const logout = useCallback(() => {
-        localStorage.removeItem(TOKEN_KEY);
+        setSessionFacts(null);
         setUser(null);
+        void supabase.auth.signOut();
     }, []);
 
     return (

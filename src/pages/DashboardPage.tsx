@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import api from "@/lib/api";
+import { dashboardService } from "@/services/dashboardService";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -154,8 +154,9 @@ export default function DashboardPage() {
     const loadActivity = useCallback(async (page: number) => {
         setActivityLoading(true);
         try {
-            const res = await api.get("/activity/recent", {
-                params: { page, page_size: ACTIVITY_PAGE_SIZE },
+            const res = await dashboardService.recentActivity({
+                page,
+                page_size: ACTIVITY_PAGE_SIZE,
             });
             setActivity(res.data.items);
             setActivityTotal(res.data.total);
@@ -171,7 +172,7 @@ export default function DashboardPage() {
         (async () => {
             try {
                 const [statsRes] = await Promise.all([
-                    api.get("/dashboard/stats"),
+                    dashboardService.stats<DashboardStats>(),
                     loadActivity(1),
                 ]);
                 setStats(statsRes.data);

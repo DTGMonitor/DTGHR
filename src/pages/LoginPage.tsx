@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate, useLocation, Navigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import axios from "axios";
+import { isApiError } from "@/lib/supabase";
 
 export default function LoginPage() {
     const { loginWithEmail, loginWithMicrosoft, isSsoAvailable, isAuthenticated, isLoading } = useAuth();
@@ -37,8 +37,8 @@ export default function LoginPage() {
             await loginWithEmail(email, password);
             navigate(from, { replace: true });
         } catch (err) {
-            if (axios.isAxiosError(err)) {
-                setError(err.response?.data?.detail ?? "Login failed. Please try again.");
+            if (isApiError(err)) {
+                setError(err.response.data.detail || "Login failed. Please try again.");
             } else {
                 setError("An unexpected error occurred.");
             }

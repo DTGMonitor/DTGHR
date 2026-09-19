@@ -7,56 +7,60 @@ FE repository for custom HR management platform with smart integration. Single u
 - **Framework:** React 18 + TypeScript
 - **Build Tool:** Vite
 - **Styling:** Tailwind CSS
-- **HTTP Client:** Axios (with JWT interceptor)
+- **Backend:** Supabase — PostgREST behind row-level security, plus Postgres
+  functions for anything with business logic behind it
+- **Client:** `@supabase/supabase-js`
 - **Routing:** React Router v6
-- **Auth:** MSAL (Microsoft Entra ID, optional) + email/password
+- **Auth:** Supabase Auth — email/password, with Microsoft Entra ID available
+  as a provider
 - **Hosting:** Vercel (static build)
+
+There is no server of our own. The migrations that define the backend live in
+[`supabase/`](supabase/README.md); start with the runbook there.
 
 ## Quick Start
 
 ### Prerequisites
 
-Node 18+ and a running backend. See [DTG-HR-HUB-BE](https://github.com/dtg-focus/DTG-HR-HUB-BE).
+Node 18+ and a Supabase project with the migrations in [`supabase/`](supabase/README.md)
+applied.
 
 ### Running locally
 
 ```bash
 npm install
-cp .env.example .env.local
+cp .env.example .env.local   # then fill in the two VITE_SUPABASE_* values
 npm run dev
 ```
 
-The app is served at **http://localhost:5173**.
-
-Vite proxies `/api` to the backend (`VITE_BACKEND_URL`, default
-`http://localhost:8000`), so requests stay same-origin and no CORS setup is
-needed in development.
+The app is served at **http://localhost:5173** and talks to Supabase directly —
+the same path as production, so there is no dev proxy to keep in sync.
 
 ## Deployment
 
-Deployed to Vercel as a static Vite build. The full guide — including how to
-point the frontend at the backend deployment — lives in the backend repo:
-**[DEPLOYMENT.md](https://github.com/dtg-focus/DTG-HR-HUB-BE/blob/main/DEPLOYMENT.md)**.
+Deployed to Vercel as a static Vite build. Set `VITE_SUPABASE_URL` and
+`VITE_SUPABASE_ANON_KEY` in the project's environment variables; Vite inlines
+them at build time, so a change needs a redeploy.
 
-There are two ways to reach the API in production:
-
-- **Absolute URL** — set `VITE_API_BASE_URL` to
-  `https://<backend>.vercel.app/api/v1`, and add this app's origin to the
-  backend's `CORS_ORIGINS`.
-- **Same-origin rewrite** — leave `VITE_API_BASE_URL` unset and add an `/api`
-  rewrite to `vercel.json` above the SPA fallback. Vercel proxies server-side,
-  so there is no CORS at all.
+The anon key is safe in the bundle — it grants nothing on its own, because
+every table is behind row-level security. The **service_role** key must never
+appear here.
 
 ## Authentication Flow
 
 There are two authentication paths:
 
 ### 1. Microsoft Entra ID (Employees)
-Most users log in via Single Sign-On (SSO) using their Microsoft organizational accounts.
+Available through Supabase's Azure provider, and off until it is configured —
+see step 4 of the [runbook](supabase/README.md).
 1. User clicks **Sign in with Microsoft** on the login page.
-2. MSAL redirects to the Azure Active Directory login.
-3. Upon successful callback, the frontend acquires an ID token and logs the user into the HR Hub dashboard.
-4. **Logout Flow:** When an employee logs out from HR Hub, only the local session is cleared. They are not forced to completely sign out of their Entra/Microsoft account.
+2. Supabase redirects to the Entra login and handles the callback itself; the
+   app receives a Supabase session like any other.
+3. On first sign-in a trigger creates their profile and links the roster row
+   whose email matches, so their own row becomes proposable without HR pairing
+   it up by hand.
+4. **Logout Flow:** logging out clears the HR Hub session only. Users are not
+   signed out of their Entra/Microsoft account.
 
 ### 2. Email & Password (HR/Admins)
 There is **no public registration**. Only HR (superusers) can create employee accounts or use email/password auth directly.
@@ -118,16 +122,17 @@ src/
 
 ## Environment Variables
 
-All are optional. Vite inlines them at **build** time, so changing one in Vercel
-requires a redeploy before it takes effect.
+Vite inlines them at **build** time, so changing one in Vercel requires a
+redeploy before it takes effect.
 
-| Variable | Description |
-|----------|-------------|
-| `VITE_API_BASE_URL` | Absolute API base URL. Defaults to `/api/v1`, which is proxied by Vite in dev and by a `vercel.json` rewrite in production. |
-| `VITE_BACKEND_URL` | Dev-server proxy target. Only used by `npm run dev`. Defaults to `http://localhost:8000`. |
-| `VITE_AZURE_CLIENT_ID` | Application (client) ID from the Azure portal. |
-| `VITE_AZURE_TENANT_ID` | Directory (tenant) ID from the Azure portal. |
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `VITE_SUPABASE_URL` | yes | Supabase project URL, e.g. `https://xxxx.supabase.co`. |
+| `VITE_SUPABASE_ANON_KEY` | yes | Supabase anon (publishable) key. |
+| `VITE_AZURE_SSO_ENABLED` | no | `"true"` shows the Microsoft sign-in button. The provider itself is configured in the Supabase dashboard, not here. |
 
-> Entra SSO is optional. With `VITE_AZURE_CLIENT_ID` and `VITE_AZURE_TENANT_ID`
-> unset, the app hides the "Sign in with Microsoft" button and email/password
-> login continues to work.
+> The app throws at startup if either required variable is missing, rather than
+> failing on the first query with something less obvious.
+
+> Entra SSO is optional. With `VITE_AZURE_SSO_ENABLED` unset, the app hides the
+> "Sign in with Microsoft" button and email/password login continues to work.

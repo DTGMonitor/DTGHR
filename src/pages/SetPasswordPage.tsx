@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import axios from "axios";
+import { isApiError } from "@/lib/supabase";
 
 export default function SetPasswordPage() {
     const { changePassword } = useAuth();
@@ -30,8 +30,8 @@ export default function SetPasswordPage() {
             await changePassword(newPassword);
             navigate("/", { replace: true });
         } catch (err) {
-            if (axios.isAxiosError(err)) {
-                setError(err.response?.data?.detail ?? "Failed to change password.");
+            if (isApiError(err)) {
+                setError(err.response.data.detail || "Failed to change password.");
             } else {
                 setError("An unexpected error occurred.");
             }

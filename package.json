@@ -6,17 +6,17 @@
     "scripts": {
         "dev": "vite",
         "build": "tsc -b && vite build",
-        "preview": "vite preview"
+        "preview": "vite preview",
+        "test:db": "node supabase/test/run.mjs"
     },
     "dependencies": {
-        "@azure/msal-browser": "^3.30.0",
-        "@azure/msal-react": "^2.2.0",
-        "axios": "^1.7.9",
+        "@supabase/supabase-js": "^2.45.0",
         "react": "^18.3.1",
         "react-dom": "^18.3.1",
         "react-router-dom": "^6.28.0"
     },
     "devDependencies": {
+        "@electric-sql/pglite": "^0.5.8",
         "@types/node": "^25.3.0",
         "@types/react": "^18.3.12",
         "@types/react-dom": "^18.3.1",
