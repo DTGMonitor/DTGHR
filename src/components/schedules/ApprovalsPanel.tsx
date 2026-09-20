@@ -26,11 +26,11 @@ function formatDate(iso: string) {
 }
 
 const STATUS_STYLES: Record<string, string> = {
-    [ShiftChangeStatus.PENDING]: "bg-amber-500/20 text-amber-400",
-    [ShiftChangeStatus.APPROVED]: "bg-emerald-500/20 text-emerald-400",
-    [ShiftChangeStatus.REJECTED]: "bg-red-500/20 text-red-400",
-    [ShiftChangeStatus.PARTIALLY_APPROVED]: "bg-sky-500/20 text-sky-400",
-    [ShiftChangeStatus.CANCELLED]: "bg-gray-500/20 text-gray-400",
+    [ShiftChangeStatus.PENDING]: "border-gold/35 bg-gold/10 text-gold",
+    [ShiftChangeStatus.APPROVED]: "border-signal/35 bg-signal/10 text-signal",
+    [ShiftChangeStatus.REJECTED]: "border-danger/35 bg-danger/10 text-danger",
+    [ShiftChangeStatus.PARTIALLY_APPROVED]: "border-teal-300/35 bg-teal-300/10 text-teal-300",
+    [ShiftChangeStatus.CANCELLED]: "border-white/12 bg-white/[0.04] text-muted",
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -50,17 +50,17 @@ export default function ApprovalsPanel({
     onClose,
 }: Props) {
     return (
-        <div className="rounded-2xl border border-white/10 bg-gray-900/50 backdrop-blur-xl">
+        <div className="rounded-2xl border border-white/10 bg-surface/50 backdrop-blur-xl">
             <div className="flex items-center justify-between border-b border-white/10 px-5 py-3">
-                <h3 className="text-sm font-bold text-white">
+                <h3 className="text-sm font-bold text-paper">
                     {canReview ? "Pending approvals" : "My proposals"}
-                    <span className="ml-2 rounded-full bg-amber-500/20 px-2 py-0.5 text-[11px] font-medium text-amber-400">
+                    <span className="ml-2 rounded-full bg-gold/20 px-2 py-0.5 text-[11px] font-medium text-gold">
                         {requests.length}
                     </span>
                 </h3>
                 <button
                     onClick={onClose}
-                    className="rounded-lg p-1 text-gray-500 transition hover:bg-white/5 hover:text-white"
+                    className="rounded-lg p-1 text-muted transition hover:bg-white/5 hover:text-paper"
                     title="Hide"
                 >
                     ✕
@@ -68,7 +68,7 @@ export default function ApprovalsPanel({
             </div>
 
             {requests.length === 0 ? (
-                <p className="px-5 py-6 text-center text-sm text-gray-500">
+                <p className="px-5 py-6 text-center text-sm text-muted">
                     Nothing waiting.
                 </p>
             ) : (
@@ -150,21 +150,21 @@ function ProposalRow({
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
                 <button
                     onClick={() => setExpanded((v) => !v)}
-                    className="text-gray-500 transition hover:text-white"
+                    className="text-muted transition hover:text-paper"
                     title={expanded ? "Collapse" : "Expand"}
                 >
                     {expanded ? "▾" : "▸"}
                 </button>
 
                 <div className="min-w-[10rem] flex-1">
-                    <p className="text-sm font-medium text-white">
+                    <p className="text-sm font-medium text-paper">
                         {employees.join(", ")}
-                        <span className="ml-2 text-[11px] font-normal text-gray-500">
+                        <span className="ml-2 text-[11px] font-normal text-muted">
                             {request.items.length} day
                             {request.items.length === 1 ? "" : "s"}
                         </span>
                     </p>
-                    <p className="text-[11px] text-gray-500">
+                    <p className="text-[11px] text-muted">
                         {request.requested_by_name
                             ? `asked by ${request.requested_by_name}`
                             : " "}
@@ -177,8 +177,7 @@ function ProposalRow({
                 </div>
 
                 <span
-                    className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_STYLES[request.status] ?? ""
-                        }`}
+                    className={`dtg-chip ${STATUS_STYLES[request.status] ?? ""}`}
                 >
                     {STATUS_LABELS[request.status] ?? request.status}
                 </span>
@@ -190,12 +189,12 @@ function ProposalRow({
                             onChange={(e) => setNote(e.target.value)}
                             placeholder="Note (optional)"
                             maxLength={500}
-                            className="w-32 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-[11px] text-white placeholder-gray-500 focus:border-indigo-500 focus:outline-none"
+                            className="w-32 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-[11px] text-paper placeholder-muted focus:border-signal/60 focus:outline-none"
                         />
                         <button
                             onClick={submit}
                             disabled={busy}
-                            className="rounded-lg bg-emerald-500/20 px-3 py-1.5 text-[11px] font-semibold text-emerald-400 transition hover:bg-emerald-500/30 disabled:opacity-50"
+                            className="rounded-lg bg-signal/20 px-3 py-1.5 text-[11px] font-semibold text-signal transition hover:bg-signal/30 disabled:opacity-50"
                         >
                             {rejectedCount === 0
                                 ? `Approve all ${pendingItems.length}`
@@ -209,7 +208,7 @@ function ProposalRow({
                                 })
                             }
                             disabled={busy}
-                            className="rounded-lg bg-red-500/20 px-3 py-1.5 text-[11px] font-semibold text-red-400 transition hover:bg-red-500/30 disabled:opacity-50"
+                            className="rounded-lg bg-danger/20 px-3 py-1.5 text-[11px] font-semibold text-danger transition hover:bg-danger/30 disabled:opacity-50"
                         >
                             Reject all
                         </button>
@@ -220,7 +219,7 @@ function ProposalRow({
                     <button
                         onClick={() => onWithdraw(request.id)}
                         disabled={busy}
-                        className="rounded-lg border border-white/10 px-3 py-1.5 text-[11px] font-medium text-gray-300 transition hover:bg-white/5 disabled:opacity-50"
+                        className="rounded-lg border border-white/10 px-3 py-1.5 text-[11px] font-medium text-paper-soft transition hover:bg-white/5 disabled:opacity-50"
                     >
                         Withdraw
                     </button>
@@ -228,12 +227,12 @@ function ProposalRow({
             </div>
 
             {request.reason && (
-                <p className="mt-1.5 pl-6 text-[11px] italic text-gray-400">
+                <p className="mt-1.5 pl-6 text-[11px] italic text-paper-soft">
                     “{request.reason}”
                 </p>
             )}
             {request.review_note && (
-                <p className="mt-1 pl-6 text-[11px] text-gray-500">
+                <p className="mt-1 pl-6 text-[11px] text-muted">
                     Reviewer: “{request.review_note}”
                 </p>
             )}
@@ -289,16 +288,16 @@ function ItemRow({
                 />
             )}
 
-            <span className="w-24 shrink-0 text-gray-300">{formatDate(item.date)}</span>
+            <span className="w-24 shrink-0 text-paper-soft">{formatDate(item.date)}</span>
 
             {multiEmployee && (
-                <span className="w-32 shrink-0 truncate text-gray-500">
+                <span className="w-32 shrink-0 truncate text-muted">
                     {item.employee_name}
                 </span>
             )}
 
             <ShiftChip code={item.current_code} />
-            <span className="text-gray-600" aria-hidden>
+            <span className="text-muted" aria-hidden>
                 →
             </span>
             <ShiftChip code={item.requested_code} />
@@ -312,7 +311,7 @@ function ItemRow({
                 </span>
             )}
             {reviewable && (
-                <span className="ml-auto text-[10px] text-gray-500">
+                <span className="ml-auto text-[10px] text-muted">
                     {accepted ? "will apply" : "will reject"}
                 </span>
             )}

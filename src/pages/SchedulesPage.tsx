@@ -21,7 +21,6 @@ import CellEditor from "@/components/schedules/CellEditor";
 import ShiftLegend from "@/components/schedules/ShiftLegend";
 import ApprovalsPanel from "@/components/schedules/ApprovalsPanel";
 import RosterPatternModal from "@/components/schedules/RosterPatternModal";
-import HolidayCalendar from "@/components/schedules/HolidayCalendar";
 import { isoDate } from "@/lib/dates";
 
 /* ------------------------------------------------------------------ */
@@ -61,7 +60,6 @@ export default function SchedulesPage() {
     const [busyRequestId, setBusyRequestId] = useState<string | null>(null);
     const [error, setError] = useState("");
     const [notice, setNotice] = useState("");
-    const [showHolidays, setShowHolidays] = useState(false);
 
     /**
      * Edits made in this sitting but not yet sent. A roster edit is a session,
@@ -225,19 +223,74 @@ export default function SchedulesPage() {
         return map;
     }, [detail]);
 
-    // Employees who actually appear in this month's roster come first; the rest
-    // still get a row so a superuser can fill them in.
-    const orderedEmployees = useMemo(() => {
+    /**
+     * Which work pattern each row belongs to, from the schedule response.
+     *
+     * The server already filters the schedule to what this user may see, so
+     * this map is also the authority on which rows to render at all.
+     */
+    const patternById = useMemo(() => {
+        const map = new Map<string, string>();
+        for (const row of detail?.working_days ?? []) {
+            if (row.work_pattern) map.set(row.employee_id, row.work_pattern);
+        }
+        return map;
+    }, [detail]);
+
+    /**
+     * Rows the signed-in user may actually see.
+     *
+     * The employee list is the whole directory, but the schedule is filtered
+     * server-side: office staff get no roster rows and the rotating crew get no
+     * office-day rows. Rendering the directory unfiltered therefore drew an
+     * empty row for every colleague whose schedule the viewer is not allowed
+     * to read, which looked like a broken roster and advertised who was on the
+     * other one. Administrators still see everybody, including people with no
+     * cells yet, so they can fill them in.
+     */
+    const visibleEmployees = useMemo(() => {
         if (!detail) return employees;
+        if (isAdmin) return employees;
+        const allowed = new Set([
+            ...detail.assignments.map((a) => a.employee_id),
+            ...patternById.keys(),
+        ]);
+        return employees.filter((e) => allowed.has(e.id));
+    }, [employees, detail, isAdmin, patternById]);
+
+    /**
+     * Roster crew first, then office staff, each alphabetical. Grouping the two
+     * keeps a flat "D" row from sitting between two rotating ones, which is how
+     * the workbook reads too.
+     */
+    const orderedEmployees = useMemo(() => {
+        if (!detail) return visibleEmployees;
         const rostered = new Set(detail.assignments.map((a) => a.employee_id));
-        return [...employees].sort((a, b) => {
-            const diff = Number(rostered.has(b.id)) - Number(rostered.has(a.id));
-            if (diff !== 0) return diff;
+        const rank = (id: string) => (patternById.get(id) === "roster" ? 0 : 1);
+        return [...visibleEmployees].sort((a, b) => {
+            const byPattern = rank(a.id) - rank(b.id);
+            if (byPattern !== 0) return byPattern;
+            const byRostered = Number(rostered.has(b.id)) - Number(rostered.has(a.id));
+            if (byRostered !== 0) return byRostered;
             return `${a.first_name} ${a.last_name}`.localeCompare(
                 `${b.first_name} ${b.last_name}`,
             );
         });
-    }, [employees, detail]);
+    }, [visibleEmployees, detail, patternById]);
+
+    /** What this user is actually looking at, for the caption above the grid. */
+    const viewSummary = useMemo(() => {
+        const counts = { roster: 0, office_day: 0 };
+        for (const e of orderedEmployees) {
+            const p = patternById.get(e.id);
+            if (p === "roster") counts.roster += 1;
+            else if (p === "office_day") counts.office_day += 1;
+        }
+        const parts: string[] = [];
+        if (counts.roster) parts.push(`Roster · ${counts.roster}`);
+        if (counts.office_day) parts.push(`Office day · ${counts.office_day}`);
+        return parts.join("   ");
+    }, [orderedEmployees, patternById]);
 
     const monthHolidays = detail?.holidays ?? [];
 
@@ -464,7 +517,7 @@ export default function SchedulesPage() {
     if (loading) {
         return (
             <div className="flex h-64 items-center justify-center">
-                <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-500 border-t-transparent" />
+                <div className="h-8 w-8 animate-spin rounded-full border-4 border-signal border-t-transparent" />
             </div>
         );
     }
@@ -479,10 +532,10 @@ export default function SchedulesPage() {
             {/* ---- Header ---- */}
             <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                    <h1 className="text-2xl font-bold tracking-tight text-white">
+                    <h1 className="text-2xl font-bold tracking-tight text-paper">
                         Employee absence schedule
                     </h1>
-                    <p className="mt-1 text-sm text-gray-400">
+                    <p className="mt-1 text-sm text-paper-soft">
                         {isAdmin
                             ? "Edit any cell, generate a default rotation, and approve requested changes."
                             : "Edit any day on your own row, then submit the lot as one proposal."}
@@ -492,11 +545,11 @@ export default function SchedulesPage() {
                 <div className="flex flex-wrap items-center gap-2">
                     <button
                         onClick={() => setShowApprovals((v) => !v)}
-                        className="relative rounded-xl border border-white/10 px-3.5 py-2 text-sm font-medium text-gray-300 transition hover:bg-white/5"
+                        className="relative rounded-xl border border-white/10 px-3.5 py-2 text-sm font-medium text-paper-soft transition hover:bg-white/5"
                     >
                         {isAdmin ? "Approvals" : "My requests"}
                         {inbox.length > 0 && (
-                            <span className="ml-2 rounded-full bg-amber-500/20 px-1.5 py-0.5 text-[11px] font-semibold text-amber-400">
+                            <span className="ml-2 rounded-full bg-gold/20 px-1.5 py-0.5 text-[11px] font-semibold text-gold">
                                 {inbox.length}
                             </span>
                         )}
@@ -505,13 +558,13 @@ export default function SchedulesPage() {
                         <>
                             <button
                                 onClick={() => setShowPattern(true)}
-                                className="rounded-xl border border-white/10 px-3.5 py-2 text-sm font-medium text-gray-300 transition hover:bg-white/5"
+                                className="rounded-xl border border-white/10 px-3.5 py-2 text-sm font-medium text-paper-soft transition hover:bg-white/5"
                             >
                                 Default roster
                             </button>
                             <button
                                 onClick={() => setShowCreate(true)}
-                                className="rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 transition-all hover:shadow-indigo-500/40"
+                                className="rounded-xl bg-signal px-4 py-2 text-sm font-semibold text-paper transition-all "
                             >
                                 + New period
                             </button>
@@ -521,17 +574,17 @@ export default function SchedulesPage() {
             </div>
 
             {error && (
-                <div className="flex items-start justify-between gap-3 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+                <div className="flex items-start justify-between gap-3 rounded-xl border border-danger/20 bg-danger/10 px-4 py-3 text-sm text-danger">
                     <span>{error}</span>
-                    <button onClick={() => setError("")} className="text-red-300">
+                    <button onClick={() => setError("")} className="text-danger">
                         ✕
                     </button>
                 </div>
             )}
             {notice && (
-                <div className="flex items-start justify-between gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-400">
+                <div className="flex items-start justify-between gap-3 rounded-xl border border-signal/20 bg-signal/10 px-4 py-3 text-sm text-signal">
                     <span>{notice}</span>
-                    <button onClick={() => setNotice("")} className="text-emerald-300">
+                    <button onClick={() => setNotice("")} className="text-signal">
                         ✕
                     </button>
                 </div>
@@ -550,20 +603,20 @@ export default function SchedulesPage() {
 
             {/* ---- Calendar ---- */}
             {schedules.length === 0 ? (
-                <p className="rounded-2xl border border-white/10 bg-gray-900/50 px-5 py-10 text-center text-sm text-gray-500">
+                <p className="rounded-2xl border border-white/10 bg-surface/50 px-5 py-10 text-center text-sm text-muted">
                     {isAdmin
                         ? "No schedule periods yet. Create one, or generate a default roster."
                         : "No published schedules available."}
                 </p>
             ) : (
-                <div className="rounded-2xl border border-white/10 bg-gray-900/50 backdrop-blur-xl">
+                <div className="rounded-2xl border border-white/10 bg-surface/50 backdrop-blur-xl">
                     {/* Month bar */}
                     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-5 py-3">
                         <div className="flex items-center gap-2">
                             <button
                                 onClick={() => step(-1)}
                                 disabled={currentIndex <= 0}
-                                className="rounded-lg border border-white/10 px-2.5 py-1.5 text-sm text-gray-300 transition hover:bg-white/5 disabled:opacity-30"
+                                className="rounded-lg border border-white/10 px-2.5 py-1.5 text-sm text-paper-soft transition hover:bg-white/5 disabled:opacity-30"
                                 title="Previous month"
                             >
                                 ‹
@@ -575,10 +628,10 @@ export default function SchedulesPage() {
                                     discardStaged();
                                     setSelectedId(e.target.value);
                                 }}
-                                className="rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-sm font-semibold text-white focus:border-indigo-500 focus:outline-none"
+                                className="rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-sm font-semibold text-paper focus:border-signal/60 focus:outline-none"
                             >
                                 {chronological.map((s) => (
-                                    <option key={s.id} value={s.id} className="bg-gray-900">
+                                    <option key={s.id} value={s.id} className="bg-surface">
                                         {s.name}
                                     </option>
                                 ))}
@@ -588,7 +641,7 @@ export default function SchedulesPage() {
                                 disabled={
                                     currentIndex < 0 || currentIndex >= chronological.length - 1
                                 }
-                                className="rounded-lg border border-white/10 px-2.5 py-1.5 text-sm text-gray-300 transition hover:bg-white/5 disabled:opacity-30"
+                                className="rounded-lg border border-white/10 px-2.5 py-1.5 text-sm text-paper-soft transition hover:bg-white/5 disabled:opacity-30"
                                 title="Next month"
                             >
                                 ›
@@ -596,9 +649,9 @@ export default function SchedulesPage() {
 
                             {detail && (
                                 <span
-                                    className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium ${detail.status === ScheduleStatus.PUBLISHED
-                                        ? "bg-emerald-500/20 text-emerald-400"
-                                        : "bg-amber-500/20 text-amber-400"
+                                    className={`dtg-chip ${detail.status === ScheduleStatus.PUBLISHED
+                                        ? "border-signal/35 bg-signal/10 text-signal"
+                                        : "border-gold/35 bg-gold/10 text-gold"
                                         }`}
                                 >
                                     {detail.status === ScheduleStatus.PUBLISHED
@@ -613,7 +666,7 @@ export default function SchedulesPage() {
                                 <button
                                     onClick={togglePublish}
                                     disabled={busy}
-                                    className="rounded-lg border border-white/10 px-3 py-1.5 text-xs font-medium text-gray-300 transition hover:bg-white/5 disabled:opacity-50"
+                                    className="rounded-lg border border-white/10 px-3 py-1.5 text-xs font-medium text-paper-soft transition hover:bg-white/5 disabled:opacity-50"
                                 >
                                     {detail.status === ScheduleStatus.PUBLISHED
                                         ? "Unpublish"
@@ -622,7 +675,7 @@ export default function SchedulesPage() {
                                 <button
                                     onClick={deleteSchedule}
                                     disabled={busy}
-                                    className="rounded-lg px-3 py-1.5 text-xs font-medium text-gray-500 transition hover:bg-red-500/20 hover:text-red-400 disabled:opacity-50"
+                                    className="rounded-lg px-3 py-1.5 text-xs font-medium text-muted transition hover:bg-danger/20 hover:text-danger disabled:opacity-50"
                                 >
                                     Delete
                                 </button>
@@ -638,6 +691,12 @@ export default function SchedulesPage() {
                     {/* Grid */}
                     {detail ? (
                         <div className="p-3">
+                            {viewSummary && (
+                                <p className="mb-2 px-1 font-mono text-micro text-muted">
+                                    {viewSummary}
+                                    {!isAdmin && "   · read-only"}
+                                </p>
+                            )}
                             <RosterGrid
                                 employees={orderedEmployees}
                                 days={days}
@@ -658,25 +717,25 @@ export default function SchedulesPage() {
                         </div>
                     ) : (
                         <div className="flex h-40 items-center justify-center">
-                            <div className="h-6 w-6 animate-spin rounded-full border-4 border-indigo-500 border-t-transparent" />
+                            <div className="h-6 w-6 animate-spin rounded-full border-4 border-signal border-t-transparent" />
                         </div>
                     )}
 
                     {/* Public holidays in this month */}
                     {monthHolidays.length > 0 && (
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-white/10 px-5 py-3">
-                            <span className="text-xs font-semibold text-gray-400">
+                            <span className="text-xs font-semibold text-paper-soft">
                                 Public holidays
                             </span>
                             {monthHolidays.map((h) => (
-                                <span key={h.id} className="text-[11px] text-gray-400">
+                                <span key={h.id} className="text-[11px] text-paper-soft">
                                     <span
-                                        className={`mr-1 inline-block h-2 w-2 rounded-full ${h.is_national ? "bg-emerald-500" : "bg-amber-500"
+                                        className={`mr-1 inline-block h-2 w-2 rounded-full ${h.is_national ? "bg-signal" : "bg-signal/40"
                                             }`}
                                     />
                                     {new Date(`${h.date}T00:00:00`).getDate()} — {h.name}
                                     {!h.is_national && (
-                                        <span className="text-gray-600"> (cuti bersama)</span>
+                                        <span className="text-muted"> (cuti bersama)</span>
                                     )}
                                 </span>
                             ))}
@@ -685,47 +744,20 @@ export default function SchedulesPage() {
                 </div>
             )}
 
-            {/* ---- Year view of the Indonesian holiday calendar ---- */}
-            <div className="rounded-2xl border border-white/10 bg-gray-900/40">
-                <button
-                    onClick={() => setShowHolidays((v) => !v)}
-                    aria-expanded={showHolidays}
-                    className="flex w-full items-center justify-between px-5 py-3 text-left"
-                >
-                    <span className="text-sm font-semibold text-white">
-                        🇮🇩 Public holiday calendar
-                        <span className="ml-2 text-xs font-normal text-gray-500">
-                            SKB 3 Menteri — libur nasional &amp; cuti bersama
-                        </span>
-                    </span>
-                    <span className="text-xs text-gray-400">{showHolidays ? "Hide ▲" : "Show ▼"}</span>
-                </button>
-                {showHolidays && (
-                    <div className="border-t border-white/10 p-5">
-                        <HolidayCalendar
-                            years={[2026, 2027]}
-                            initialYear={
-                                detail ? Number(detail.start_date.slice(0, 4)) : new Date().getFullYear()
-                            }
-                        />
-                    </div>
-                )}
-            </div>
-
             {/* ---- Staged edits: submit the sitting as one proposal ---- */}
             {staged.size > 0 && (
-                <div className="sticky bottom-4 z-30 flex flex-wrap items-center gap-3 rounded-2xl border border-indigo-400/40 bg-gray-900/95 px-5 py-3 shadow-2xl shadow-black/50 backdrop-blur-xl">
-                    <span className="text-sm font-semibold text-white">
+                <div className="sticky bottom-4 z-30 flex flex-wrap items-center gap-3 rounded-2xl border border-signal/40 bg-surface/95 px-5 py-3 shadow-2xl shadow-black/50 backdrop-blur-xl">
+                    <span className="text-sm font-semibold text-paper">
                         {staged.size} day{staged.size === 1 ? "" : "s"} edited
                     </span>
-                    <span className="hidden text-[11px] text-gray-500 sm:inline">
+                    <span className="hidden text-[11px] text-muted sm:inline">
                         Sent as a single proposal for approval
                     </span>
                     {stagedLeave !== null && (
                         <span
                             className={`text-[11px] font-medium ${stagedLeave.remaining < 0
-                                ? "text-red-400"
-                                : "text-gray-400"
+                                ? "text-danger"
+                                : "text-paper-soft"
                                 }`}
                             title="Annual leave this proposal would use, against the balance"
                         >
@@ -743,20 +775,20 @@ export default function SchedulesPage() {
                         onChange={(e) => setProposalReason(e.target.value)}
                         placeholder="Reason (optional)"
                         maxLength={500}
-                        className="min-w-[10rem] flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white placeholder-gray-500 focus:border-indigo-500 focus:outline-none"
+                        className="min-w-[10rem] flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-paper placeholder-muted focus:border-signal/60 focus:outline-none"
                     />
 
                     <button
                         onClick={discardStaged}
                         disabled={busy}
-                        className="rounded-lg border border-white/10 px-3 py-1.5 text-xs font-medium text-gray-300 transition hover:bg-white/5 disabled:opacity-50"
+                        className="rounded-lg border border-white/10 px-3 py-1.5 text-xs font-medium text-paper-soft transition hover:bg-white/5 disabled:opacity-50"
                     >
                         Discard
                     </button>
                     <button
                         onClick={submitProposal}
                         disabled={busy}
-                        className="rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 px-4 py-1.5 text-xs font-semibold text-white shadow-lg shadow-indigo-500/25 transition-all hover:shadow-indigo-500/40 disabled:opacity-50"
+                        className="rounded-lg bg-signal px-4 py-1.5 text-xs font-semibold text-paper transition-all  disabled:opacity-50"
                     >
                         {busy ? "Sending..." : "Submit for approval"}
                     </button>
@@ -810,13 +842,13 @@ export default function SchedulesPage() {
             {/* ---- New period ---- */}
             {showCreate && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
-                    <div className="w-full max-w-md rounded-2xl border border-white/10 bg-gray-900 p-6 shadow-2xl">
-                        <h2 className="mb-4 text-lg font-bold text-white">
+                    <div className="w-full max-w-md rounded-2xl border border-white/10 bg-surface p-6 shadow-2xl">
+                        <h2 className="mb-4 text-lg font-bold text-paper">
                             New schedule period
                         </h2>
                         <div className="space-y-3">
                             <div>
-                                <label className="mb-1 block text-xs font-medium text-gray-400">
+                                <label className="mb-1 block text-xs font-medium text-paper-soft">
                                     Name
                                 </label>
                                 <input
@@ -825,12 +857,12 @@ export default function SchedulesPage() {
                                         setNewSchedule((p) => ({ ...p, name: e.target.value }))
                                     }
                                     placeholder="January 2027"
-                                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-gray-500 focus:border-indigo-500 focus:outline-none"
+                                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-paper placeholder-muted focus:border-signal/60 focus:outline-none"
                                 />
                             </div>
                             <div className="grid grid-cols-2 gap-3">
                                 <div>
-                                    <label className="mb-1 block text-xs font-medium text-gray-400">
+                                    <label className="mb-1 block text-xs font-medium text-paper-soft">
                                         Starts
                                     </label>
                                     <input
@@ -839,11 +871,11 @@ export default function SchedulesPage() {
                                         onChange={(e) =>
                                             setNewSchedule((p) => ({ ...p, start: e.target.value }))
                                         }
-                                        className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white focus:border-indigo-500 focus:outline-none"
+                                        className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-paper focus:border-signal/60 focus:outline-none"
                                     />
                                 </div>
                                 <div>
-                                    <label className="mb-1 block text-xs font-medium text-gray-400">
+                                    <label className="mb-1 block text-xs font-medium text-paper-soft">
                                         Ends
                                     </label>
                                     <input
@@ -853,7 +885,7 @@ export default function SchedulesPage() {
                                         onChange={(e) =>
                                             setNewSchedule((p) => ({ ...p, end: e.target.value }))
                                         }
-                                        className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white focus:border-indigo-500 focus:outline-none"
+                                        className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-paper focus:border-signal/60 focus:outline-none"
                                     />
                                 </div>
                             </div>
@@ -861,14 +893,14 @@ export default function SchedulesPage() {
                         <div className="mt-6 flex justify-end gap-2">
                             <button
                                 onClick={() => setShowCreate(false)}
-                                className="rounded-xl border border-white/10 px-4 py-2.5 text-sm font-medium text-gray-300 transition hover:bg-white/5"
+                                className="rounded-xl border border-white/10 px-4 py-2.5 text-sm font-medium text-paper-soft transition hover:bg-white/5"
                             >
                                 Cancel
                             </button>
                             <button
                                 onClick={createSchedule}
                                 disabled={busy}
-                                className="rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 px-4 py-2.5 text-sm font-semibold text-white transition-all disabled:opacity-50"
+                                className="rounded-xl bg-signal px-4 py-2.5 text-sm font-semibold text-paper transition-all disabled:opacity-50"
                             >
                                 Create
                             </button>

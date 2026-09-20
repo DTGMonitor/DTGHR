@@ -5,29 +5,29 @@ export default function ShiftLegend({ compact = false }: { compact?: boolean }) 
     return (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
             {!compact && (
-                <span className="text-xs font-semibold text-gray-400">Absence type key</span>
+                <span className="text-xs font-semibold text-paper-soft">Absence type key</span>
             )}
             {SHIFT_CODE_ORDER.map((code) => {
                 const style = SHIFT_STYLES[code];
                 return (
                     <span key={code} className="flex items-center gap-1.5">
                         <span
-                            className="inline-flex h-5 w-7 items-center justify-center rounded text-[10px] font-bold leading-none ring-1 ring-black/20"
+                            className="inline-flex h-5 w-7 items-center justify-center rounded text-[10px] font-bold leading-none ring-1 ring-black/25"
                             style={{ background: style.bg, color: style.fg }}
                         >
                             {code}
                         </span>
                         {!compact && (
-                            <span className="text-[11px] text-gray-400">{style.label}</span>
+                            <span className="text-[11px] text-paper-soft">{style.label}</span>
                         )}
                     </span>
                 );
             })}
             <span className="flex items-center gap-1.5">
-                <span className="inline-flex h-5 w-7 items-center justify-center rounded border border-dashed border-amber-400/70 bg-amber-400/10 text-[10px] font-bold leading-none text-amber-300">
+                <span className="inline-flex h-5 w-7 items-center justify-center rounded border border-dashed border-gold/70 bg-gold/10 text-[10px] font-bold leading-none text-gold">
                     ?
                 </span>
-                <span className="text-[11px] text-gray-400">Pending approval</span>
+                <span className="text-[11px] text-paper-soft">Pending approval</span>
             </span>
         </div>
     );
@@ -44,7 +44,7 @@ export function ShiftChip({
     if (!code) {
         return (
             <span
-                className={`inline-flex h-5 min-w-[1.75rem] items-center justify-center rounded border border-white/15 px-1 text-[10px] font-bold leading-none text-gray-400 ${className}`}
+                className={`inline-flex h-5 min-w-[1.75rem] items-center justify-center rounded border border-white/15 px-1 text-[10px] font-bold leading-none text-paper-soft ${className}`}
             >
                 —
             </span>
@@ -53,7 +53,7 @@ export function ShiftChip({
     const style = SHIFT_STYLES[code];
     return (
         <span
-            className={`inline-flex h-5 min-w-[1.75rem] items-center justify-center rounded px-1 text-[10px] font-bold leading-none ring-1 ring-black/20 ${className}`}
+            className={`inline-flex h-5 min-w-[1.75rem] items-center justify-center rounded px-1 text-[10px] font-bold leading-none ring-1 ring-black/25 ${className}`}
             style={{ background: style.bg, color: style.fg }}
             title={style.label}
         >

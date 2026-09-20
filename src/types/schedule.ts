@@ -94,6 +94,13 @@ export interface PublicHoliday {
 export interface WorkingDaysSummary {
     employee_id: string;
     employee_name: string | null;
+    /**
+     * "roster" or "office_day". Optional because the column does not exist yet
+     * — it arrives with the employee-profile migration, and the roster grid
+     * groups by it only once it does. Until then every row ranks alike and the
+     * grid falls back to alphabetical order.
+     */
+    work_pattern?: string;
     /** Days worked: DS, NS, C and D only. */
     working_days: number;
     by_code: Record<string, number>;
