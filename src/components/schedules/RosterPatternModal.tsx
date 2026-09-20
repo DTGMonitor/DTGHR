@@ -128,22 +128,22 @@ export default function RosterPatternModal({
     };
 
     const inputClass =
-        "rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:border-indigo-500 focus:outline-none";
-    const labelClass = "mb-1 block text-xs font-medium text-gray-400";
+        "rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-paper focus:border-signal/60 focus:outline-none";
+    const labelClass = "mb-1 block text-xs font-medium text-paper-soft";
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
-            <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-white/10 bg-gray-900 p-6 shadow-2xl">
+            <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-white/10 bg-surface p-6 shadow-2xl">
                 <div className="mb-5">
-                    <h2 className="text-lg font-bold text-white">Default roster</h2>
-                    <p className="mt-1 text-xs text-gray-400">
+                    <h2 className="text-lg font-bold text-paper">Default roster</h2>
+                    <p className="mt-1 text-xs text-paper-soft">
                         Repeat a rotation across a date range. Months that don&apos;t exist
                         yet are created as drafts.
                     </p>
                 </div>
 
                 {error && (
-                    <div className="mb-4 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-2.5 text-sm text-red-400">
+                    <div className="mb-4 rounded-xl border border-danger/20 bg-danger/10 px-4 py-2.5 text-sm text-danger">
                         {error}
                     </div>
                 )}
@@ -156,7 +156,7 @@ export default function RosterPatternModal({
                             <button
                                 key={preset.label}
                                 onClick={() => setBlocks(preset.blocks)}
-                                className="rounded-lg border border-white/10 px-2.5 py-1 text-[11px] text-gray-300 transition hover:border-indigo-500/50 hover:text-white"
+                                className="rounded-lg border border-white/10 px-2.5 py-1 text-[11px] text-paper-soft transition hover:border-signal/50 hover:text-paper"
                             >
                                 {preset.label}
                             </button>
@@ -178,7 +178,7 @@ export default function RosterPatternModal({
                                     }
                                     className={`${inputClass} w-20`}
                                 />
-                                <span className="text-xs text-gray-500">days of</span>
+                                <span className="text-xs text-muted">days of</span>
                                 <select
                                     value={block.shift_code}
                                     onChange={(e) =>
@@ -199,7 +199,7 @@ export default function RosterPatternModal({
                                         setBlocks((prev) => prev.filter((_, i) => i !== index))
                                     }
                                     disabled={blocks.length === 1}
-                                    className="rounded-lg px-2 py-1 text-gray-500 transition hover:bg-red-500/20 hover:text-red-400 disabled:opacity-30"
+                                    className="rounded-lg px-2 py-1 text-muted transition hover:bg-danger/20 hover:text-danger disabled:opacity-30"
                                     title="Remove leg"
                                 >
                                     ✕
@@ -216,11 +216,11 @@ export default function RosterPatternModal({
                                     { shift_code: ShiftCode.B, days: 4 },
                                 ])
                             }
-                            className="text-xs font-medium text-indigo-400 hover:text-indigo-300"
+                            className="text-xs font-medium text-teal-300 hover:text-teal-300"
                         >
                             + Add leg
                         </button>
-                        <span className="text-[11px] text-gray-500">
+                        <span className="text-[11px] text-muted">
                             {cycleLength}-day cycle
                         </span>
                     </div>
@@ -231,7 +231,7 @@ export default function RosterPatternModal({
                             Array.from({ length: block.days }, (_, di) => (
                                 <span
                                     key={`${bi}-${di}`}
-                                    className="inline-flex h-5 w-6 items-center justify-center rounded-sm text-[9px] font-bold ring-1 ring-black/20"
+                                    className="inline-flex h-5 w-6 items-center justify-center rounded-sm text-[9px] font-bold ring-1 ring-black/25"
                                     style={{
                                         background: SHIFT_STYLES[block.shift_code].bg,
                                         color: SHIFT_STYLES[block.shift_code].fg,
@@ -290,7 +290,7 @@ export default function RosterPatternModal({
                                 className={`${inputClass} w-full`}
                             />
                         ) : (
-                            <p className="rounded-xl border border-white/5 bg-white/[0.02] px-3 py-2 text-sm text-gray-400">
+                            <p className="rounded-xl border border-white/5 bg-white/[0.02] px-3 py-2 text-sm text-paper-soft">
                                 {endDate}
                             </p>
                         )}
@@ -311,7 +311,7 @@ export default function RosterPatternModal({
                                         : employees.map((e) => e.id),
                                 )
                             }
-                            className="text-xs font-medium text-indigo-400 hover:text-indigo-300"
+                            className="text-xs font-medium text-teal-300 hover:text-teal-300"
                         >
                             {selected.length === employees.length
                                 ? "Clear all"
@@ -324,7 +324,7 @@ export default function RosterPatternModal({
                             return (
                                 <label
                                     key={employee.id}
-                                    className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1 text-sm text-gray-300 hover:bg-white/5"
+                                    className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1 text-sm text-paper-soft hover:bg-white/5"
                                 >
                                     <input
                                         type="checkbox"
@@ -336,7 +336,7 @@ export default function RosterPatternModal({
                                         {employee.first_name} {employee.last_name}
                                     </span>
                                     {position >= 0 && offsetDays > 0 && (
-                                        <span className="text-[10px] text-gray-500">
+                                        <span className="text-[10px] text-muted">
                                             +{position * offsetDays}d
                                         </span>
                                     )}
@@ -344,7 +344,7 @@ export default function RosterPatternModal({
                             );
                         })}
                     </div>
-                    <p className="mt-1 text-[10px] text-gray-500">
+                    <p className="mt-1 text-[10px] text-muted">
                         Selection order sets the stagger — the first employee starts at day
                         one of the cycle.
                     </p>
@@ -353,7 +353,7 @@ export default function RosterPatternModal({
                 {/* ---- Options ---- */}
                 <div className="mb-6 space-y-2.5">
                     <div className="flex items-center gap-2">
-                        <label className="text-xs text-gray-400">
+                        <label className="text-xs text-paper-soft">
                             Stagger each employee by
                         </label>
                         <input
@@ -366,11 +366,11 @@ export default function RosterPatternModal({
                             }
                             className={`${inputClass} w-20 py-1`}
                         />
-                        <span className="text-xs text-gray-500">
+                        <span className="text-xs text-muted">
                             days of the cycle (0 = everyone on the same rotation)
                         </span>
                     </div>
-                    <label className="flex cursor-pointer items-center gap-2 text-xs text-gray-400">
+                    <label className="flex cursor-pointer items-center gap-2 text-xs text-paper-soft">
                         <input
                             type="checkbox"
                             checked={overwrite}
@@ -379,7 +379,7 @@ export default function RosterPatternModal({
                         />
                         Overwrite days that already have a code
                     </label>
-                    <label className="flex cursor-pointer items-center gap-2 text-xs text-gray-400">
+                    <label className="flex cursor-pointer items-center gap-2 text-xs text-paper-soft">
                         <input
                             type="checkbox"
                             checked={applyHolidays}
@@ -394,14 +394,14 @@ export default function RosterPatternModal({
                     <button
                         onClick={onClose}
                         disabled={busy}
-                        className="rounded-xl border border-white/10 px-4 py-2.5 text-sm font-medium text-gray-300 transition hover:bg-white/5 disabled:opacity-50"
+                        className="rounded-xl border border-white/10 px-4 py-2.5 text-sm font-medium text-paper-soft transition hover:bg-white/5 disabled:opacity-50"
                     >
                         Cancel
                     </button>
                     <button
                         onClick={submit}
                         disabled={busy}
-                        className="rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 transition-all hover:shadow-indigo-500/40 disabled:opacity-50"
+                        className="rounded-xl bg-signal px-4 py-2.5 text-sm font-semibold text-paper transition-all  disabled:opacity-50"
                     >
                         {busy ? "Applying…" : "Apply rotation"}
                     </button>

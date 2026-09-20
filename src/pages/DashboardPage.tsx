@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import api from "@/lib/api";
+import StatTile, { StatTileSkeleton, type StatTileProps } from "@/components/ui/StatTile";
+import Icon, { type IconName } from "@/components/ui/icons";
+import { Wordmark } from "@/components/brand/Logo";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -24,15 +27,6 @@ interface EmployeeStats {
 
 type DashboardStats = AdminStats | EmployeeStats;
 
-interface StatCard {
-    label: string;
-    value: string;
-    sub?: string;
-    icon: string;
-    color: string;
-    border: string;
-}
-
 interface ActivityItem {
     id: string;
     action: string;
@@ -43,15 +37,16 @@ interface ActivityItem {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const ACTION_ICONS: Record<string, string> = {
-    EMPLOYEE_CREATED: "👤",
-    EMPLOYEE_UPDATED: "✏️",
-    EMPLOYEE_DEACTIVATED: "🚫",
-    ACCOUNT_CREATED: "🔑",
-    LEAVE_REQUESTED: "📝",
-    LEAVE_APPROVED: "✅",
-    LEAVE_REJECTED: "❌",
-    LEAVE_CANCELLED: "🔄",
+/** Icon and accent per audit action. Colour never carries the meaning alone. */
+const ACTION_STYLE: Record<string, { icon: IconName; tone: string }> = {
+    EMPLOYEE_CREATED: { icon: "userPlus", tone: "text-signal" },
+    EMPLOYEE_UPDATED: { icon: "pencil", tone: "text-teal-300" },
+    EMPLOYEE_DEACTIVATED: { icon: "userMinus", tone: "text-danger" },
+    ACCOUNT_CREATED: { icon: "key", tone: "text-teal-300" },
+    LEAVE_REQUESTED: { icon: "clipboard", tone: "text-gold" },
+    LEAVE_APPROVED: { icon: "check", tone: "text-signal" },
+    LEAVE_REJECTED: { icon: "x", tone: "text-danger" },
+    LEAVE_CANCELLED: { icon: "refresh", tone: "text-muted" },
 };
 
 function timeAgo(dateStr: string): string {
@@ -66,74 +61,53 @@ function timeAgo(dateStr: string): string {
     if (hours < 24) return `${hours}h ago`;
     const days = Math.floor(hours / 24);
     if (days < 30) return `${days}d ago`;
-    return date.toLocaleDateString();
+    return date.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 }
 
-function buildAdminCards(s: AdminStats): StatCard[] {
+function buildAdminTiles(s: AdminStats): StatTileProps[] {
     return [
-        {
-            label: "Total Employees",
-            value: String(s.total_employees),
-            icon: "👥",
-            color: "from-blue-500/20 to-cyan-500/20",
-            border: "border-blue-500/20",
-        },
+        { label: "Total Employees", value: s.total_employees, icon: "users", accent: "data" },
         {
             label: "Pending Approvals",
-            value: String(s.pending_approvals),
-            icon: "📋",
-            color: "from-amber-500/20 to-orange-500/20",
-            border: "border-amber-500/20",
+            value: s.pending_approvals,
+            icon: "clipboard",
+            // Zero pending is a good state, so it should not sit there in gold.
+            accent: s.pending_approvals > 0 ? "attention" : "neutral",
+            sub: s.pending_approvals > 0 ? "awaiting your review" : "nothing waiting",
         },
-        {
-            label: "On Leave Today",
-            value: String(s.on_leave_today),
-            icon: "🏖️",
-            color: "from-emerald-500/20 to-green-500/20",
-            border: "border-emerald-500/20",
-        },
-        {
-            label: "New This Month",
-            value: String(s.new_this_month),
-            icon: "🆕",
-            color: "from-purple-500/20 to-violet-500/20",
-            border: "border-purple-500/20",
-        },
+        { label: "On Leave Today", value: s.on_leave_today, icon: "sun", accent: "neutral" },
+        { label: "New This Month", value: s.new_this_month, icon: "userPlus", accent: "action" },
     ];
 }
 
-function buildEmployeeCards(s: EmployeeStats): StatCard[] {
+function buildEmployeeTiles(s: EmployeeStats): StatTileProps[] {
     return [
         {
             label: "Annual Leave",
-            value: String(s.annual_remaining),
-            sub: `of ${s.annual_total} days`,
-            icon: "🏖️",
-            color: "from-blue-500/20 to-cyan-500/20",
-            border: "border-blue-500/20",
+            value: s.annual_remaining,
+            sub: `of ${s.annual_total} days remaining`,
+            icon: "sun",
+            accent: "action",
         },
         {
             label: "Sick Leave",
-            value: String(s.sick_remaining),
-            sub: `of ${s.sick_total} days`,
-            icon: "🏥",
-            color: "from-red-500/20 to-rose-500/20",
-            border: "border-red-500/20",
+            value: s.sick_remaining,
+            sub: `of ${s.sick_total} days remaining`,
+            icon: "heart",
+            accent: "data",
         },
         {
             label: "Pending Requests",
-            value: String(s.pending_requests),
-            icon: "⏳",
-            color: "from-amber-500/20 to-orange-500/20",
-            border: "border-amber-500/20",
+            value: s.pending_requests,
+            icon: "clock",
+            accent: s.pending_requests > 0 ? "attention" : "neutral",
         },
         {
             label: "Total Used",
-            value: String(s.total_used),
+            value: s.total_used,
             sub: "days this year",
-            icon: "📊",
-            color: "from-emerald-500/20 to-green-500/20",
-            border: "border-emerald-500/20",
+            icon: "chart",
+            accent: "neutral",
         },
     ];
 }
@@ -185,134 +159,151 @@ export default function DashboardPage() {
 
     const totalPages = Math.max(1, Math.ceil(activityTotal / ACTIVITY_PAGE_SIZE));
 
-    const cards: StatCard[] = loading
+    const tiles: StatTileProps[] = loading
         ? []
         : stats?.role === "admin"
-            ? buildAdminCards(stats)
-            : stats?.role === "employee"
-                ? buildEmployeeCards(stats)
-                : [];
+          ? buildAdminTiles(stats)
+          : stats?.role === "employee"
+            ? buildEmployeeTiles(stats)
+            : [];
+
+    const firstName = user?.full_name?.split(" ")[0];
 
     return (
-        <div className="space-y-6">
-            {/* Welcome Banner */}
-            <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-indigo-500/10 via-purple-500/10 to-pink-500/10 p-8">
-                <div className="pointer-events-none absolute -right-20 -top-20 h-60 w-60 rounded-full bg-indigo-500/10 blur-3xl" />
-                <h1 className="text-2xl font-bold text-white">
-                    Welcome back, {user?.full_name?.split(" ")[0]} 👋
-                </h1>
-                <p className="mt-2 text-gray-400">
-                    {stats?.role === "admin"
-                        ? "Here's your organisation overview."
-                        : "Here's your HR Hub dashboard overview."}
-                </p>
-            </div>
+        <div className="dtg-fade-in space-y-6">
+            {/* ── Welcome band ───────────────────────────────────────────── */}
+            <section className="relative overflow-hidden rounded-2xl border border-white/10 bg-band px-6 py-7 sm:px-8">
+                {/* Pixel wash, echoing the wordmark's dissolving edge. */}
+                <div
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-0 opacity-[0.08]"
+                    style={{
+                        backgroundImage:
+                            "radial-gradient(circle at 1px 1px, #F4F0E7 1px, transparent 0)",
+                        backgroundSize: "14px 14px",
+                        maskImage: "linear-gradient(105deg, transparent 45%, #000 100%)",
+                        WebkitMaskImage: "linear-gradient(105deg, transparent 45%, #000 100%)",
+                    }}
+                />
 
-            {/* Stat Cards */}
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="relative flex flex-wrap items-end justify-between gap-6">
+                    <div className="min-w-0">
+                        <p className="dtg-eyebrow">
+                            {stats?.role === "admin" ? "Organisation overview" : "Your HR summary"}
+                        </p>
+                        <h1 className="mt-2 text-2xl font-bold tracking-tight text-paper sm:text-3xl">
+                            {firstName ? `Welcome back, ${firstName}.` : "Welcome back."}
+                        </h1>
+                        <p className="mt-2 max-w-xl text-sm leading-relaxed text-teal-100/75">
+                            {stats?.role === "admin"
+                                ? "Headcount, approvals and cover for today, at a glance."
+                                : "Your leave balances, requests and recent activity."}
+                        </p>
+                    </div>
+
+                    <Wordmark className="hidden h-8 opacity-40 lg:block" />
+                </div>
+            </section>
+
+            {/* ── Stat tiles ─────────────────────────────────────────────── */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 {loading
-                    ? [...Array(4)].map((_, i) => (
-                        <div
-                            key={i}
-                            className="animate-pulse rounded-2xl border border-white/10 bg-white/5 p-6 h-28"
-                        />
-                    ))
-                    : cards.map((stat) => (
-                        <div
-                            key={stat.label}
-                            className={`rounded-2xl border ${stat.border} bg-gradient-to-br ${stat.color} p-6 transition-transform hover:scale-[1.02]`}
-                        >
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <p className="text-sm text-gray-400">{stat.label}</p>
-                                    <p className="mt-1 text-3xl font-bold text-white">
-                                        {stat.value}
-                                    </p>
-                                    {stat.sub && (
-                                        <p className="mt-0.5 text-xs text-gray-500">{stat.sub}</p>
-                                    )}
-                                </div>
-                                <span className="text-3xl">{stat.icon}</span>
-                            </div>
-                        </div>
-                    ))}
+                    ? [...Array(4)].map((_, i) => <StatTileSkeleton key={i} />)
+                    : tiles.map((tile) => <StatTile key={tile.label} {...tile} />)}
             </div>
 
-            {/* Recent Activity */}
-            <div className="rounded-2xl border border-white/10 bg-gray-900/30 p-6">
-                <div className="flex items-center justify-between">
-                    <h2 className="text-lg font-semibold text-white">Recent Activity</h2>
+            {/* ── Recent activity ───────────────────────────────────────── */}
+            <section className="dtg-panel overflow-hidden">
+                <header className="flex items-center justify-between gap-4 border-b border-white/[0.08] px-5 py-4">
+                    <div>
+                        <p className="dtg-eyebrow">Audit trail</p>
+                        <h2 className="mt-1 text-base font-semibold text-paper">Recent activity</h2>
+                    </div>
                     {activityTotal > 0 && (
-                        <span className="text-xs text-gray-500">
-                            {activityTotal} total
+                        <span className="flex-shrink-0 font-mono text-micro text-muted">
+                            {activityTotal} entr{activityTotal === 1 ? "y" : "ies"}
                         </span>
                     )}
-                </div>
+                </header>
+
                 {loading ? (
-                    <div className="mt-4 space-y-3">
-                        {[...Array(3)].map((_, i) => (
-                            <div
-                                key={i}
-                                className="animate-pulse h-12 rounded-xl bg-white/5"
-                            />
+                    <div className="space-y-2 p-5">
+                        {[...Array(4)].map((_, i) => (
+                            <div key={i} className="h-14 animate-pulse rounded-lg bg-white/[0.04]" />
                         ))}
                     </div>
                 ) : activity.length === 0 && activityPage === 1 ? (
-                    <p className="mt-3 text-sm text-gray-500">
-                        No recent activity yet. Actions like leave requests and approvals will
-                        appear here.
-                    </p>
+                    <div className="px-5 py-14 text-center">
+                        <Icon name="clipboard" className="mx-auto h-8 w-8 text-teal-700" />
+                        <p className="mt-3 text-sm text-paper-soft">No activity recorded yet</p>
+                        <p className="mx-auto mt-1 max-w-sm text-xs text-muted">
+                            Leave requests, approvals and employee changes will be logged here.
+                        </p>
+                    </div>
                 ) : (
                     <>
-                        <div className={`mt-4 space-y-2 transition-opacity ${activityLoading ? "opacity-50" : ""}`}>
-                            {activity.map((item) => (
-                                <div
-                                    key={item.id}
-                                    className="flex items-center gap-3 rounded-xl border border-white/5 bg-white/[0.02] px-4 py-3 transition-colors hover:bg-white/[0.04]"
-                                >
-                                    <span className="flex-shrink-0 text-xl">
-                                        {ACTION_ICONS[item.action] || "📌"}
-                                    </span>
-                                    <div className="min-w-0 flex-1">
-                                        <p className="truncate text-sm text-gray-200">
-                                            {item.description}
-                                        </p>
-                                        <p className="text-xs text-gray-500">
-                                            by {item.actor_name}
-                                        </p>
-                                    </div>
-                                    <span className="flex-shrink-0 text-xs text-gray-500">
-                                        {timeAgo(item.created_at)}
-                                    </span>
-                                </div>
-                            ))}
-                        </div>
+                        <ul
+                            className={`divide-y divide-white/[0.06] transition-opacity ${
+                                activityLoading ? "opacity-50" : ""
+                            }`}
+                        >
+                            {activity.map((item) => {
+                                const style = ACTION_STYLE[item.action] ?? {
+                                    icon: "pin" as IconName,
+                                    tone: "text-muted",
+                                };
+                                return (
+                                    <li
+                                        key={item.id}
+                                        className="flex items-center gap-3.5 px-5 py-3.5 transition-colors hover:bg-white/[0.03]"
+                                    >
+                                        <span
+                                            className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded border border-white/[0.08] bg-deep/50 ${style.tone}`}
+                                        >
+                                            <Icon name={style.icon} className="h-4 w-4" />
+                                        </span>
+                                        <div className="min-w-0 flex-1">
+                                            <p className="truncate text-sm text-paper">{item.description}</p>
+                                            <p className="truncate text-xs text-muted">by {item.actor_name}</p>
+                                        </div>
+                                        <time
+                                            dateTime={item.created_at}
+                                            title={new Date(item.created_at).toLocaleString("en-GB")}
+                                            className="flex-shrink-0 font-mono text-micro text-muted"
+                                        >
+                                            {timeAgo(item.created_at)}
+                                        </time>
+                                    </li>
+                                );
+                            })}
+                        </ul>
 
-                        {/* Pagination */}
                         {totalPages > 1 && (
-                            <div className="mt-4 flex items-center justify-between border-t border-white/5 pt-4">
+                            <div className="flex items-center justify-between gap-3 border-t border-white/[0.08] px-5 py-3.5">
                                 <button
                                     onClick={() => loadActivity(activityPage - 1)}
                                     disabled={activityPage <= 1 || activityLoading}
-                                    className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-white/20 disabled:opacity-30 disabled:cursor-not-allowed"
+                                    className="dtg-btn-secondary px-3 py-1.5 text-xs"
                                 >
-                                    ← Previous
+                                    <Icon name="arrowLeft" className="h-3.5 w-3.5" />
+                                    Previous
                                 </button>
-                                <span className="text-xs text-gray-500">
-                                    Page {activityPage} of {totalPages}
+                                <span className="font-mono text-micro text-muted">
+                                    {activityPage} / {totalPages}
                                 </span>
                                 <button
                                     onClick={() => loadActivity(activityPage + 1)}
                                     disabled={activityPage >= totalPages || activityLoading}
-                                    className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-white/20 disabled:opacity-30 disabled:cursor-not-allowed"
+                                    className="dtg-btn-secondary px-3 py-1.5 text-xs"
                                 >
-                                    Next →
+                                    Next
+                                    <Icon name="arrowRight" className="h-3.5 w-3.5" />
                                 </button>
                             </div>
                         )}
                     </>
                 )}
-            </div>
+            </section>
         </div>
     );
 }

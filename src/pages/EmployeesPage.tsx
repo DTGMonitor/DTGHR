@@ -1,32 +1,47 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { Link } from "react-router-dom";
 import type { Employee } from "@/types/employee";
 import { employeeService, type CreateAccountResult } from "@/services/employeeService";
 import { useAuth } from "@/contexts/AuthContext";
 import EmployeeFormModal from "@/components/employees/EmployeeFormModal";
 import DeleteConfirmModal from "@/components/employees/DeleteConfirmModal";
 import CreateAccountModal from "@/components/employees/CreateAccountModal";
+import Icon from "@/components/ui/icons";
+import Spinner from "@/components/ui/Spinner";
+import Alert from "@/components/ui/Alert";
 
 const PAGE_SIZE = 20;
 
 function StatusBadge({ active, onLeave }: { active: boolean; onLeave?: boolean }) {
     if (active && onLeave) {
         return (
-            <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium bg-amber-500/15 text-amber-400">
-                <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
-                On Leave
+            <span className="dtg-chip border-gold/35 bg-gold/10 text-gold">
+                <span className="h-1.5 w-1.5 rounded-full bg-gold" />
+                On leave
             </span>
         );
     }
     return (
         <span
-            className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${active
-                ? "bg-emerald-500/15 text-emerald-400"
-                : "bg-gray-500/15 text-gray-400"
-                }`}
+            className={`dtg-chip ${
+                active
+                    ? "border-signal/35 bg-signal/10 text-signal"
+                    : "border-white/12 bg-white/[0.04] text-muted"
+            }`}
         >
-            <span className={`h-1.5 w-1.5 rounded-full ${active ? "bg-emerald-400" : "bg-gray-400"}`} />
+            <span className={`h-1.5 w-1.5 rounded-full ${active ? "bg-signal" : "bg-muted"}`} />
             {active ? "Active" : "Inactive"}
         </span>
+    );
+}
+
+/** Initials avatar. Square-ish and teal, matching the header's. */
+function Avatar({ first, last }: { first: string; last: string }) {
+    return (
+        <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded border border-teal-300/20 bg-teal-900 font-mono text-[0.6875rem] font-semibold tracking-wider text-teal-100">
+            {(first[0] ?? "").toUpperCase()}
+            {(last[0] ?? "").toUpperCase()}
+        </div>
     );
 }
 
@@ -36,8 +51,12 @@ export default function EmployeesPage() {
     const [page, setPage] = useState(1);
     const [search, setSearch] = useState("");
     const [department, setDepartment] = useState("");
+    // Former staff are hidden by default; the server ignores this for anyone
+    // who is not an administrator.
+    const [includeInactive, setIncludeInactive] = useState(false);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [accountError, setAccountError] = useState<string | null>(null);
 
     const { user } = useAuth();
     const isHR = !!user?.is_superuser;
@@ -49,7 +68,7 @@ export default function EmployeesPage() {
 
     const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    const fetchEmployees = useCallback(async (p: number, s: string, d: string) => {
+    const fetchEmployees = useCallback(async (p: number, s: string, d: string, inactive = false) => {
         setLoading(true);
         setError(null);
         try {
@@ -58,6 +77,7 @@ export default function EmployeesPage() {
                 page_size: PAGE_SIZE,
                 search: s || undefined,
                 department: d || undefined,
+                include_inactive: inactive || undefined,
             });
             setEmployees(res.data.items);
             setTotal(res.data.total);
@@ -69,8 +89,15 @@ export default function EmployeesPage() {
     }, []);
 
     useEffect(() => {
-        fetchEmployees(page, search, department);
-    }, [page, department, fetchEmployees]); // search handled by debounce below
+        fetchEmployees(page, search, department, includeInactive);
+    }, [page, department, includeInactive, fetchEmployees]); // search handled by debounce below
+
+    // Clear any pending debounce if the page unmounts mid-keystroke.
+    useEffect(() => {
+        return () => {
+            if (searchDebounce.current) clearTimeout(searchDebounce.current);
+        };
+    }, []);
 
     const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const val = e.target.value;
@@ -78,13 +105,21 @@ export default function EmployeesPage() {
         setPage(1);
         if (searchDebounce.current) clearTimeout(searchDebounce.current);
         searchDebounce.current = setTimeout(() => {
-            fetchEmployees(1, val, department);
+            fetchEmployees(1, val, department, includeInactive);
         }, 400);
     };
 
     const handleDeptChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setDepartment(e.target.value);
         setPage(1);
+    };
+
+    const clearFilters = () => {
+        if (searchDebounce.current) clearTimeout(searchDebounce.current);
+        setSearch("");
+        setDepartment("");
+        setPage(1);
+        fetchEmployees(1, "", "", includeInactive);
     };
 
     const handleSaved = (saved: Employee) => {
@@ -109,6 +144,7 @@ export default function EmployeesPage() {
     };
 
     const handleCreateAccount = async (emp: Employee) => {
+        setAccountError(null);
         try {
             const res = await employeeService.createAccount(emp.id);
             setCreateAccountResult(res.data);
@@ -117,166 +153,217 @@ export default function EmployeesPage() {
                 prev.map((e) => (e.id === emp.id ? { ...e, has_account: true } : e))
             );
         } catch {
-            alert("Failed to create account. The employee may already have one.");
+            // Was a blocking window.alert, which reads as a browser error rather
+            // than part of the app.
+            setAccountError(
+                `Could not create an account for ${emp.first_name} ${emp.last_name}. They may already have one.`
+            );
         }
     };
 
     const totalPages = Math.ceil(total / PAGE_SIZE);
+    const hasFilters = !!(search || department);
 
     return (
-        <div className="space-y-6">
-            {/* Page header */}
-            <div className="flex items-center justify-between">
+        <div className="dtg-fade-in space-y-5">
+            {/* ── Page header ───────────────────────────────────────────── */}
+            <div className="flex flex-wrap items-end justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold text-white">Employees</h1>
-                    <p className="mt-1 text-sm text-gray-400">
-                        {total} employee{total !== 1 ? "s" : ""} in your organisation
+                    <p className="dtg-eyebrow">People</p>
+                    <h1 className="mt-2 text-2xl font-bold tracking-tight text-paper">Employees</h1>
+                    <p className="mt-1.5 text-sm text-paper-soft">
+                        <span className="font-mono text-paper">{total}</span> active record
+                        {total === 1 ? "" : "s"} at Digital Twin Geotechnical
                     </p>
                 </div>
                 {isHR && (
-                    <button
-                        onClick={() => setFormTarget(null)}
-                        className="rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 transition-all hover:from-indigo-600 hover:to-purple-700"
-                    >
-                        + Add Employee
+                    <button onClick={() => setFormTarget(null)} className="dtg-btn-primary">
+                        <Icon name="plus" className="h-4 w-4" />
+                        Add employee
                     </button>
                 )}
             </div>
 
-            {/* Filters */}
+            {accountError && (
+                <Alert tone="danger">
+                    <div className="flex items-start justify-between gap-3">
+                        <span>{accountError}</span>
+                        <button
+                            onClick={() => setAccountError(null)}
+                            className="flex-shrink-0 text-micro font-semibold uppercase tracking-label underline decoration-danger/40 hover:decoration-danger"
+                        >
+                            Dismiss
+                        </button>
+                    </div>
+                </Alert>
+            )}
+
+            {/* ── Filters ───────────────────────────────────────────────── */}
             <div className="flex flex-col gap-3 sm:flex-row">
                 <div className="relative flex-1">
-                    <svg
-                        className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500"
-                        fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"
-                    >
-                        <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
-                    </svg>
+                    <Icon
+                        name="search"
+                        className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-teal-500"
+                    />
                     <input
-                        type="text"
-                        placeholder="Search by name, email, or ID…"
+                        type="search"
+                        aria-label="Search employees"
+                        placeholder="Search by name, email or employee ID…"
                         value={search}
                         onChange={handleSearchChange}
-                        className="w-full rounded-xl border border-white/10 bg-white/5 py-2.5 pl-10 pr-4 text-sm text-white placeholder-gray-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition"
+                        className="dtg-input pl-9"
                     />
                 </div>
                 <input
                     type="text"
-                    placeholder="Filter by department…"
+                    aria-label="Filter by department"
+                    placeholder="Department…"
                     value={department}
                     onChange={handleDeptChange}
-                    className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-gray-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition sm:w-52"
+                    className="dtg-input sm:w-56"
                 />
+                {isHR && (
+                    <label className="flex flex-shrink-0 cursor-pointer items-center gap-2 rounded-lg border border-white/10 bg-deep/60 px-3.5 py-2.5 text-xs text-paper-soft">
+                        <input
+                            type="checkbox"
+                            checked={includeInactive}
+                            onChange={(e) => {
+                                setIncludeInactive(e.target.checked);
+                                setPage(1);
+                            }}
+                            className="h-3.5 w-3.5 accent-[#63B75D]"
+                        />
+                        Show former staff
+                    </label>
+                )}
+                {hasFilters && (
+                    <button onClick={clearFilters} className="dtg-btn-secondary sm:w-auto">
+                        Clear
+                    </button>
+                )}
             </div>
 
-            {/* Table */}
-            <div className="overflow-hidden rounded-2xl border border-white/10">
+            {/* ── Table ─────────────────────────────────────────────────── */}
+            <div className="dtg-panel overflow-hidden">
                 {loading ? (
-                    <div className="flex items-center justify-center py-20 text-gray-500 text-sm">
-                        <svg className="mr-2 h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                        </svg>
+                    <div className="flex items-center justify-center gap-2.5 py-20 text-sm text-paper-soft">
+                        <Spinner className="h-4 w-4 text-signal" />
                         Loading employees…
                     </div>
                 ) : error ? (
-                    <div className="flex items-center justify-center py-20 text-red-400 text-sm">{error}</div>
+                    <div className="px-5 py-16 text-center">
+                        <Icon name="x" className="mx-auto h-8 w-8 text-danger" />
+                        <p className="mt-3 text-sm text-danger">{error}</p>
+                        <button
+                            onClick={() => fetchEmployees(page, search, department, includeInactive)}
+                            className="dtg-btn-secondary mt-4"
+                        >
+                            <Icon name="refresh" className="h-4 w-4" />
+                            Retry
+                        </button>
+                    </div>
                 ) : employees.length === 0 ? (
-                    <div className="py-20 text-center">
-                        <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-800 text-3xl">👥</div>
-                        <p className="text-sm text-gray-400">No employees found</p>
-                        {(search || department) && (
-                            <button
-                                onClick={() => { setSearch(""); setDepartment(""); fetchEmployees(1, "", ""); }}
-                                className="mt-2 text-xs text-indigo-400 hover:underline"
-                            >
+                    <div className="px-5 py-16 text-center">
+                        <Icon name="users" className="mx-auto h-8 w-8 text-teal-700" />
+                        <p className="mt-3 text-sm text-paper-soft">No employees found</p>
+                        {hasFilters ? (
+                            <button onClick={clearFilters} className="dtg-btn-secondary mt-4">
                                 Clear filters
                             </button>
+                        ) : (
+                            isHR && (
+                                <button onClick={() => setFormTarget(null)} className="dtg-btn-primary mt-4">
+                                    <Icon name="plus" className="h-4 w-4" />
+                                    Add the first employee
+                                </button>
+                            )
                         )}
                     </div>
                 ) : (
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                             <thead>
-                                <tr className="border-b border-white/10 bg-white/5 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                                    <th className="px-4 py-3">Employee</th>
-                                    <th className="px-4 py-3">ID</th>
-                                    <th className="px-4 py-3">Department</th>
-                                    <th className="px-4 py-3">Position</th>
-                                    <th className="px-4 py-3">Joined</th>
-                                    <th className="px-4 py-3">Status</th>
-                                    <th className="px-4 py-3 text-right">Actions</th>
+                                <tr className="border-b border-white/10 bg-deep/40">
+                                    <th className="dtg-th">Employee</th>
+                                    <th className="dtg-th">ID</th>
+                                    <th className="dtg-th">Department</th>
+                                    <th className="dtg-th">Position</th>
+                                    <th className="dtg-th">Joined</th>
+                                    <th className="dtg-th">Status</th>
+                                    <th className="dtg-th text-right">Actions</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-white/5">
+                            <tbody className="divide-y divide-white/[0.06]">
                                 {employees.map((emp) => (
-                                    <tr key={emp.id} className="bg-gray-900/20 transition hover:bg-white/5">
-                                        <td className="px-4 py-3">
-                                            <div className="flex items-center gap-3">
-                                                <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-xs font-bold text-white">
-                                                    {emp.first_name[0]}{emp.last_name[0]}
-                                                </div>
-                                                <div>
-                                                    <p className="font-medium text-white">
+                                    <tr key={emp.id} className="transition-colors hover:bg-white/[0.03]">
+                                        <td className="dtg-td">
+                                            <Link
+                                                to={`/employees/${emp.id}`}
+                                                className="group flex items-center gap-3 rounded outline-offset-2"
+                                            >
+                                                <Avatar first={emp.first_name} last={emp.last_name} />
+                                                <div className="min-w-0">
+                                                    <p className="truncate font-medium text-paper group-hover:text-signal">
                                                         {emp.first_name} {emp.last_name}
                                                     </p>
-                                                    <p className="text-xs text-gray-500">{emp.email}</p>
+                                                    <p className="truncate text-xs text-muted">{emp.email}</p>
                                                 </div>
-                                            </div>
+                                            </Link>
                                         </td>
-                                        <td className="px-4 py-3 font-mono text-xs text-gray-400">
+                                        <td className="dtg-td font-mono text-xs text-teal-300">
                                             {emp.employee_id}
                                         </td>
-                                        <td className="px-4 py-3 text-gray-300">{emp.department}</td>
-                                        <td className="px-4 py-3 text-gray-300">{emp.position}</td>
-                                        <td className="px-4 py-3 text-gray-400">
+                                        <td className="dtg-td text-paper-soft">{emp.department}</td>
+                                        <td className="dtg-td text-paper-soft">{emp.position}</td>
+                                        <td className="dtg-td whitespace-nowrap font-mono text-xs text-muted">
                                             {new Date(emp.date_of_joining).toLocaleDateString("en-GB", {
-                                                day: "2-digit", month: "short", year: "numeric",
+                                                day: "2-digit",
+                                                month: "short",
+                                                year: "numeric",
                                             })}
                                         </td>
-                                        <td className="px-4 py-3">
+                                        <td className="dtg-td">
                                             <StatusBadge active={emp.is_active} onLeave={emp.on_leave_today} />
                                         </td>
-                                        <td className="px-4 py-3 text-right">
-                                            <div className="inline-flex gap-1">
+                                        <td className="dtg-td text-right">
+                                            <div className="inline-flex items-center gap-0.5">
                                                 {isHR && (
-                                                <button
-                                                    onClick={() => setFormTarget(emp)}
-                                                    className="rounded-lg p-1.5 text-gray-500 hover:bg-white/10 hover:text-indigo-400 transition"
-                                                    title="Edit"
-                                                >
-                                                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Z" />
-                                                    </svg>
-                                                </button>
+                                                    <button
+                                                        onClick={() => setFormTarget(emp)}
+                                                        className="rounded p-2 text-teal-500 transition-colors hover:bg-white/[0.06] hover:text-teal-100"
+                                                        title="Edit employee"
+                                                        aria-label={`Edit ${emp.first_name} ${emp.last_name}`}
+                                                    >
+                                                        <Icon name="pencil" className="h-4 w-4" />
+                                                    </button>
                                                 )}
                                                 {isHR && (
-                                                <button
-                                                    onClick={() => setDeleteTarget(emp)}
-                                                    className="rounded-lg p-1.5 text-gray-500 hover:bg-red-500/10 hover:text-red-400 transition"
-                                                    title="Deactivate"
-                                                >
-                                                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M22 10.5h-6m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM4 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109A12.318 12.318 0 0 1 10.374 21c-2.331 0-4.512-.645-6.374-1.766Z" />
-                                                    </svg>
-                                                </button>
+                                                    <button
+                                                        onClick={() => setDeleteTarget(emp)}
+                                                        className="rounded p-2 text-teal-500 transition-colors hover:bg-danger/10 hover:text-danger"
+                                                        title="Deactivate employee"
+                                                        aria-label={`Deactivate ${emp.first_name} ${emp.last_name}`}
+                                                    >
+                                                        <Icon name="userMinus" className="h-4 w-4" />
+                                                    </button>
                                                 )}
                                                 {isHR && !emp.has_account && (
                                                     <button
                                                         onClick={() => handleCreateAccount(emp)}
-                                                        className="rounded-lg p-1.5 text-gray-500 hover:bg-emerald-500/10 hover:text-emerald-400 transition"
-                                                        title="Create Login Account"
+                                                        className="rounded p-2 text-teal-500 transition-colors hover:bg-signal/10 hover:text-signal"
+                                                        title="Create login account"
+                                                        aria-label={`Create a login account for ${emp.first_name} ${emp.last_name}`}
                                                     >
-                                                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
-                                                        </svg>
+                                                        <Icon name="key" className="h-4 w-4" />
                                                     </button>
                                                 )}
                                                 {emp.has_account && (
-                                                    <span title="Account active" className="rounded-lg p-1.5 text-emerald-500">
-                                                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-                                                        </svg>
+                                                    <span
+                                                        title="Login account active"
+                                                        className="p-2 text-signal"
+                                                        aria-label="Has a login account"
+                                                    >
+                                                        <Icon name="check" className="h-4 w-4" />
                                                     </span>
                                                 )}
                                             </div>
@@ -289,26 +376,28 @@ export default function EmployeesPage() {
                 )}
             </div>
 
-            {/* Pagination */}
+            {/* ── Pagination ────────────────────────────────────────────── */}
             {totalPages > 1 && (
-                <div className="flex items-center justify-between text-sm text-gray-400">
-                    <p>
-                        Page {page} of {totalPages} &middot; {total} total
+                <div className="flex items-center justify-between gap-3">
+                    <p className="font-mono text-micro text-muted">
+                        Page {page} / {totalPages} · {total} total
                     </p>
                     <div className="flex gap-2">
                         <button
                             onClick={() => setPage((p) => Math.max(1, p - 1))}
                             disabled={page === 1}
-                            className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-gray-300 hover:bg-white/10 disabled:opacity-40 transition"
+                            className="dtg-btn-secondary px-3 py-1.5 text-xs"
                         >
-                            ← Previous
+                            <Icon name="arrowLeft" className="h-3.5 w-3.5" />
+                            Previous
                         </button>
                         <button
                             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                             disabled={page === totalPages}
-                            className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-gray-300 hover:bg-white/10 disabled:opacity-40 transition"
+                            className="dtg-btn-secondary px-3 py-1.5 text-xs"
                         >
-                            Next →
+                            Next
+                            <Icon name="arrowRight" className="h-3.5 w-3.5" />
                         </button>
                     </div>
                 </div>

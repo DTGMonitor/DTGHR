@@ -1,3 +1,5 @@
+import type { WorkPattern } from "@/types/employee";
+
 export enum ScheduleStatus {
     DRAFT = "draft",
     PUBLISHED = "published",
@@ -103,6 +105,14 @@ export interface WorkingDaysSummary {
     annual_leave_taken: number;
     /** National public holidays this employee was rostered to work. */
     public_holiday_loading: number;
+    /**
+     * "office_day" or "roster".
+     *
+     * The workbook keeps both crews on one sheet; this is what lets the grid
+     * group them, and what tells the page which rows the viewer is entitled to
+     * see at all.
+     */
+    work_pattern: WorkPattern | null;
 }
 
 export interface WorkSchedule {

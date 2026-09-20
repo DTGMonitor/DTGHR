@@ -14,6 +14,11 @@ export interface UserResponse {
     full_name: string;
     is_active: boolean;
     is_superuser: boolean;
+    /**
+     * Place in the KPI review chain. Distinct from `is_superuser`, which gates
+     * HR administration — the CEO approves scorecards without editing rosters.
+     */
+    role: "employee" | "director" | "executive";
     password_change_required: boolean;
     created_at: string;
 }

@@ -1,4 +1,6 @@
 import { useState } from "react";
+import Modal from "@/components/ui/Modal";
+import Alert from "@/components/ui/Alert";
 
 interface Props {
     email: string;
@@ -8,62 +10,68 @@ interface Props {
 
 export default function CreateAccountModal({ email, tempPassword, onClose }: Props) {
     const [copied, setCopied] = useState(false);
+    const [copyFailed, setCopyFailed] = useState(false);
 
-    const handleCopy = () => {
-        navigator.clipboard.writeText(tempPassword);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
+    const handleCopy = async () => {
+        setCopyFailed(false);
+        try {
+            // Rejects when the page is not a secure context or permission is
+            // denied. Silently doing nothing looked like a broken button, so
+            // the failure now tells the user to copy it by hand.
+            await navigator.clipboard.writeText(tempPassword);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        } catch {
+            setCopyFailed(true);
+        }
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-            <div className="relative z-10 w-full max-w-md rounded-2xl border border-white/10 bg-gray-900 p-8 shadow-2xl">
-                {/* Success icon */}
-                <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500/20">
-                    <svg className="h-7 w-7 text-emerald-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
-                    </svg>
-                </div>
-
-                <h2 className="text-center text-lg font-semibold text-white">Account Created!</h2>
-                <p className="mt-1 text-center text-sm text-gray-400">
-                    Share the temporary password below with <span className="text-white">{email}</span>.
-                    They will be prompted to change it on first login.
-                </p>
-
-                {/* Temp password display */}
-                <div className="mt-6 rounded-xl border border-white/10 bg-white/5 p-4">
-                    <p className="mb-1 text-xs font-medium uppercase tracking-wider text-gray-500">
-                        Temporary Password
-                    </p>
-                    <div className="flex items-center justify-between gap-3">
-                        <code className="flex-1 select-all break-all text-sm font-mono text-white">
-                            {tempPassword}
-                        </code>
-                        <button
-                            onClick={handleCopy}
-                            className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium transition ${copied
-                                    ? "bg-emerald-500/20 text-emerald-400"
-                                    : "bg-white/10 text-gray-300 hover:bg-white/20"
-                                }`}
-                        >
-                            {copied ? "Copied!" : "Copy"}
-                        </button>
-                    </div>
-                </div>
-
-                <p className="mt-3 text-xs text-gray-600">
-                    ⚠️ This password will not be shown again. Make sure to copy it now.
-                </p>
-
-                <button
-                    onClick={onClose}
-                    className="mt-6 w-full rounded-xl bg-white/10 py-2.5 text-sm font-medium text-gray-300 hover:bg-white/20 transition"
-                >
+        <Modal
+            tone="success"
+            title="Account created"
+            description={
+                <>
+                    Share the temporary password with{" "}
+                    <span className="font-medium text-paper">{email}</span>. They will be asked to
+                    change it the first time they sign in.
+                </>
+            }
+            onClose={onClose}
+            footer={
+                <button onClick={onClose} className="dtg-btn-secondary sm:w-auto">
                     Done
                 </button>
+            }
+        >
+            <div className="dtg-panel-inset p-4">
+                <p className="dtg-eyebrow">Temporary password</p>
+                <div className="mt-2.5 flex items-center justify-between gap-3">
+                    <code className="min-w-0 flex-1 select-all break-all font-mono text-sm text-paper">
+                        {tempPassword}
+                    </code>
+                    <button
+                        onClick={handleCopy}
+                        className={`flex-shrink-0 rounded border px-2.5 py-1.5 text-micro font-semibold uppercase tracking-label transition-colors ${
+                            copied
+                                ? "border-signal/40 bg-signal/15 text-signal"
+                                : "border-white/12 bg-white/[0.04] text-paper-soft hover:border-white/25 hover:text-paper"
+                        }`}
+                    >
+                        {copied ? "Copied" : "Copy"}
+                    </button>
+                </div>
             </div>
-        </div>
+
+            {copyFailed && (
+                <Alert tone="warning" className="mt-3">
+                    Could not reach the clipboard. Select the password above and copy it manually.
+                </Alert>
+            )}
+
+            <Alert tone="warning" className="mt-3">
+                This password is shown once and cannot be retrieved later.
+            </Alert>
+        </Modal>
     );
 }

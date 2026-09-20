@@ -3,6 +3,44 @@
 @tailwind utilities;
 
 /* ---------------------------------------------------------------------------
+   DTG design tokens
+   ---------------------------------------------------------------------------
+   Mirrors the `:root` block on digitaltwingeotechnical.com. Tailwind reads the
+   same values from tailwind.config.js; these exist for the handful of places
+   that need raw CSS (scrollbars, selection, autofill, keyframes).
+   --------------------------------------------------------------------------- */
+
+:root {
+    --dtg-night: #0b1a22;
+    --dtg-deep: #061216;
+    --dtg-surface: #122530;
+    --dtg-band: #073c4a;
+
+    --dtg-teal-700: #3c6470;
+    --dtg-teal-500: #6892a0;
+    --dtg-teal-300: #9dc1cc;
+
+    --dtg-signal: #63b75d;
+    --dtg-signal-hover: #4fa24a;
+    --dtg-on-signal: #06210a;
+
+    --dtg-gold: #d6a73a;
+
+    --dtg-paper: #f4f8f9;
+    --dtg-paper-soft: #aec0c7;
+    --dtg-paper-warm: #f4f0e7;
+    --dtg-muted: #7c8b92;
+
+    --dtg-danger: #e08373;
+
+    --dtg-line: rgba(255, 255, 255, 0.14);
+    --dtg-line-subtle: rgba(255, 255, 255, 0.08);
+
+    --dtg-header-height: 64px;
+    --dtg-sidebar-width: 15rem;
+}
+
+/* ---------------------------------------------------------------------------
    Base layer
    --------------------------------------------------------------------------- */
 
@@ -17,19 +55,51 @@
     html {
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
+        /* Let the browser paint the brand colour behind an overscroll bounce
+           instead of white. */
+        background: var(--dtg-night);
     }
 
     body {
         margin: 0;
-        font-family: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
-        background: #030712;
-        color: #f3f4f6;
+        font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        background: var(--dtg-night);
+        color: var(--dtg-paper);
+        /* The site sets body copy at 1.6; headings override locally. */
+        line-height: 1.6;
     }
 
-    /* Custom scrollbar */
+    /* Tabular figures everywhere numbers are compared down a column. */
+    table,
+    .font-mono {
+        font-variant-numeric: tabular-nums;
+    }
+
+    ::selection {
+        background: rgba(99, 183, 93, 0.28);
+        color: var(--dtg-paper);
+    }
+
+    /* A single, consistent focus ring in the brand's action colour. Applies to
+       keyboard navigation only, so pointer users never see it. */
+    :focus-visible {
+        outline: 2px solid var(--dtg-signal);
+        outline-offset: 2px;
+    }
+
+    /* Chrome's autofill yellow is jarring on a dark form; repaint it. */
+    input:-webkit-autofill,
+    input:-webkit-autofill:hover,
+    input:-webkit-autofill:focus {
+        -webkit-text-fill-color: var(--dtg-paper);
+        -webkit-box-shadow: 0 0 0 1000px var(--dtg-deep) inset;
+        caret-color: var(--dtg-paper);
+    }
+
+    /* Custom scrollbar — teal, not grey. */
     ::-webkit-scrollbar {
-        width: 6px;
-        height: 6px;
+        width: 8px;
+        height: 8px;
     }
 
     ::-webkit-scrollbar-track {
@@ -37,11 +107,118 @@
     }
 
     ::-webkit-scrollbar-thumb {
-        background: rgba(255, 255, 255, 0.1);
-        border-radius: 3px;
+        background: rgba(157, 193, 204, 0.18);
+        border-radius: 4px;
     }
 
     ::-webkit-scrollbar-thumb:hover {
-        background: rgba(255, 255, 255, 0.2);
+        background: rgba(157, 193, 204, 0.32);
+    }
+
+    * {
+        scrollbar-color: rgba(157, 193, 204, 0.18) transparent;
+        scrollbar-width: thin;
+    }
+}
+
+/* ---------------------------------------------------------------------------
+   Components
+   ---------------------------------------------------------------------------
+   Named after what they are on the marketing site, so the vocabulary carries
+   across. Prefer these over re-deriving the same stack of utilities per page.
+   --------------------------------------------------------------------------- */
+
+@layer components {
+
+    /* The site's signature label: uppercase, heavily tracked, tiny. */
+    .dtg-eyebrow {
+        @apply text-micro font-bold uppercase tracking-eyebrow text-teal-300;
+    }
+
+    /* Flat panel. DTG uses a hairline and a solid surface, never a blur. */
+    .dtg-panel {
+        @apply rounded-2xl border border-white/10 bg-surface;
+    }
+
+    .dtg-panel-inset {
+        @apply rounded-lg border border-white/[0.08] bg-deep/40;
+    }
+
+    /* Primary action — signal green, dark text, square-ish. */
+    .dtg-btn-primary {
+        @apply inline-flex items-center justify-center gap-2 rounded-lg bg-signal px-4 py-2.5
+               text-sm font-semibold text-signal-on transition-colors
+               hover:bg-signal-hover disabled:cursor-not-allowed disabled:opacity-40;
+    }
+
+    /* Secondary — hairline outline on the dark canvas. */
+    .dtg-btn-secondary {
+        @apply inline-flex items-center justify-center gap-2 rounded-lg border border-white/15
+               bg-white/[0.03] px-4 py-2.5 text-sm font-medium text-paper-soft transition-colors
+               hover:border-white/25 hover:bg-white/[0.07] hover:text-paper
+               disabled:cursor-not-allowed disabled:opacity-40;
+    }
+
+    .dtg-btn-danger {
+        @apply inline-flex items-center justify-center gap-2 rounded-lg border border-danger/40
+               bg-danger/10 px-4 py-2.5 text-sm font-semibold text-danger transition-colors
+               hover:border-danger/60 hover:bg-danger/20
+               disabled:cursor-not-allowed disabled:opacity-40;
+    }
+
+    /* Form field. Recessed well + green focus, matching the site's inputs. */
+    .dtg-input {
+        @apply w-full rounded-lg border border-white/10 bg-deep/60 px-3.5 py-2.5 text-sm text-paper
+               placeholder-muted transition-colors
+               focus:border-signal/60 focus:outline-none focus:ring-1 focus:ring-signal/40;
+    }
+
+    .dtg-label {
+        @apply mb-1.5 block text-label font-semibold uppercase tracking-label text-paper-soft;
+    }
+
+    /* Table chrome. */
+    .dtg-th {
+        @apply px-4 py-3 text-left text-micro font-bold uppercase tracking-label text-teal-300;
+    }
+
+    .dtg-td {
+        @apply px-4 py-3 align-middle text-sm;
+    }
+
+    /* Status pill. Square-ish, hairline, no glow. */
+    .dtg-chip {
+        @apply inline-flex items-center gap-1.5 rounded border px-2 py-0.5 text-micro font-semibold uppercase tracking-wider;
+    }
+}
+
+/* ---------------------------------------------------------------------------
+   Motion
+   --------------------------------------------------------------------------- */
+
+@keyframes dtg-fade-in {
+    from {
+        opacity: 0;
+        transform: translateY(4px);
+    }
+
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+.dtg-fade-in {
+    animation: dtg-fade-in 0.18s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
     }
 }

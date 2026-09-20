@@ -5,6 +5,9 @@ import {
     type EmployeeCreateData,
     type EmployeeUpdateData,
 } from "@/services/employeeService";
+import Drawer from "@/components/ui/Drawer";
+import Alert from "@/components/ui/Alert";
+import Spinner from "@/components/ui/Spinner";
 
 interface Props {
     employee?: Employee | null; // null = create mode
@@ -105,139 +108,215 @@ export default function EmployeeFormModal({ employee, onClose, onSaved }: Props)
         }
     };
 
-    const inputClass =
-        "w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-gray-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition";
-    const labelClass = "block text-xs font-medium text-gray-400 mb-1";
-
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-end">
-            {/* Backdrop */}
-            <div
-                className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-                onClick={onClose}
-            />
-
-            {/* Drawer */}
-            <div className="relative z-10 flex h-full w-full max-w-lg flex-col border-l border-white/10 bg-gray-950 shadow-2xl">
-                {/* Header */}
-                <div className="flex items-center justify-between border-b border-white/10 px-6 py-4">
-                    <h2 className="text-lg font-semibold text-white">
-                        {isEdit ? "Edit Employee" : "Add Employee"}
-                    </h2>
+        <Drawer
+            eyebrow={isEdit ? "People" : "New record"}
+            title={isEdit ? "Edit employee" : "Add employee"}
+            onClose={onClose}
+            footer={
+                <>
                     <button
+                        type="button"
                         onClick={onClose}
-                        className="rounded-lg p-1.5 text-gray-400 hover:bg-white/10 hover:text-white transition"
+                        disabled={loading}
+                        className="dtg-btn-secondary flex-1"
                     >
-                        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
-                        </svg>
+                        Cancel
                     </button>
-                </div>
-
-                {/* Form */}
-                <form onSubmit={handleSubmit} className="flex flex-1 flex-col overflow-y-auto">
-                    <div className="space-y-4 px-6 py-5">
-                        {error && (
-                            <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
-                                {error}
-                            </div>
+                    <button
+                        type="submit"
+                        form="employee-form"
+                        disabled={loading}
+                        className="dtg-btn-primary flex-1"
+                    >
+                        {loading ? (
+                            <>
+                                <Spinner />
+                                Saving…
+                            </>
+                        ) : isEdit ? (
+                            "Save changes"
+                        ) : (
+                            "Add employee"
                         )}
+                    </button>
+                </>
+            }
+        >
+            <form
+                id="employee-form"
+                onSubmit={handleSubmit}
+                className="flex-1 space-y-5 overflow-y-auto px-5 py-5 sm:px-6"
+            >
+                {error && <Alert tone="danger">{error}</Alert>}
 
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className={labelClass}>First Name *</label>
-                                <input className={inputClass} name="first_name" value={form.first_name} onChange={handleChange} placeholder="John" required />
-                            </div>
-                            <div>
-                                <label className={labelClass}>Last Name *</label>
-                                <input className={inputClass} name="last_name" value={form.last_name} onChange={handleChange} placeholder="Doe" required />
-                            </div>
-                        </div>
+                <fieldset className="space-y-4">
+                    <legend className="dtg-eyebrow mb-3">Identity</legend>
 
+                    <div className="grid gap-4 sm:grid-cols-2">
                         <div>
-                            <label className={labelClass}>Email *</label>
-                            <input className={inputClass} name="email" type="email" value={form.email} onChange={handleChange} placeholder="john@dtgeotech.com" required />
+                            <label htmlFor="first_name" className="dtg-label">
+                                First name <span className="text-signal">*</span>
+                            </label>
+                            <input
+                                id="first_name"
+                                className="dtg-input"
+                                name="first_name"
+                                value={form.first_name}
+                                onChange={handleChange}
+                                placeholder="Budi"
+                                required
+                            />
                         </div>
-
                         <div>
-                            <label className={labelClass}>Phone</label>
-                            <input className={inputClass} name="phone" value={form.phone} onChange={handleChange} placeholder="+62 812 3456 7890" />
+                            <label htmlFor="last_name" className="dtg-label">
+                                Last name <span className="text-signal">*</span>
+                            </label>
+                            <input
+                                id="last_name"
+                                className="dtg-input"
+                                name="last_name"
+                                value={form.last_name}
+                                onChange={handleChange}
+                                placeholder="Santoso"
+                                required
+                            />
                         </div>
+                    </div>
 
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className={labelClass}>Department *</label>
-                                <input className={inputClass} name="department" value={form.department} onChange={handleChange} placeholder="Engineering" required />
-                            </div>
-                            <div>
-                                <label className={labelClass}>Position *</label>
-                                <input className={inputClass} name="position" value={form.position} onChange={handleChange} placeholder="Software Engineer" required />
-                            </div>
+                    <div>
+                        <label htmlFor="email" className="dtg-label">
+                            Email <span className="text-signal">*</span>
+                        </label>
+                        <input
+                            id="email"
+                            className="dtg-input"
+                            name="email"
+                            type="email"
+                            value={form.email}
+                            onChange={handleChange}
+                            placeholder="budi@dtgeotech.com"
+                            required
+                        />
+                    </div>
+
+                    <div>
+                        <label htmlFor="phone" className="dtg-label">
+                            Phone
+                        </label>
+                        <input
+                            id="phone"
+                            className="dtg-input"
+                            name="phone"
+                            type="tel"
+                            value={form.phone}
+                            onChange={handleChange}
+                            placeholder="+62 812 3456 7890"
+                        />
+                    </div>
+                </fieldset>
+
+                <hr className="border-white/[0.08]" />
+
+                <fieldset className="space-y-4">
+                    <legend className="dtg-eyebrow mb-3">Role</legend>
+
+                    <div className="grid gap-4 sm:grid-cols-2">
+                        <div>
+                            <label htmlFor="department" className="dtg-label">
+                                Department <span className="text-signal">*</span>
+                            </label>
+                            <input
+                                id="department"
+                                className="dtg-input"
+                                name="department"
+                                value={form.department}
+                                onChange={handleChange}
+                                placeholder="Monitoring"
+                                required
+                            />
                         </div>
+                        <div>
+                            <label htmlFor="position" className="dtg-label">
+                                Position <span className="text-signal">*</span>
+                            </label>
+                            <input
+                                id="position"
+                                className="dtg-input"
+                                name="position"
+                                value={form.position}
+                                onChange={handleChange}
+                                placeholder="Geotechnical Engineer"
+                                required
+                            />
+                        </div>
+                    </div>
 
-                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                            <div>
-                                <label className={labelClass}>Date of Joining *</label>
-                                <input className={inputClass} name="date_of_joining" type="date" value={form.date_of_joining} onChange={handleChange} required />
-                            </div>
-                            <div>
-                                <label className={labelClass}>Opening annual leave</label>
-                                <input
-                                    className={inputClass}
-                                    name="annual_leave_opening_balance"
-                                    type="number"
-                                    step="0.5"
-                                    value={form.annual_leave_opening_balance}
-                                    onChange={handleChange}
-                                />
-                                <p className="mt-1 text-[10px] leading-tight text-gray-500">
-                                    Days carried in on the joining date. Leave accrues at
-                                    1/month on top of this; set it to match the balance
-                                    the roster workbook shows.
+                    <div className="grid gap-4 sm:grid-cols-2">
+                        <div>
+                            <label htmlFor="date_of_joining" className="dtg-label">
+                                Date of joining <span className="text-signal">*</span>
+                            </label>
+                            <input
+                                id="date_of_joining"
+                                className="dtg-input"
+                                name="date_of_joining"
+                                type="date"
+                                value={form.date_of_joining}
+                                onChange={handleChange}
+                                required
+                            />
+                        </div>
+                        <div>
+                            <label htmlFor="annual_leave_opening_balance" className="dtg-label">
+                                Opening annual leave
+                            </label>
+                            <input
+                                id="annual_leave_opening_balance"
+                                className="dtg-input"
+                                name="annual_leave_opening_balance"
+                                type="number"
+                                step="0.5"
+                                min="0"
+                                value={form.annual_leave_opening_balance}
+                                onChange={handleChange}
+                                aria-describedby="opening-balance-help"
+                            />
+                            <p id="opening-balance-help" className="mt-1.5 text-micro leading-relaxed text-muted">
+                                Days carried in on the joining date. Leave accrues at 1/month on
+                                top of this — set it to match the balance the roster workbook
+                                shows.
+                            </p>
+                        </div>
+                    </div>
+                </fieldset>
+
+                {/* Active toggle (edit only) */}
+                {isEdit && (
+                    <>
+                        <hr className="border-white/[0.08]" />
+                        <div className="dtg-panel-inset flex items-center justify-between gap-4 px-4 py-3.5">
+                            <div className="min-w-0">
+                                <p className="text-sm font-medium text-paper">Active</p>
+                                <p className="mt-0.5 text-xs text-muted">
+                                    Inactive employees are hidden from the directory.
                                 </p>
                             </div>
+                            <label className="relative inline-flex flex-shrink-0 cursor-pointer items-center">
+                                <input
+                                    type="checkbox"
+                                    name="is_active"
+                                    className="peer sr-only"
+                                    checked={form.is_active}
+                                    onChange={handleChange}
+                                />
+                                <span className="sr-only">Active</span>
+                                <div className="peer h-6 w-11 rounded-full border border-white/15 bg-deep transition-colors after:absolute after:left-[3px] after:top-[3px] after:h-4 after:w-4 after:rounded-full after:bg-paper-soft after:transition-all after:content-[''] peer-checked:border-signal/50 peer-checked:bg-signal/25 peer-checked:after:translate-x-full peer-checked:after:bg-signal peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-signal" />
+                            </label>
                         </div>
-
-                        {/* Active toggle (edit only) */}
-                        {isEdit && (
-                            <div className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3">
-                                <div>
-                                    <p className="text-sm font-medium text-white">Active Status</p>
-                                    <p className="text-xs text-gray-500">Inactive employees are hidden from the directory</p>
-                                </div>
-                                <label className="relative inline-flex cursor-pointer items-center">
-                                    <input
-                                        type="checkbox"
-                                        name="is_active"
-                                        className="peer sr-only"
-                                        checked={form.is_active}
-                                        onChange={handleChange}
-                                    />
-                                    <div className="peer h-6 w-11 rounded-full bg-gray-700 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:bg-indigo-600 peer-checked:after:translate-x-full" />
-                                </label>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Footer */}
-                    <div className="mt-auto flex gap-3 border-t border-white/10 px-6 py-4">
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            className="flex-1 rounded-xl border border-white/10 bg-white/5 py-2.5 text-sm font-medium text-gray-300 hover:bg-white/10 transition"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            type="submit"
-                            disabled={loading}
-                            className="flex-1 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 transition hover:from-indigo-600 hover:to-purple-700 disabled:opacity-60"
-                        >
-                            {loading ? "Saving…" : isEdit ? "Save Changes" : "Add Employee"}
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
+                    </>
+                )}
+            </form>
+        </Drawer>
     );
 }

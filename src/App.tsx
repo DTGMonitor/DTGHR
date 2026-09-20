@@ -8,6 +8,8 @@ import LoginPage from "@/pages/LoginPage";
 import SetPasswordPage from "@/pages/SetPasswordPage";
 import DashboardPage from "@/pages/DashboardPage";
 import EmployeesPage from "@/pages/EmployeesPage";
+import EmployeeProfilePage from "@/pages/EmployeeProfilePage";
+import KpiPage from "@/pages/KpiPage";
 import LeavesPage from "@/pages/LeavesPage";
 import SchedulesPage from "@/pages/SchedulesPage";
 
@@ -40,6 +42,8 @@ export default function App() {
                         >
                             <Route path="/" element={<DashboardPage />} />
                             <Route path="/employees" element={<EmployeesPage />} />
+                            <Route path="/employees/:employeeId" element={<EmployeeProfilePage />} />
+                            <Route path="/kpi" element={<KpiPage />} />
                             <Route path="/leaves" element={<LeavesPage />} />
                             <Route path="/schedules" element={<SchedulesPage />} />
                         </Route>

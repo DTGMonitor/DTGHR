@@ -109,22 +109,22 @@ export default function CellEditor({
         <div
             ref={panelRef}
             style={{ left, top, bottom, width: PANEL_WIDTH }}
-            className="fixed z-50 rounded-xl border border-white/10 bg-gray-900 p-3 shadow-2xl shadow-black/50 backdrop-blur-xl"
+            className="fixed z-50 rounded-xl border border-white/10 bg-surface p-3 shadow-2xl shadow-black/50 backdrop-blur-xl"
         >
             <div className="mb-2 border-b border-white/10 pb-2">
-                <p className="truncate text-sm font-semibold text-white">{employeeName}</p>
-                <p className="text-[11px] text-gray-500">{readableDate}</p>
+                <p className="truncate text-sm font-semibold text-paper">{employeeName}</p>
+                <p className="text-[11px] text-muted">{readableDate}</p>
             </div>
 
             {pending && (
-                <div className="mb-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2">
-                    <p className="flex items-center gap-1.5 text-[11px] text-amber-300">
+                <div className="mb-2 rounded-lg border border-gold/30 bg-gold/10 p-2">
+                    <p className="flex items-center gap-1.5 text-[11px] text-gold">
                         Awaiting approval:
                         <ShiftChip code={pending.current_code} />
                         <span aria-hidden>&rarr;</span>
                         <ShiftChip code={pending.requested_code} />
                     </p>
-                    <p className="mt-1 text-[10px] leading-tight text-amber-200/70">
+                    <p className="mt-1 text-[10px] leading-tight text-gold/70">
                         Withdraw the proposal from the requests panel to change this day
                         again.
                     </p>
@@ -132,7 +132,7 @@ export default function CellEditor({
             )}
 
             {staged !== undefined && !pending && (
-                <div className="mb-2 flex items-center gap-1.5 rounded-lg border border-indigo-400/40 bg-indigo-500/10 p-2 text-[11px] text-indigo-300">
+                <div className="mb-2 flex items-center gap-1.5 rounded-lg border border-teal-300/35 bg-teal-300/[0.07] p-2 text-[11px] text-teal-100">
                     Staged:
                     <ShiftChip code={currentCode} />
                     <span aria-hidden>&rarr;</span>
@@ -150,7 +150,7 @@ export default function CellEditor({
             )}
 
             {!canEdit ? (
-                <p className="text-[11px] text-gray-500">
+                <p className="text-[11px] text-muted">
                     You can only change your own row.
                 </p>
             ) : (
@@ -167,7 +167,7 @@ export default function CellEditor({
                                     title={style.label}
                                     className={`flex h-8 items-center justify-center rounded-lg text-[11px] font-bold ring-1 transition disabled:cursor-not-allowed disabled:opacity-40 ${active
                                         ? "ring-2 ring-white"
-                                        : "ring-black/20 hover:ring-white/60"
+                                        : "ring-black/25 hover:ring-white/60"
                                         }`}
                                     style={{ background: style.bg, color: style.fg }}
                                 >
@@ -180,15 +180,15 @@ export default function CellEditor({
                             disabled={busy || !!pending}
                             title="Clear this day"
                             className={`col-span-4 mt-0.5 flex h-8 items-center justify-center rounded-lg border border-dashed text-[11px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 ${highlighted === null
-                                ? "border-white/60 text-white"
-                                : "border-white/20 text-gray-400 hover:border-white/40 hover:text-white"
+                                ? "border-white/60 text-paper"
+                                : "border-white/20 text-paper-soft hover:border-white/40 hover:text-paper"
                                 }`}
                         >
                             Clear day
                         </button>
                     </div>
 
-                    <p className="mt-2 text-[10px] leading-tight text-gray-500">
+                    <p className="mt-2 text-[10px] leading-tight text-muted">
                         {pending
                             ? "This day is already awaiting approval."
                             : canApplyDirectly
