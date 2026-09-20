@@ -8,6 +8,8 @@ import type { LeaveOverview } from "@/types/leave";
 import { SHIFT_STYLES, type PublicHoliday, type ShiftCode } from "@/types/schedule";
 import { isoDate } from "@/lib/dates";
 import { formatDays, formatRange, LEAVE_TYPE_LABELS } from "@/components/leaves/leaveLabels";
+import StatTile from "@/components/ui/StatTile";
+import Icon from "@/components/ui/icons";
 import {
     SAMPLE_ANNOUNCEMENTS,
     SAMPLE_KPIS,
@@ -54,13 +56,18 @@ function daysUntil(target: Date, from: Date): number {
 
 // ─── Building blocks ──────────────────────────────────────────────────────────
 
+/**
+ * Marks a block whose numbers are invented. Payroll, KPI and announcements are
+ * not wired to anything yet, and an unlabelled placeholder on a dashboard gets
+ * quoted in a meeting sooner or later.
+ */
 function SampleTag() {
     return (
         <span
-            className="rounded-full border border-dashed border-gray-600 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-gray-500"
+            className="dtg-chip border-dashed border-white/20 text-muted"
             title="Placeholder content until this module is connected"
         >
-            Sample data
+            Sample
         </span>
     );
 }
@@ -79,10 +86,10 @@ function Panel({
     children: ReactNode;
 }) {
     return (
-        <section className={`rounded-2xl border border-white/10 bg-gray-900/30 p-5 ${className}`}>
+        <section className={`dtg-panel p-5 ${className}`}>
             <div className="mb-4 flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                    <h2 className="text-base font-semibold text-white">{title}</h2>
+                <div className="flex items-center gap-2.5">
+                    <h2 className="dtg-eyebrow">{title}</h2>
                     {sample && <SampleTag />}
                 </div>
                 {action}
@@ -92,41 +99,11 @@ function Panel({
     );
 }
 
-function StatTile({
-    label,
-    value,
-    sub,
-    icon,
-    tone,
-    to,
-    sample,
-}: {
-    label: string;
-    value: string;
-    sub?: string;
-    icon: string;
-    tone: string;
-    to?: string;
-    sample?: boolean;
-}) {
-    const body = (
-        <div className={`h-full rounded-2xl border bg-gradient-to-br p-5 transition-transform hover:scale-[1.02] ${tone}`}>
-            <div className="flex items-start justify-between">
-                <p className="text-sm text-gray-400">{label}</p>
-                <span className="text-2xl" aria-hidden>{icon}</span>
-            </div>
-            <p className="mt-1 text-3xl font-bold text-white">{value}</p>
-            <div className="mt-1 flex items-center justify-between gap-2">
-                {sub && <p className="truncate text-xs text-gray-400">{sub}</p>}
-                {sample && <SampleTag />}
-            </div>
-        </div>
-    );
-    return to ? <Link to={to} className="block">{body}</Link> : body;
-}
-
 const LinkAction = ({ to, children }: { to: string; children: ReactNode }) => (
-    <Link to={to} className="text-xs font-medium text-indigo-400 hover:underline">
+    <Link
+        to={to}
+        className="text-label font-semibold uppercase tracking-label text-teal-300 transition-colors hover:text-signal"
+    >
         {children}
     </Link>
 );
@@ -201,38 +178,52 @@ export default function DashboardPage() {
     const admin = stats?.role === "admin" ? stats : null;
 
     return (
-        <div className="space-y-6">
-            {/* Welcome */}
-            <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-indigo-500/10 via-purple-500/10 to-pink-500/10 p-6 sm:p-8">
-                <div className="pointer-events-none absolute -right-20 -top-20 h-60 w-60 rounded-full bg-indigo-500/10 blur-3xl" />
-                <p className="text-sm text-gray-400">
-                    {today.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
-                </p>
-                <h1 className="mt-1 text-2xl font-bold text-white">
-                    Welcome back, {user?.full_name?.split(" ")[0]} 👋
-                </h1>
-                <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
-                    {todayShift?.code ? (
-                        <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-gray-200">
-                            <span
-                                className="h-2.5 w-2.5 rounded-sm"
-                                style={{ background: SHIFT_STYLES[todayShift.code].bg }}
-                            />
-                            Today: {SHIFT_STYLES[todayShift.code].label} ({todayShift.code})
-                        </span>
-                    ) : employeeId && !loading ? (
-                        <span className="rounded-full bg-white/10 px-3 py-1 text-gray-400">No shift rostered today</span>
-                    ) : null}
-                    {todayShift?.holiday && (
-                        <span className="rounded-full bg-emerald-500/15 px-3 py-1 text-emerald-300">
-                            🇮🇩 {todayShift.holiday.name}
-                        </span>
-                    )}
-                    {overview?.next_leave && (
-                        <span className="rounded-full bg-blue-500/15 px-3 py-1 text-blue-300">
-                            Next leave: {formatRange(overview.next_leave.start_date, overview.next_leave.end_date)}
-                        </span>
-                    )}
+        <div className="dtg-fade-in space-y-6">
+            {/* Welcome. A flat teal band in the site's idiom — the gradient blobs
+                this replaced were the only soft-focus element in the product. */}
+            <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-band p-6 sm:p-8">
+                <div
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-0 opacity-[0.06]"
+                    style={{
+                        backgroundImage: "radial-gradient(circle at 1px 1px, #F4F0E7 1px, transparent 0)",
+                        backgroundSize: "14px 14px",
+                        maskImage: "linear-gradient(110deg, #000 0%, transparent 55%)",
+                        WebkitMaskImage: "linear-gradient(110deg, #000 0%, transparent 55%)",
+                    }}
+                />
+                <div className="relative">
+                    <p className="dtg-eyebrow">
+                        {today.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+                    </p>
+                    <h1 className="mt-2 text-2xl font-bold tracking-tight text-paper">
+                        Welcome back, {user?.full_name?.split(" ")[0]}
+                    </h1>
+                    <div className="mt-4 flex flex-wrap items-center gap-2 text-sm">
+                        {todayShift?.code ? (
+                            <span className="inline-flex items-center gap-2 rounded border border-white/12 bg-white/[0.06] px-2.5 py-1 text-paper-soft">
+                                <span
+                                    className="h-2.5 w-2.5 rounded-sm"
+                                    style={{ background: SHIFT_STYLES[todayShift.code].bg }}
+                                />
+                                Today: {SHIFT_STYLES[todayShift.code].label} ({todayShift.code})
+                            </span>
+                        ) : employeeId && !loading ? (
+                            <span className="rounded border border-white/12 px-2.5 py-1 text-muted">
+                                No shift rostered today
+                            </span>
+                        ) : null}
+                        {todayShift?.holiday && (
+                            <span className="rounded border border-signal/30 bg-signal/10 px-2.5 py-1 text-signal">
+                                {todayShift.holiday.name}
+                            </span>
+                        )}
+                        {overview?.next_leave && (
+                            <span className="rounded border border-teal-500/30 bg-teal-900/40 px-2.5 py-1 text-teal-100">
+                                Next leave: {formatRange(overview.next_leave.start_date, overview.next_leave.end_date)}
+                            </span>
+                        )}
+                    </div>
                 </div>
             </div>
 
@@ -240,64 +231,68 @@ export default function DashboardPage() {
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 {loading ? (
                     [...Array(4)].map((_, i) => (
-                        <div key={i} className="h-32 animate-pulse rounded-2xl border border-white/10 bg-white/5" />
+                        <div key={i} className="h-32 animate-pulse rounded-2xl border border-white/10 bg-white/[0.04]" />
                     ))
                 ) : (
                     <>
                         {overview ? (
                             <>
-                                <StatTile
-                                    label="Annual leave"
-                                    value={String(overview.annual.remaining)}
-                                    sub={`of ${overview.annual.total} days · ${overview.annual.used} used`}
-                                    icon="🏖️"
-                                    tone="from-blue-500/20 to-cyan-500/20 border-blue-500/20"
-                                    to="/leaves"
-                                />
-                                <StatTile
-                                    label="Pending requests"
-                                    value={String(overview.pending_count)}
-                                    sub={overview.pending_count ? `${formatDays(overview.pending_days)} awaiting approval` : "Nothing waiting"}
-                                    icon="⏳"
-                                    tone="from-amber-500/20 to-orange-500/20 border-amber-500/20"
-                                    to="/leaves"
-                                />
+                                <Link to="/leaves" className="block">
+                                    <StatTile
+                                        label="Annual leave"
+                                        value={overview.annual.remaining}
+                                        sub={`of ${overview.annual.total} days · ${overview.annual.used} used`}
+                                        icon="sun"
+                                        accent="action"
+                                    />
+                                </Link>
+                                <Link to="/leaves" className="block">
+                                    <StatTile
+                                        label="Pending requests"
+                                        value={overview.pending_count}
+                                        sub={overview.pending_count ? `${formatDays(overview.pending_days)} awaiting approval` : "Nothing waiting"}
+                                        icon="clock"
+                                        accent="attention"
+                                    />
+                                </Link>
                             </>
                         ) : admin ? (
                             <>
-                                <StatTile
-                                    label="Total employees"
-                                    value={String(admin.total_employees)}
-                                    sub={`${admin.new_this_month} joined this month`}
-                                    icon="👥"
-                                    tone="from-blue-500/20 to-cyan-500/20 border-blue-500/20"
-                                    to="/employees"
-                                />
-                                <StatTile
-                                    label="Pending approvals"
-                                    value={String(admin.pending_approvals)}
-                                    sub={`${admin.on_leave_today} on leave today`}
-                                    icon="📋"
-                                    tone="from-amber-500/20 to-orange-500/20 border-amber-500/20"
-                                    to="/leaves"
-                                />
+                                <Link to="/employees" className="block">
+                                    <StatTile
+                                        label="Total employees"
+                                        value={admin.total_employees}
+                                        sub={`${admin.new_this_month} joined this month`}
+                                        icon="users"
+                                        accent="data"
+                                    />
+                                </Link>
+                                <Link to="/leaves" className="block">
+                                    <StatTile
+                                        label="Pending approvals"
+                                        value={admin.pending_approvals}
+                                        sub={`${admin.on_leave_today} on leave today`}
+                                        icon="clipboard"
+                                        accent="attention"
+                                    />
+                                </Link>
                             </>
                         ) : null}
                         <StatTile
                             label="Next payday"
                             value={payIn === 0 ? "Today" : `${payIn} day${payIn === 1 ? "" : "s"}`}
                             sub={payday.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}
-                            icon="💰"
-                            tone="from-emerald-500/20 to-green-500/20 border-emerald-500/20"
-                            sample
+                            icon="calendar"
+                            accent="neutral"
+                            footer={<SampleTag />}
                         />
                         <StatTile
                             label="KPI score"
                             value={`${SAMPLE_KPI_SCORE}%`}
                             sub={`${SAMPLE_KPI_PERIOD} · on track`}
-                            icon="🎯"
-                            tone="from-purple-500/20 to-violet-500/20 border-purple-500/20"
-                            sample
+                            icon="chart"
+                            accent="data"
+                            footer={<SampleTag />}
                         />
                     </>
                 )}
@@ -305,16 +300,20 @@ export default function DashboardPage() {
 
             {/* Organisation strip -- HR who also have their own leave see both. */}
             {admin && overview && (
-                <div className="grid grid-cols-2 gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4 sm:grid-cols-4">
+                <div className="dtg-panel grid grid-cols-2 gap-3 p-4 sm:grid-cols-4">
                     {[
                         ["Employees", admin.total_employees, "/employees"],
                         ["Pending approvals", admin.pending_approvals, "/leaves"],
                         ["On leave today", admin.on_leave_today, "/employees"],
                         ["Joined this month", admin.new_this_month, "/employees"],
                     ].map(([label, value, to]) => (
-                        <Link key={label as string} to={to as string} className="rounded-xl px-3 py-2 transition hover:bg-white/5">
-                            <p className="text-xs text-gray-500">{label}</p>
-                            <p className="text-xl font-semibold text-white">{value}</p>
+                        <Link
+                            key={label as string}
+                            to={to as string}
+                            className="rounded-lg px-3 py-2 transition-colors hover:bg-white/5"
+                        >
+                            <p className="dtg-eyebrow text-paper-soft">{label}</p>
+                            <p className="mt-1.5 font-mono text-xl font-semibold text-paper">{value}</p>
                         </Link>
                     ))}
                 </div>
@@ -328,30 +327,30 @@ export default function DashboardPage() {
                     action={
                         <button
                             onClick={() => setShowPay((s) => !s)}
-                            className="text-xs font-medium text-indigo-400 hover:underline"
+                            className="text-label font-semibold uppercase tracking-label text-teal-300 transition-colors hover:text-signal"
                         >
-                            {showPay ? "Hide amounts" : "Show amounts"}
+                            {showPay ? "Hide" : "Show"}
                         </button>
                     }
                 >
-                    <p className="text-xs text-gray-500">Latest payslip · {SAMPLE_PAYSLIP.period}</p>
-                    <p className="mt-1 text-2xl font-bold text-white">{money(net)}</p>
-                    <p className="text-xs text-gray-500">take-home pay</p>
+                    <p className="text-xs text-muted">Latest payslip · {SAMPLE_PAYSLIP.period}</p>
+                    <p className="mt-1.5 font-mono text-2xl font-semibold text-paper">{money(net)}</p>
+                    <p className="text-xs text-muted">take-home pay</p>
                     <dl className="mt-4 space-y-1.5 text-sm">
-                        <div className="flex justify-between text-gray-300">
+                        <div className="flex justify-between text-paper-soft">
                             <dt>Basic salary</dt>
-                            <dd>{money(SAMPLE_PAYSLIP.basic)}</dd>
+                            <dd className="font-mono">{money(SAMPLE_PAYSLIP.basic)}</dd>
                         </div>
                         {SAMPLE_PAYSLIP.allowances.map((a) => (
-                            <div key={a.label} className="flex justify-between text-gray-400">
+                            <div key={a.label} className="flex justify-between text-muted">
                                 <dt>+ {a.label}</dt>
-                                <dd>{money(a.amount)}</dd>
+                                <dd className="font-mono">{money(a.amount)}</dd>
                             </div>
                         ))}
                         {SAMPLE_PAYSLIP.deductions.map((d) => (
-                            <div key={d.label} className="flex justify-between text-gray-500">
+                            <div key={d.label} className="flex justify-between text-muted">
                                 <dt>− {d.label}</dt>
-                                <dd>{money(d.amount)}</dd>
+                                <dd className="font-mono">{money(d.amount)}</dd>
                             </div>
                         ))}
                     </dl>
@@ -363,20 +362,20 @@ export default function DashboardPage() {
                         {SAMPLE_KPIS.map((k) => (
                             <li key={k.label}>
                                 <div className="flex items-baseline justify-between gap-2 text-sm">
-                                    <span className="text-gray-300">{k.label}</span>
-                                    <span className="whitespace-nowrap text-xs text-gray-400">
+                                    <span className="text-paper-soft">{k.label}</span>
+                                    <span className="whitespace-nowrap font-mono text-xs text-muted">
                                         {k.actual} / {k.target}
                                     </span>
                                 </div>
                                 <div
-                                    className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/10"
+                                    className="mt-1.5 h-1.5 overflow-hidden rounded-sm bg-white/10"
                                     role="meter"
                                     aria-valuemin={0}
                                     aria-valuemax={100}
                                     aria-valuenow={k.progress}
                                     aria-label={`${k.label}: ${k.progress}% of target`}
                                 >
-                                    <div className="h-full rounded-full bg-indigo-400" style={{ width: `${k.progress}%` }} />
+                                    <div className="h-full rounded-sm bg-signal" style={{ width: `${k.progress}%` }} />
                                 </div>
                             </li>
                         ))}
@@ -384,25 +383,25 @@ export default function DashboardPage() {
                 </Panel>
 
                 {/* This week's roster */}
-                <Panel title="My next 7 days" action={<LinkAction to="/schedules">Roster →</LinkAction>}>
+                <Panel title="My next 7 days" action={<LinkAction to="/schedules">Roster</LinkAction>}>
                     {!employeeId ? (
-                        <p className="text-sm text-gray-500">No roster row is linked to your account.</p>
+                        <p className="text-sm text-muted">No roster row is linked to your account.</p>
                     ) : (
                         <ol className="space-y-1.5">
                             {week.map((d) => {
                                 const style = d.code ? SHIFT_STYLES[d.code] : null;
                                 return (
                                     <li key={d.iso} className="flex items-center gap-3 text-sm">
-                                        <span className={`w-20 flex-shrink-0 ${d.iso === todayIso ? "font-semibold text-white" : "text-gray-400"}`}>
+                                        <span className={`w-20 flex-shrink-0 font-mono text-xs ${d.iso === todayIso ? "font-semibold text-paper" : "text-muted"}`}>
                                             {d.date.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}
                                         </span>
                                         <span
                                             className="inline-flex h-6 w-9 flex-shrink-0 items-center justify-center rounded text-[10px] font-bold"
-                                            style={style ? { background: style.bg, color: style.fg } : { background: "rgba(255,255,255,0.05)", color: "#6b7280" }}
+                                            style={style ? { background: style.bg, color: style.fg } : { background: "rgba(255,255,255,0.05)", color: "#7C8B92" }}
                                         >
                                             {d.code && !style?.blankInGrid ? d.code : d.code ? "" : "–"}
                                         </span>
-                                        <span className="truncate text-gray-400">
+                                        <span className="truncate text-paper-soft">
                                             {d.holiday ? d.holiday.name : style ? style.label : "Not rostered"}
                                         </span>
                                     </li>
@@ -416,18 +415,20 @@ export default function DashboardPage() {
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
                 {/* Announcements */}
                 <Panel title="Announcements" sample className="lg:col-span-2">
-                    <ul className="divide-y divide-white/5">
+                    <ul className="divide-y divide-white/[0.06]">
                         {SAMPLE_ANNOUNCEMENTS.map((a) => (
                             <li key={a.id} className="py-3 first:pt-0 last:pb-0">
                                 <div className="flex items-center gap-2">
-                                    {a.pinned && <span title="Pinned" aria-label="Pinned">📌</span>}
-                                    <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-medium text-gray-300">{a.tag}</span>
-                                    <h3 className="truncate text-sm font-medium text-white">{a.title}</h3>
-                                    <span className="ml-auto flex-shrink-0 text-xs text-gray-500">
+                                    {a.pinned && (
+                                        <Icon name="pin" className="h-3.5 w-3.5 flex-shrink-0 text-gold" aria-label="Pinned" />
+                                    )}
+                                    <span className="dtg-chip border-white/12 text-paper-soft">{a.tag}</span>
+                                    <h3 className="truncate text-sm font-medium text-paper">{a.title}</h3>
+                                    <span className="ml-auto flex-shrink-0 font-mono text-micro text-muted">
                                         {new Date(a.date).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
                                     </span>
                                 </div>
-                                <p className="mt-1 text-sm text-gray-400">{a.body}</p>
+                                <p className="mt-1 text-sm text-paper-soft">{a.body}</p>
                             </li>
                         ))}
                     </ul>
@@ -436,14 +437,14 @@ export default function DashboardPage() {
                 <div className="space-y-6">
                     {/* Leave used this year */}
                     {overview && (
-                        <Panel title={`Leave in ${overview.year}`} action={<LinkAction to="/leaves">Details →</LinkAction>}>
-                            <p className="text-2xl font-bold text-white">{formatDays(overview.used_days)}</p>
-                            <p className="text-xs text-gray-500">approved so far</p>
+                        <Panel title={`Leave in ${overview.year}`} action={<LinkAction to="/leaves">Details</LinkAction>}>
+                            <p className="font-mono text-2xl font-semibold text-paper">{formatDays(overview.used_days)}</p>
+                            <p className="text-xs text-muted">approved so far</p>
                             <ul className="mt-3 space-y-1 text-sm">
                                 {(Object.keys(overview.used_by_type) as (keyof typeof overview.used_by_type)[]).map((t) => (
-                                    <li key={t} className="flex justify-between text-gray-400">
+                                    <li key={t} className="flex justify-between text-paper-soft">
                                         <span>{LEAVE_TYPE_LABELS[t]}</span>
-                                        <span className="text-gray-300">{overview.used_by_type[t]}</span>
+                                        <span className="font-mono text-paper">{overview.used_by_type[t]}</span>
                                     </li>
                                 ))}
                             </ul>
@@ -451,9 +452,9 @@ export default function DashboardPage() {
                     )}
 
                     {/* Upcoming holidays */}
-                    <Panel title="Upcoming holidays" action={<LinkAction to="/schedules">Calendar →</LinkAction>}>
+                    <Panel title="Upcoming holidays" action={<LinkAction to="/schedules">Calendar</LinkAction>}>
                         {holidays.length === 0 ? (
-                            <p className="text-sm text-gray-500">{loading ? "Loading…" : "None on file."}</p>
+                            <p className="text-sm text-muted">{loading ? "Loading…" : "None on file."}</p>
                         ) : (
                             <ul className="space-y-2">
                                 {holidays.map((h) => {
@@ -461,13 +462,23 @@ export default function DashboardPage() {
                                     const inDays = daysUntil(d, today);
                                     return (
                                         <li key={h.id} className="flex items-center gap-3">
-                                            <div className={`flex h-10 w-10 flex-shrink-0 flex-col items-center justify-center rounded-lg ${h.is_national ? "bg-emerald-500/15 text-emerald-300" : "bg-amber-500/10 text-amber-300"}`}>
-                                                <span className="text-sm font-bold leading-none">{d.getDate()}</span>
-                                                <span className="text-[9px] uppercase">{d.toLocaleDateString("en-GB", { month: "short" })}</span>
+                                            {/* National days carry the signal colour; cuti bersama
+                                                is gold, the same split the roster legend uses. */}
+                                            <div
+                                                className={`flex h-10 w-10 flex-shrink-0 flex-col items-center justify-center rounded border ${
+                                                    h.is_national
+                                                        ? "border-signal/30 bg-signal/10 text-signal"
+                                                        : "border-gold/30 bg-gold/10 text-gold"
+                                                }`}
+                                            >
+                                                <span className="font-mono text-sm font-bold leading-none">{d.getDate()}</span>
+                                                <span className="text-[9px] uppercase tracking-wider">
+                                                    {d.toLocaleDateString("en-GB", { month: "short" })}
+                                                </span>
                                             </div>
                                             <div className="min-w-0 flex-1">
-                                                <p className="truncate text-sm text-gray-200">{h.name}</p>
-                                                <p className="text-xs text-gray-500">
+                                                <p className="truncate text-sm text-paper">{h.name}</p>
+                                                <p className="text-xs text-muted">
                                                     {h.is_national ? "National holiday" : "Cuti bersama"} ·{" "}
                                                     {inDays === 0 ? "today" : inDays === 1 ? "tomorrow" : `in ${inDays} days`}
                                                 </p>
