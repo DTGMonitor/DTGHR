@@ -13,6 +13,9 @@ const navItems = [
     {
         label: "Employees",
         to: "/employees",
+        // The staff directory carries statutory identifiers, bank details and
+        // home addresses. Management only; everyone has "My profile" instead.
+        managementOnly: true,
         icon: (
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" />
         ),
@@ -48,24 +51,39 @@ export default function Sidebar({ open, onClose }: { open: boolean; onClose: () 
     const inReviewChain = user?.role === "director" || user?.role === "executive";
 
     /*
-     * The staff directory is management's. Everyone else gets their own record
-     * in the same slot rather than losing the entry altogether: the thing they
-     * actually want from "Employees" is their own details, and a nav item that
-     * simply vanishes reads as something broken.
+     * The staff directory is management's. Everyone else never sees it.
+     *
+     * "My profile" is its own entry rather than a relabelled directory,
+     * because management need both: the directory to administer other people,
+     * and their own record like anybody else. It sits directly under
+     * Employees so the pair reads as "everyone / me".
      */
     const isManagement = Boolean(user?.is_management) || inReviewChain;
 
     const items = navItems
         .filter((item) => !item.reviewChainOnly || inReviewChain)
-        .map((item) =>
-            item.to === "/employees" && !isManagement
-                ? {
-                      ...item,
-                      label: "My profile",
-                      to: user?.employee_id ? `/employees/${user.employee_id}` : "/employees",
-                  }
-                : item
-        );
+        .filter((item) => !item.managementOnly || isManagement);
+
+    const myProfile = user?.employee_id
+        ? {
+              label: "My profile",
+              to: `/employees/${user.employee_id}`,
+              icon: (
+                  <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z"
+                  />
+              ),
+          }
+        : null;
+
+    /* Straight after Employees, or first when there is no directory to sit
+       under. Not appended at the end: "my own record" belongs with people,
+       not below the roster. */
+    const navList = myProfile
+        ? [...items.slice(0, isManagement ? 2 : 1), myProfile, ...items.slice(isManagement ? 2 : 1)]
+        : items;
 
     return (
         <>
@@ -87,7 +105,7 @@ export default function Sidebar({ open, onClose }: { open: boolean; onClose: () 
                     <p className="dtg-eyebrow px-3 pb-3">Workspace</p>
 
                     <div className="space-y-0.5">
-                        {items.map((item) => (
+                        {navList.map((item) => (
                             <NavLink
                                 key={item.to}
                                 to={item.to}
