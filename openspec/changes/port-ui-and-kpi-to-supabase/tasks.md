@@ -64,12 +64,14 @@ lands before the review chain and before the visibility policies.
 
 ## 2. Schema
 
-- [ ] Write `supabase/migrations/2026…_profile_and_kpi.sql`:
-      employee profile columns, `kpi_review_required` + reason, `photo_path`,
-      `kpi_role_templates`, `kpi_template_items`, `kpi_reviews`, `kpi_review_items`
+- [x] `20260921000200_employee_profile_and_kpi.sql`: 23 profile columns,
+      `work_pattern`, `is_backup_engineer`, `kpi_review_required` + reason,
+      `photo_path`, and the four KPI tables. Entirely additive.
+- [x] Seed the six role templates, generated from
+      `backend/app/data/kpi_role_templates.json` rather than retyped
+- [x] Verify: 8 new checks, `npm run test:db` green (61 total)
 - [ ] Extend `create_employee()` for `DTG-YY-NNN` numbering
-- [ ] Seed the six role templates from `backend/app/data/kpi_role_templates.json`
-- [ ] Verify: extend `supabase/test/` and keep `npm run test:db` green
+- [ ] Storage bucket `employee-photos` (private, signed URLs)
 
 ## 3. Scoring and reward as SQL
 

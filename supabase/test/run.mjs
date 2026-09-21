@@ -743,6 +743,112 @@ await step("the reversal is recorded in the activity trail", async () => {
 });
 
 
+// ---------------------------------------------------------------------------
+// Profile + KPI schema (20260921000200, 20260921000300)
+// ---------------------------------------------------------------------------
+console.log("\n--- profile and kpi schema ---");
+
+await step("the six role templates are seeded", async () => {
+    const r = await db.query(`select count(*)::int n from public.kpi_role_templates`);
+    if (r.rows[0].n !== 6) throw new Error(`got ${r.rows[0].n} templates`);
+});
+
+await step("every template has ten KPIs weighted to exactly 100", async () => {
+    const r = await db.query(`
+        select t.code, count(i.*)::int items, sum(i.weight)::float total
+          from public.kpi_role_templates t
+          join public.kpi_template_items i on i.template_id = t.id
+         group by t.code order by t.code`);
+    const bad = r.rows.filter((x) => x.items !== 10 || Math.abs(x.total - 100) > 0.001);
+    if (bad.length) {
+        throw new Error(bad.map((b) => `${b.code}: ${b.items} items, ${b.total}`).join("; "));
+    }
+    // A scorecard rated 3 throughout must come to 100; that only holds if the
+    // weights do. Every band downstream depends on it.
+});
+
+await step("re-running the seed does not duplicate items", async () => {
+    const before = await db.query(`select count(*)::int n from public.kpi_template_items`);
+    await db.exec(readFileSync(join(MIGRATIONS, "20260921000300_seed_kpi_templates.sql"), "utf8"));
+    const after = await db.query(`select count(*)::int n from public.kpi_template_items`);
+    if (after.rows[0].n !== before.rows[0].n) {
+        throw new Error(`${before.rows[0].n} -> ${after.rows[0].n}`);
+    }
+});
+
+await step("the profile columns exist and are all optional", async () => {
+    const cols = [
+        "date_of_birth", "place_of_birth", "gender", "marital_status", "religion",
+        "address", "personal_email", "emergency_contact_name",
+        "emergency_contact_relationship", "emergency_contact_phone",
+        "national_id", "tax_id", "bpjs_health_no", "bpjs_employment_no",
+        "bank_name", "bank_account_number", "bank_account_holder",
+        "employment_type", "contract_end_date", "job_level", "work_location",
+        "kpi_exemption_reason", "photo_path",
+    ];
+    const r = await db.query(`
+        select column_name, is_nullable from information_schema.columns
+         where table_schema='public' and table_name='employees'
+           and column_name = any($1)`, [cols]);
+    const found = new Set(r.rows.map((x) => x.column_name));
+    const missing = cols.filter((c) => !found.has(c));
+    if (missing.length) throw new Error("missing: " + missing.join(", "));
+    const required = r.rows.filter((x) => x.is_nullable === "NO").map((x) => x.column_name);
+    if (required.length) throw new Error("should be optional: " + required.join(", "));
+});
+
+await step("a new employee defaults to office_day and needs a review", async () => {
+    const r = await db.query(`
+        select work_pattern::text wp, is_backup_engineer bk, kpi_review_required req
+          from public.employees where employee_id = 'DTG-001'`);
+    const row = r.rows[0];
+    if (row.wp !== "office_day") throw new Error(`work_pattern ${row.wp}`);
+    if (row.bk !== false) throw new Error("backup engineer should default false");
+    if (row.req !== true) throw new Error("kpi_review_required should default true");
+});
+
+await step("salary lives on the review, never on the employee", async () => {
+    const r = await db.query(`
+        select column_name from information_schema.columns
+         where table_schema='public' and table_name='employees'
+           and column_name ~ 'salary|bonus'`);
+    if (r.rows.length) throw new Error("found on employees: " + r.rows.map((x) => x.column_name).join(", "));
+    const onReview = await db.query(`
+        select column_name from information_schema.columns
+         where table_schema='public' and table_name='kpi_reviews'
+           and column_name in ('current_basic_salary','target_bonus_amount','approved_increase_pct')`);
+    if (onReview.rows.length !== 3) throw new Error("compensation columns missing from kpi_reviews");
+});
+
+await step("a rating outside 0..5 is refused", async () => {
+    const t = await db.query(`select id from public.kpi_role_templates where code='monitoring_engineer'`);
+    await db.exec(`
+        insert into public.kpi_reviews (id, employee_id, template_id, period_label, period_start, period_end)
+        values ('99999999-0000-0000-0000-000000000001','aaaaaaaa-0000-0000-0000-000000000001',
+                '${t.rows[0].id}', '2026', '2026-01-01', '2026-12-31')
+        on conflict (employee_id, period_label) do nothing;`);
+    try {
+        await db.exec(`
+            insert into public.kpi_review_items (review_id, number, name, weight, rating)
+            values ('99999999-0000-0000-0000-000000000001','KPI-99','Out of range', 10, 7)`);
+        throw new Error("expected the check constraint to fire");
+    } catch (e) {
+        if (!/check constraint|violates/i.test(e.message)) throw new Error(`wrong error: ${e.message}`);
+    }
+});
+
+await step("one review per employee per period", async () => {
+    try {
+        await db.exec(`
+            insert into public.kpi_reviews (employee_id, period_label, period_start, period_end)
+            values ('aaaaaaaa-0000-0000-0000-000000000001','2026','2026-01-01','2026-12-31')`);
+        throw new Error("expected a unique violation");
+    } catch (e) {
+        if (!/duplicate key|unique/i.test(e.message)) throw new Error(`wrong error: ${e.message}`);
+    }
+});
+
+
 console.log("\n=====================================");
 if (fail.length) {
     console.log(`${fail.length} FAILURE(S)`);
