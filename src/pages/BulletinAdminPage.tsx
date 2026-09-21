@@ -176,12 +176,32 @@ export default function BulletinAdminPage() {
                                     Drafts &amp; scheduled
                                 </h2>
                             </div>
-                            <span className="font-mono text-micro text-muted">{drafts.length}</span>
+                            <button
+                                onClick={() => setParams({ edit: "new" })}
+                                className="dtg-btn-primary px-2.5 py-1 text-micro"
+                            >
+                                <Icon name="plus" className="h-3 w-3" />
+                                New draft
+                            </button>
                         </header>
                         {drafts.length === 0 ? (
-                            <p className="px-4 py-8 text-center text-sm text-muted">
-                                Nothing in progress.
-                            </p>
+                            <div className="px-4 py-10 text-center">
+                                <Icon name="pencil" className="mx-auto h-7 w-7 text-teal-500/50" />
+                                <p className="mt-3 text-sm text-paper-soft">
+                                    No drafts yet.
+                                </p>
+                                <p className="mx-auto mt-1 max-w-sm text-xs leading-relaxed text-muted">
+                                    Start as many as you like — they stay here, invisible to staff,
+                                    until you publish or schedule each one.
+                                </p>
+                                <button
+                                    onClick={() => setParams({ edit: "new" })}
+                                    className="dtg-btn-primary mx-auto mt-4 px-3 py-1.5 text-xs"
+                                >
+                                    <Icon name="plus" className="h-3.5 w-3.5" />
+                                    Start a draft
+                                </button>
+                            </div>
                         ) : (
                             <ul className="divide-y divide-white/[0.05]">
                                 {drafts.map((a) => (
