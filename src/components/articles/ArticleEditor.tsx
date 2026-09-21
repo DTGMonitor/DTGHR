@@ -22,7 +22,15 @@ import Alert from "@/components/ui/Alert";
  * fine ten minutes ago.
  */
 
-const CATEGORIES = ["Safety", "Health", "Weather", "Operations", "Announcement"];
+/*
+ * Suggestions, not a fixed list.
+ *
+ * The category is free text in the database precisely so it can change without
+ * a deployment -- these are a starting point, and the ones already in use are
+ * merged in. A <select> would have meant asking me every time a new kind of
+ * article came along.
+ */
+const SUGGESTED_CATEGORIES = ["Safety", "Health", "Weather", "Operations", "Announcement"];
 
 /** Local datetime for <input type="datetime-local">, which has no timezone. */
 function toLocalInput(iso: string | null): string {
@@ -37,6 +45,7 @@ export default function ArticleEditor({
     onClose,
     onChanged,
     onSlugChange,
+    knownCategories = [],
 }: {
     /** An existing article's slug, or "new" to start one. */
     slug: string;
@@ -44,6 +53,8 @@ export default function ArticleEditor({
     onChanged: () => void;
     /** The slug follows the title until first publication, so the URL must too. */
     onSlugChange: (slug: string) => void;
+    /** Categories already in use, so the suggestions grow with the bulletin. */
+    knownCategories?: string[];
 }) {
     const [article, setArticle] = useState<ArticleDetail | null>(null);
     const [loading, setLoading] = useState(true);
@@ -265,17 +276,26 @@ export default function ArticleEditor({
                     </div>
                     <div>
                         <label htmlFor="a-category" className="dtg-label">Category</label>
-                        <select
+                        <input
                             id="a-category"
+                            list="a-category-options"
                             value={category}
                             onChange={(e) => setCategory(e.target.value)}
+                            maxLength={60}
+                            placeholder="Safety"
                             className="dtg-input"
-                        >
-                            <option value="">None</option>
-                            {CATEGORIES.map((c) => (
-                                <option key={c} value={c}>{c}</option>
-                            ))}
-                        </select>
+                        />
+                        <datalist id="a-category-options">
+                            {[...new Set([...knownCategories, ...SUGGESTED_CATEGORIES])]
+                                .filter(Boolean)
+                                .sort()
+                                .map((c) => (
+                                    <option key={c} value={c} />
+                                ))}
+                        </datalist>
+                        <p className="mt-1.5 text-micro text-muted">
+                            Pick one or type a new one.
+                        </p>
                     </div>
                 </div>
 

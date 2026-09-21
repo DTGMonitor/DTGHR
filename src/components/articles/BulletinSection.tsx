@@ -174,6 +174,9 @@ export default function BulletinSection() {
                 onClose={() => setParams({})}
                 onChanged={() => void load()}
                 onSlugChange={(next) => setParams({ edit: next }, { replace: true })}
+                knownCategories={[
+                    ...new Set(items.map((a) => a.category).filter((c): c is string => !!c)),
+                ]}
             />
         );
     }
@@ -241,11 +244,10 @@ export default function BulletinSection() {
                             <ArticleBody body={article.body} images={article.images} />
                         </div>
 
+                        {/* No second "Back to dashboard" here: the one at the
+                            top of the article does that job, and two exits
+                            three screens apart read as two different things. */}
                         <div className="mt-12 flex flex-wrap gap-2 border-t border-white/10 pt-5">
-                            <button onClick={close} className="dtg-btn-secondary px-3 py-1.5 text-xs">
-                                <Icon name="arrowLeft" className="h-3.5 w-3.5" />
-                                Back to dashboard
-                            </button>
                             {article.can_edit && (
                                 <button
                                     onClick={() => setParams({ edit: article.slug })}
