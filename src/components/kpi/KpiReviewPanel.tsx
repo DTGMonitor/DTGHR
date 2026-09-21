@@ -434,7 +434,11 @@ export default function KpiReviewPanel({ employee }: { employee: EmployeeDetail 
                             </Alert>
                         )}
 
-                        {(active.can_submit || active.can_approve) && (
+                        {(active.can_submit ||
+                            active.can_approve ||
+                            active.can_publish ||
+                            active.can_unpublish ||
+                            active.can_reset) && (
                             <div className="mt-4 flex flex-wrap gap-2 border-t border-white/[0.08] pt-4">
                                 {active.can_submit && (
                                     <button
@@ -470,6 +474,77 @@ export default function KpiReviewPanel({ employee }: { employee: EmployeeDetail 
                                             Return for revision
                                         </button>
                                     </>
+                                )}
+
+                                {/* Approval settles the assessment between the two
+                                    reviewers. Publishing is the separate decision to
+                                    show it to the person it is about, so nothing
+                                    reaches an employee by accident. */}
+                                {active.can_publish && (
+                                    <button
+                                        onClick={() => {
+                                            if (
+                                                window.confirm(
+                                                    `Publish this scorecard to ${
+                                                        active.employee_name ?? "the employee"
+                                                    }?
+
+They will be able to read their ratings, ` +
+                                                        `score and band. Salary and bonus are never shown.`
+                                                )
+                                            ) {
+                                                act(() => kpiService.publish(active.id));
+                                            }
+                                        }}
+                                        disabled={busy}
+                                        className="dtg-btn-primary px-3 py-1.5 text-xs"
+                                    >
+                                        <Icon name="check" className="h-3.5 w-3.5" />
+                                        Publish to employee
+                                    </button>
+                                )}
+
+                                {active.can_unpublish && (
+                                    <button
+                                        onClick={() => {
+                                            if (
+                                                window.confirm(
+                                                    "Withdraw this published scorecard?\n\n" +
+                                                        "It becomes invisible to the employee again and " +
+                                                        "editable. The approval is kept."
+                                                )
+                                            ) {
+                                                act(() => kpiService.unpublish(active.id));
+                                            }
+                                        }}
+                                        disabled={busy}
+                                        className="dtg-btn-secondary px-3 py-1.5 text-xs"
+                                    >
+                                        Withdraw from employee
+                                    </button>
+                                )}
+
+                                {/* Destructive, so it asks -- and it asks with the
+                                    consequence spelled out rather than "are you sure". */}
+                                {active.can_reset && (
+                                    <button
+                                        onClick={() => {
+                                            if (
+                                                window.confirm(
+                                                    "Reset this scorecard?\n\n" +
+                                                        "Every rating, note and sign-off is cleared and it " +
+                                                        "goes back to an empty draft. This cannot be undone."
+                                                )
+                                            ) {
+                                                act(() => kpiService.reset(active.id));
+                                            }
+                                        }}
+                                        disabled={busy}
+                                        className="dtg-btn-danger ml-auto px-3 py-1.5 text-xs"
+                                    >
+                                        <Icon name="refresh" className="h-3.5 w-3.5" />
+                                        Reset
+                                    </button>
                                 )}
                             </div>
                         )}

@@ -58,13 +58,32 @@ export default function RewardPanel({
 
     const blocked = review.reward_blocked_reason;
 
+    /*
+     * Peter, September 2026: salary reviews, increases and bonuses are
+     * discretionary -- they turn on company performance as well as individual
+     * performance -- so none of this calculation is shared with staff.
+     *
+     * The server already withholds the figures from anyone outside the review
+     * chain; this is the matching decision not to draw an empty panel where
+     * they would have been. An interface that shows a greyed-out bonus box
+     * still tells the reader a bonus exists.
+     */
+    if (!review.can_see_reward) return null;
+
+    /*
+     * And annual bonuses are not offered outside management roles at this
+     * stage, so for everyone else the bonus is absent rather than zero. The
+     * multiplier stays: Peter kept it for salary reviews.
+     */
+    const showBonus = review.bonus_applies;
+
     return (
         <section className="dtg-panel overflow-hidden">
             <header className="flex items-center justify-between gap-4 border-b border-white/[0.08] px-5 py-3.5">
                 <div>
                     <p className="dtg-eyebrow">Reward</p>
                     <h3 className="mt-0.5 text-sm font-semibold text-paper">
-                        Bonus &amp; salary outcome
+                        {showBonus ? "Bonus & salary outcome" : "Salary review"}
                     </h3>
                 </div>
                 {saving && <Spinner className="h-4 w-4 text-signal" />}
@@ -77,7 +96,7 @@ export default function RewardPanel({
                     <Alert tone={review.is_complete ? "danger" : "info"}>{blocked}</Alert>
                 ) : (
                     /* ── The outcome ────────────────────────────────────── */
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    <div className={`grid grid-cols-1 gap-3 ${showBonus ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
                         <div className="dtg-panel-inset p-4">
                             <p className="dtg-eyebrow">Multiplier</p>
                             <p className="mt-2 font-mono text-2xl font-semibold leading-none text-paper">
@@ -87,15 +106,17 @@ export default function RewardPanel({
                                 {review.bonus_multiplier_label}
                             </p>
                         </div>
-                        <div className="dtg-panel-inset border-l-2 border-l-signal p-4">
-                            <p className="dtg-eyebrow">Recommended bonus</p>
-                            <p className="mt-2 font-mono text-xl font-semibold leading-none text-paper">
-                                {formatRupiah(review.recommended_bonus)}
-                            </p>
-                            <p className="mt-1.5 text-micro text-muted">
-                                target × multiplier
-                            </p>
-                        </div>
+                        {showBonus && (
+                            <div className="dtg-panel-inset border-l-2 border-l-signal p-4">
+                                <p className="dtg-eyebrow">Recommended bonus</p>
+                                <p className="mt-2 font-mono text-xl font-semibold leading-none text-paper">
+                                    {formatRupiah(review.recommended_bonus)}
+                                </p>
+                                <p className="mt-1.5 text-micro text-muted">
+                                    target × multiplier
+                                </p>
+                            </div>
+                        )}
                         <div className="dtg-panel-inset p-4">
                             <p className="dtg-eyebrow">Proposed basic salary</p>
                             <p className="mt-2 font-mono text-xl font-semibold leading-none text-paper">
@@ -117,6 +138,13 @@ export default function RewardPanel({
                     </p>
                 )}
 
+                {!showBonus && (
+                    <p className="text-xs leading-relaxed text-muted">
+                        No annual bonus applies to this role. The multiplier informs the
+                        salary review only, and is not shared with the employee.
+                    </p>
+                )}
+
                 {/* ── The decisions ──────────────────────────────────────── */}
                 <div className="grid grid-cols-1 gap-4 border-t border-white/[0.08] pt-5 sm:grid-cols-2">
                     <Toggle
@@ -126,22 +154,26 @@ export default function RewardPanel({
                         disabled={!editable}
                         onChange={(v) => save({ critical_gate_cleared: v })}
                     />
-                    <Toggle
-                        label="Bonus available from company"
-                        help="When it is not, the outcome routes to a salary review instead."
-                        checked={review.bonus_available}
-                        disabled={!editable}
-                        onChange={(v) => save({ bonus_available: v })}
-                    />
+                    {showBonus && (
+                        <Toggle
+                            label="Bonus available from company"
+                            help="When it is not, the outcome routes to a salary review instead."
+                            checked={review.bonus_available}
+                            disabled={!editable}
+                            onChange={(v) => save({ bonus_available: v })}
+                        />
+                    )}
 
-                    <Money
-                        label="Target bonus amount"
-                        value={target}
-                        disabled={!editable}
-                        onChange={setTarget}
-                        onCommit={() => save({ target_bonus_amount: numberOrNull(target) })}
-                        help="Agreed before the period. The bonus at target performance."
-                    />
+                    {showBonus && (
+                        <Money
+                            label="Target bonus amount"
+                            value={target}
+                            disabled={!editable}
+                            onChange={setTarget}
+                            onCommit={() => save({ target_bonus_amount: numberOrNull(target) })}
+                            help="Agreed before the period. The bonus at target performance."
+                        />
+                    )}
                     <Money
                         label="Current monthly basic salary"
                         value={salary}

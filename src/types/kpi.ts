@@ -8,7 +8,13 @@
 
 export type KpiPeriodType = "quarterly" | "half_year" | "annual";
 
-export type KpiReviewStatus = "draft" | "submitted" | "approved" | "returned";
+export type KpiReviewStatus =
+    | "draft"
+    | "submitted"
+    | "approved"
+    | "returned"
+    /** Released to the person it is about. Read-only for everyone. */
+    | "published";
 
 export const KPI_PERIOD_LABELS: Record<KpiPeriodType, string> = {
     quarterly: "Quarterly check-in",
@@ -21,6 +27,7 @@ export const KPI_STATUS_LABELS: Record<KpiReviewStatus, string> = {
     submitted: "Awaiting approval",
     approved: "Approved",
     returned: "Returned for revision",
+    published: "Published to employee",
 };
 
 /** Rating -> factor, from section 5 of the role documents. */
@@ -138,6 +145,23 @@ export interface KpiReviewDetail extends KpiReviewSummary {
     can_approve: boolean;
     /** Looser than can_edit: the reward is decided after the ratings lock. */
     can_edit_reward: boolean;
+    /** Release an approved scorecard to its subject. The approver's. */
+    can_publish: boolean;
+    /** Withdraw a published one for correction. The administrator's. */
+    can_unpublish: boolean;
+    /** Discard every rating and start again. The administrator's. */
+    can_reset: boolean;
+    /**
+     * Whether the reward block is shown at all. False for the subject of the
+     * review: salary and bonus are discretionary and are not shared with staff.
+     */
+    can_see_reward: boolean;
+    /**
+     * Whether an annual bonus exists for this role. False outside management
+     * roles, and then no bonus is shown at all rather than a bonus of zero.
+     */
+    bonus_applies: boolean;
+    published_at: string | null;
 
     // ── Reward ──────────────────────────────────────────────────────────
     critical_gate_cleared: boolean;

@@ -75,6 +75,21 @@ export const kpiService = {
         return api.post(`/kpi/reviews/${reviewId}/approve`, { comment });
     },
 
+    /** Release an approved scorecard to the person it is about. */
+    publish(reviewId: string): Promise<{ data: KpiReviewDetail }> {
+        return api.post(`/kpi/reviews/${reviewId}/publish`);
+    },
+
+    /** Withdraw a published scorecard so it can be corrected. Admin only. */
+    unpublish(reviewId: string): Promise<{ data: KpiReviewDetail }> {
+        return api.post(`/kpi/reviews/${reviewId}/unpublish`);
+    },
+
+    /** Clear every rating and the sign-off, back to an empty draft. Admin only. */
+    reset(reviewId: string): Promise<{ data: KpiReviewDetail }> {
+        return api.post(`/kpi/reviews/${reviewId}/reset`);
+    },
+
     return(reviewId: string, comment: string): Promise<{ data: KpiReviewDetail }> {
         return api.post(`/kpi/reviews/${reviewId}/return`, { comment });
     },
