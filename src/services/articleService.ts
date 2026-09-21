@@ -12,7 +12,7 @@ export const articleService = {
     list(params?: {
         includeDrafts?: boolean;
         category?: string;
-    }): Promise<{ data: { items: ArticleSummary[]; total: number } }> {
+    }): Promise<{ data: { items: ArticleSummary[]; total: number; can_write: boolean } }> {
         return api.get("/articles", {
             params: {
                 include_drafts: params?.includeDrafts || undefined,

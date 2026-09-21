@@ -11,6 +11,7 @@ import {
     type ArticleSummary,
 } from "@/types/article";
 import ArticleBody from "@/components/articles/ArticleBody";
+import ArticleEditor from "@/components/articles/ArticleEditor";
 import AuthImage from "@/components/articles/AuthImage";
 import Icon from "@/components/ui/icons";
 import Spinner from "@/components/ui/Spinner";
@@ -95,12 +96,22 @@ export default function BulletinSection() {
     const [article, setArticle] = useState<ArticleDetail | null>(null);
     const [articleLoading, setArticleLoading] = useState(false);
 
+    /*
+     * Whether this viewer may write, straight from the list response. It is a
+     * property of the person rather than of any article, which is why asking
+     * an article about it was wrong: with nothing published yet there was no
+     * article to ask, and therefore no way to write the first one.
+     */
+    const [canWrite, setCanWrite] = useState(false);
+    const editSlug = params.get("edit");
+
     const load = useCallback(async () => {
         try {
             // Authors ask for drafts; the server ignores the flag for anybody
             // else, so it is safe to send unconditionally.
             const res = await articleService.list({ includeDrafts: true });
             setItems(res.data.items);
+            setCanWrite(res.data.can_write);
         } catch {
             setError("Could not load the bulletin.");
         } finally {
@@ -111,6 +122,7 @@ export default function BulletinSection() {
     useEffect(() => {
         void load();
     }, [load]);
+
 
     useEffect(() => {
         if (!openSlug) {
@@ -153,6 +165,17 @@ export default function BulletinSection() {
     const recent = byMonth.filter(([m]) => m === currentMonth);
     const archive = byMonth.filter(([m]) => m !== currentMonth);
     const archiveCount = archive.reduce((n, [, g]) => n + g.length, 0);
+
+    // ── Writing ─────────────────────────────────────────────────────────
+    if (editSlug) {
+        return (
+            <ArticleEditor
+                slug={editSlug}
+                onClose={() => setParams({})}
+                onChanged={() => void load()}
+            />
+        );
+    }
 
     // ── Reading one ─────────────────────────────────────────────────────
     if (openSlug) {
@@ -217,11 +240,20 @@ export default function BulletinSection() {
                             <ArticleBody body={article.body} images={article.images} />
                         </div>
 
-                        <div className="mt-12 border-t border-white/10 pt-5">
+                        <div className="mt-12 flex flex-wrap gap-2 border-t border-white/10 pt-5">
                             <button onClick={close} className="dtg-btn-secondary px-3 py-1.5 text-xs">
                                 <Icon name="arrowLeft" className="h-3.5 w-3.5" />
                                 Back to dashboard
                             </button>
+                            {article.can_edit && (
+                                <button
+                                    onClick={() => setParams({ edit: article.slug })}
+                                    className="dtg-btn-secondary px-3 py-1.5 text-xs"
+                                >
+                                    <Icon name="pencil" className="h-3.5 w-3.5" />
+                                    Edit this article
+                                </button>
+                            )}
                         </div>
                     </article>
                 )}
@@ -246,6 +278,15 @@ export default function BulletinSection() {
             <div className="dtg-panel px-5 py-16 text-center">
                 <Icon name="clipboard" className="mx-auto h-8 w-8 text-teal-500/60" />
                 <p className="mt-3 text-sm text-paper-soft">Nothing published yet.</p>
+                {canWrite && (
+                    <button
+                        onClick={() => setParams({ edit: "new" })}
+                        className="dtg-btn-primary mx-auto mt-4 px-3 py-1.5 text-xs"
+                    >
+                        <Icon name="plus" className="h-3.5 w-3.5" />
+                        Write the first one
+                    </button>
+                )}
             </div>
         );
     }
@@ -258,6 +299,15 @@ export default function BulletinSection() {
                 <span className="font-mono text-micro text-muted">
                     {items.length} article{items.length === 1 ? "" : "s"}
                 </span>
+                {canWrite && (
+                    <button
+                        onClick={() => setParams({ edit: "new" })}
+                        className="dtg-btn-primary px-3 py-1.5 text-xs"
+                    >
+                        <Icon name="plus" className="h-3.5 w-3.5" />
+                        New article
+                    </button>
+                )}
             </div>
 
             {/* The lead: this week's piece, given the room it deserves. */}
