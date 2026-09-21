@@ -594,6 +594,155 @@ await step("an employee cannot reactivate, and HR cannot deactivate themselves",
     }
 });
 
+// ---------------------------------------------------------------------------
+// Roles (20260921000100)
+// ---------------------------------------------------------------------------
+console.log("\n--- roles ---");
+
+// Peter is the executive; Himawan is finance. Both get a profile and a roster
+// row so current_employee_id() resolves for them.
+const PETER = "44444444-4444-4444-4444-444444444444";
+const HIMAWAN = "55555555-5555-5555-5555-555555555555";
+
+await db.exec(`
+    -- public.users hangs off auth.users, so the auth row comes first and the
+    -- on_auth_user_created trigger provisions the profile.
+    insert into auth.users (
+        instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
+        raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+        confirmation_token, recovery_token, email_change_token_new, email_change
+    ) values
+      ('00000000-0000-0000-0000-000000000000','44444444-4444-4444-4444-444444444444',
+       'authenticated','authenticated','peter@dtgeotech.com','x', now(),
+       '{"provider":"email","providers":["email"]}'::jsonb,
+       '{"full_name":"Peter Saunders"}'::jsonb, now(), now(), '', '', '', ''),
+      ('00000000-0000-0000-0000-000000000000','55555555-5555-5555-5555-555555555555',
+       'authenticated','authenticated','himawan@dtgeotech.com','x', now(),
+       '{"provider":"email","providers":["email"]}'::jsonb,
+       '{"full_name":"Himawan"}'::jsonb, now(), now(), '', '', '', '');
+
+    update public.users set role = 'executive' where id = '44444444-4444-4444-4444-444444444444';
+    update public.users set role = 'finance'   where id = '55555555-5555-5555-5555-555555555555';
+
+    insert into public.employees (id, employee_id, first_name, last_name, email, department, position, date_of_joining, annual_leave_opening_balance, user_id) values
+      ('aaaaaaaa-0000-0000-0000-00000000000e','DTG-900','Peter','Saunders','peter@dtgeotech.com','Management','President Director','2024-01-02', 0, '44444444-4444-4444-4444-444444444444'),
+      ('aaaaaaaa-0000-0000-0000-00000000000f','DTG-901','Himawan','F','himawan@dtgeotech.com','Finance','Finance Assistant','2024-01-02', 0, '55555555-5555-5555-5555-555555555555');
+`);
+
+await step("existing superusers were backfilled to admin", async () => {
+    const r = await db.query(`select role::text as role from public.users where id = $1`, [ADMIN]);
+    if (r.rows[0].role !== "admin") throw new Error(`got ${r.rows[0].role}`);
+});
+
+await step("is_superuser is mirrored from the role", async () => {
+    const exec = await db.query(`select is_superuser from public.users where id=$1`, [PETER]);
+    const fin = await db.query(`select is_superuser from public.users where id=$1`, [HIMAWAN]);
+    if (exec.rows[0].is_superuser !== true) throw new Error("executive should be superuser");
+    if (fin.rows[0].is_superuser !== false) throw new Error("finance must not be superuser");
+});
+
+await step("finance is not an administrator", async () => {
+    const r = await tx(HIMAWAN, `select public.is_admin() a, public.is_finance() f`);
+    if (r.rows[0].a !== false) throw new Error("finance must not be admin");
+    if (r.rows[0].f !== true) throw new Error("is_finance() false for finance");
+});
+
+await step("the executive is an administrator but not the HR admin", async () => {
+    const r = await tx(PETER, `select public.is_admin() a, public.is_hr_admin() h, public.is_executive() e`);
+    if (r.rows[0].a !== true) throw new Error("executive should be admin-like");
+    if (r.rows[0].h !== false) throw new Error("executive is not the HR admin");
+    if (r.rows[0].e !== true) throw new Error("is_executive() false for executive");
+});
+
+await step("bootstrap_session carries the role and its capabilities", async () => {
+    const r = await tx(HIMAWAN, `select public.bootstrap_session() j`);
+    const j = r.rows[0].j;
+    if (j.role !== "finance") throw new Error(`role ${j.role}`);
+    if (j.can_approve_leave !== false) throw new Error("finance must not approve leave");
+    if (j.can_read_compensation !== true) throw new Error("finance must read compensation");
+    const p = await tx(PETER, `select public.bootstrap_session() j`);
+    if (p.rows[0].j.can_overturn_leave !== true) throw new Error("executive must overturn");
+});
+
+// --- leave: one signature, executive may overturn --------------------------
+
+const leaveId = "dddddddd-0000-0000-0000-0000000000a1";
+
+async function freshRequest() {
+    await db.exec(`delete from public.leave_requests where id = 'dddddddd-0000-0000-0000-0000000000a1'`);
+    await db.exec(`
+        insert into public.leave_balances (id, employee_id, leave_type, year, total_days, used_days)
+        values ('eeeeeeee-0000-0000-0000-0000000000a1','aaaaaaaa-0000-0000-0000-000000000001','annual',2026,12,0)
+        on conflict (employee_id, leave_type, year) do update set used_days = 0;
+
+        insert into public.leave_requests
+            (id, employee_id, leave_type, start_date, end_date, days_requested, reason, status)
+        values ('dddddddd-0000-0000-0000-0000000000a1','aaaaaaaa-0000-0000-0000-000000000001','annual',
+                '2026-05-04','2026-05-06', 3, 'test', 'pending');
+    `);
+}
+
+const usedDays = async () => Number((await db.query(
+    `select used_days from public.leave_balances
+      where employee_id='aaaaaaaa-0000-0000-0000-000000000001'
+        and leave_type='annual' and year=2026`)).rows[0].used_days);
+
+await step("finance cannot approve leave", async () => {
+    await freshRequest();
+    try {
+        await tx(HIMAWAN, `select public.approve_leave_request($1::uuid, null)`, [leaveId]);
+        throw new Error("expected a raise");
+    } catch (e) {
+        if (!/Not authorised|No employee profile/.test(e.message)) {
+            throw new Error(`wrong error: ${e.message}`);
+        }
+    }
+});
+
+await step("one signature settles it - the admin alone approves", async () => {
+    await freshRequest();
+    await tx(ADMIN, `select public.approve_leave_request($1::uuid, null)`, [leaveId]);
+    const r = await db.query(`select status from public.leave_requests where id=$1`, [leaveId]);
+    if (r.rows[0].status !== "approved") throw new Error(`status ${r.rows[0].status}`);
+    const used = await usedDays();
+    if (used !== 3) throw new Error(`used ${used}, expected 3`);
+});
+
+await step("the admin cannot revisit a settled request", async () => {
+    try {
+        await tx(ADMIN, `select public.reject_leave_request($1::uuid, 'changed my mind')`, [leaveId]);
+        throw new Error("expected a raise");
+    } catch (e) {
+        if (!/already/.test(e.message)) throw new Error(`wrong error: ${e.message}`);
+    }
+});
+
+await step("the executive overturns the approval, and the days come back", async () => {
+    await tx(PETER, `select public.reject_leave_request($1::uuid, 'cover needed')`, [leaveId]);
+    const r = await db.query(`select status from public.leave_requests where id=$1`, [leaveId]);
+    if (r.rows[0].status !== "rejected") throw new Error(`status ${r.rows[0].status}`);
+    const used = await usedDays();
+    if (used !== 0) throw new Error(`used ${used}, expected the 3 days returned`);
+});
+
+await step("overturning the other way spends them again, exactly once", async () => {
+    await tx(PETER, `select public.approve_leave_request($1::uuid, null)`, [leaveId]);
+    let used = await usedDays();
+    if (used !== 3) throw new Error(`used ${used}, expected 3`);
+    // Re-approving an already-approved request must not double-count.
+    await tx(PETER, `select public.approve_leave_request($1::uuid, null)`, [leaveId]);
+    used = await usedDays();
+    if (used !== 3) throw new Error(`double counted: used ${used}`);
+});
+
+await step("the reversal is recorded in the activity trail", async () => {
+    const r = await db.query(
+        `select description from public.activity_logs
+          where description ilike '%Overturned%' order by created_at desc limit 1`);
+    if (!r.rows.length) throw new Error("no overturn logged");
+});
+
+
 console.log("\n=====================================");
 if (fail.length) {
     console.log(`${fail.length} FAILURE(S)`);
