@@ -99,5 +99,14 @@ export interface EmployeeDetail extends Employee {
      */
     is_management_role: boolean;
 
+    /**
+     * Content author for the staff bulletin.
+     *
+     * Not a platform administrator: this grants writing and publishing
+     * articles, and nothing else. Handing the bulletin to somebody is a tick
+     * here rather than making them an admin.
+     */
+    can_write_articles: boolean;
+
     has_photo: boolean;
 }

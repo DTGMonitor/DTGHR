@@ -47,7 +47,7 @@ export default function App() {
                             <Route path="/kpi" element={<KpiPage />} />
                             <Route path="/leaves" element={<LeavesPage />} />
                             <Route path="/schedules" element={<SchedulesPage />} />
-                        <Route path="/activity" element={<ActivityLogPage />} />
+                            <Route path="/activity" element={<ActivityLogPage />} />
                         </Route>
 
                         {/* Catch-all */}

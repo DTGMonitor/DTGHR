@@ -177,6 +177,13 @@
         @apply mb-1.5 block text-label font-semibold uppercase tracking-label text-paper-soft;
     }
 
+    /* Inline link inside body copy. Underlined rather than colour-only, so it
+       is still identifiable to a reader who cannot separate teal from grey. */
+    .dtg-link {
+        @apply font-medium text-teal-300 underline decoration-teal-300/40 underline-offset-2
+               transition-colors hover:text-signal hover:decoration-signal/60;
+    }
+
     /* Table chrome. */
     .dtg-th {
         @apply px-4 py-3 text-left text-micro font-bold uppercase tracking-label text-teal-300;

@@ -186,6 +186,14 @@ export default function EmployeeProfilePage() {
                 "For everyone else the scorecard shows no bonus at all, rather than one of zero.",
         },
         {
+            key: "can_write_articles",
+            label: "Bulletin author",
+            type: "toggle",
+            help:
+                "Can write, schedule and publish staff articles. This is not platform " +
+                "administration — it grants the bulletin and nothing else.",
+        },
+        {
             key: "kpi_template_id",
             label: "KPI scorecard",
             type: "select",

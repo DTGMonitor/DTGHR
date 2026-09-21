@@ -3,6 +3,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import api from "@/lib/api";
 import StatTile, { StatTileSkeleton, type StatTileProps } from "@/components/ui/StatTile";
 import { Wordmark } from "@/components/brand/Logo";
+import BulletinSection from "@/components/articles/BulletinSection";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -166,6 +167,12 @@ export default function DashboardPage() {
                     ? [...Array(4)].map((_, i) => <StatTileSkeleton key={i} />)
                     : tiles.map((tile) => <StatTile key={tile.label} {...tile} />)}
             </div>
+
+            {/* ── Staff bulletin ─────────────────────────────────────────
+                Where the audit trail used to sit. This is the thing people
+                should read on the way past; the audit trail is a record you
+                go looking for, and it has its own page now. */}
+            <BulletinSection />
 
         </div>
     );
