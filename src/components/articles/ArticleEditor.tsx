@@ -191,6 +191,58 @@ export default function ArticleEditor({
         }
     };
 
+    /** Drop a reference to a figure where the cursor is. */
+    const insertFigure = (filename: string) => insert(`\n![${filename}](${filename})\n`);
+
+    /** Refresh from the server after a change that only touches figures. */
+    const refresh = async (message: string) => {
+        const fresh = await articleService.get(article!.slug);
+        setArticle(fresh.data);
+        setNote(message);
+        onChanged();
+    };
+
+    const setCover = async (imageId: string) => {
+        if (!article) return;
+        setSaving(true);
+        setError(null);
+        try {
+            await articleService.update(article.id, { cover_image_id: imageId });
+            await refresh("Cover updated.");
+        } catch {
+            setError("Could not change the cover.");
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const removeFigure = async (imageId: string, filename: string) => {
+        if (!article) return;
+        /*
+         * The markdown is left alone deliberately. A body that still refers to
+         * a deleted file shows that one figure as missing -- visible, and
+         * fixable in a line. Rewriting somebody's text behind their back to
+         * tidy it up would be worse than the broken image.
+         */
+        const ok = window.confirm(
+            `Remove ${filename}?\n\n` +
+                "If the text still refers to it, that figure will show as missing until you " +
+                "delete the line.",
+        );
+        if (!ok) return;
+
+        setSaving(true);
+        setError(null);
+        try {
+            await articleService.removeImage(article.id, imageId);
+            await refresh(`Removed ${filename}.`);
+        } catch {
+            setError("Could not remove that figure.");
+        } finally {
+            setSaving(false);
+        }
+    };
+
     const act = async (fn: () => Promise<{ data: ArticleDetail }>, message: string) => {
         setSaving(true);
         setError(null);
@@ -360,25 +412,66 @@ export default function ArticleEditor({
                 {article.images.length > 0 && (
                     <div>
                         <p className="dtg-label">Figures</p>
-                        <div className="flex flex-wrap gap-2">
-                            {article.images.map((img) => (
-                                <button
-                                    key={img.id}
-                                    type="button"
-                                    onClick={() => insert(`\n![${img.filename}](${img.filename})\n`)}
-                                    title={`Insert ${img.filename}`}
-                                    className="group relative h-16 w-24 overflow-hidden rounded border border-white/10"
-                                >
-                                    <AuthImage
-                                        src={articleImageUrl(img.id)}
-                                        className="h-full w-full object-cover"
-                                    />
-                                    <span className="absolute inset-0 flex items-center justify-center bg-deep/70 text-micro font-semibold text-paper opacity-0 transition-opacity group-hover:opacity-100">
-                                        Insert
-                                    </span>
-                                </button>
-                            ))}
+                        <div className="flex flex-wrap gap-3">
+                            {article.images.map((img) => {
+                                const isCover = img.id === article.cover_image_id;
+                                return (
+                                    <div
+                                        key={img.id}
+                                        className={`w-32 overflow-hidden rounded-lg border ${
+                                            isCover ? "border-signal/50" : "border-white/10"
+                                        }`}
+                                    >
+                                        <div className="relative">
+                                            <AuthImage
+                                                src={articleImageUrl(img.id)}
+                                                className="h-20 w-full object-cover"
+                                            />
+                                            {isCover && (
+                                                <span className="absolute left-1 top-1 rounded bg-signal px-1.5 py-0.5 text-[0.6rem] font-bold uppercase tracking-wider text-signal-on">
+                                                    Cover
+                                                </span>
+                                            )}
+                                        </div>
+                                        <p
+                                            className="truncate px-1.5 pt-1 font-mono text-[0.6rem] text-muted"
+                                            title={img.filename}
+                                        >
+                                            {img.filename}
+                                        </p>
+                                        <div className="flex divide-x divide-white/10 border-t border-white/10 text-[0.6rem]">
+                                            <button
+                                                type="button"
+                                                onClick={() => insertFigure(img.filename)}
+                                                className="flex-1 py-1 text-teal-300 transition-colors hover:bg-white/5"
+                                            >
+                                                Insert
+                                            </button>
+                                            {!isCover && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setCover(img.id)}
+                                                    className="flex-1 py-1 text-paper-soft transition-colors hover:bg-white/5"
+                                                >
+                                                    Cover
+                                                </button>
+                                            )}
+                                            <button
+                                                type="button"
+                                                onClick={() => removeFigure(img.id, img.filename)}
+                                                className="flex-1 py-1 text-danger transition-colors hover:bg-danger/10"
+                                            >
+                                                Remove
+                                            </button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
                         </div>
+                        <p className="mt-2 text-micro leading-relaxed text-muted">
+                            The cover is the picture on the article's card. Removing it promotes the
+                            next figure rather than leaving the card blank.
+                        </p>
                     </div>
                 )}
             </div>

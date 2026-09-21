@@ -75,6 +75,11 @@ export const articleService = {
         });
     },
 
+    /** Remove one figure. The cover moves to the next one if it was the cover. */
+    removeImage(articleId: string, imageId: string): Promise<void> {
+        return api.delete(`/articles/${articleId}/images/${imageId}`);
+    },
+
     remove(id: string): Promise<void> {
         return api.delete(`/articles/${id}`);
     },
