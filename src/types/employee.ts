@@ -90,5 +90,14 @@ export interface EmployeeDetail extends Employee {
     kpi_review_required: boolean;
     kpi_exemption_reason: string | null;
 
+    /**
+     * Whether an annual bonus is offered for this role.
+     *
+     * Peter, September 2026: bonuses are for management roles only at this
+     * stage. Elsewhere the scorecard shows no bonus at all -- an empty bonus
+     * field still reads as a promise that one is coming.
+     */
+    is_management_role: boolean;
+
     has_photo: boolean;
 }

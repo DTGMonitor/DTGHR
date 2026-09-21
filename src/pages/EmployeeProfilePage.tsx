@@ -178,6 +178,14 @@ export default function EmployeeProfilePage() {
             help: "Office-day staff covering the roster can also view it. Clearing this withdraws that access.",
         },
         {
+            key: "is_management_role",
+            label: "Management role",
+            type: "toggle",
+            help:
+                "Annual bonuses are offered to management roles only. " +
+                "For everyone else the scorecard shows no bonus at all, rather than one of zero.",
+        },
+        {
             key: "kpi_template_id",
             label: "KPI scorecard",
             type: "select",
