@@ -243,6 +243,30 @@ export default function ArticleEditor({
         }
     };
 
+    /*
+     * Whether anything has been typed since the last save.
+     *
+     * A transient "Saved." message answers "did that work?" but not "is it
+     * saved *now*?" -- and it appeared at the top of the editor while the Save
+     * button is at the bottom, so it was easy to miss entirely. This is
+     * derived rather than stored: it cannot drift out of step with the fields,
+     * and it says the same thing whether you have just saved or just returned
+     * from lunch.
+     */
+    const dirty =
+        article !== null &&
+        (title !== article.title ||
+            summary !== (article.summary ?? "") ||
+            category !== (article.category ?? "") ||
+            body !== (article.body ?? ""));
+
+    /** Clear the transient note, so it does not sit there looking current. */
+    useEffect(() => {
+        if (!note) return;
+        const id = window.setTimeout(() => setNote(null), 4000);
+        return () => window.clearTimeout(id);
+    }, [note]);
+
     const act = async (fn: () => Promise<{ data: ArticleDetail }>, message: string) => {
         setSaving(true);
         setError(null);
@@ -274,7 +298,20 @@ export default function ArticleEditor({
     return (
         <section className="dtg-fade-in space-y-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
-                <button onClick={onClose} className="dtg-btn-secondary px-3 py-1.5 text-xs">
+                <button
+                    onClick={() => {
+                        // Leaving is how work gets lost, so it asks -- but only
+                        // when there is actually something to lose.
+                        if (
+                            dirty &&
+                            !window.confirm("Leave without saving?\n\nYour edits to this article will be lost.")
+                        ) {
+                            return;
+                        }
+                        onClose();
+                    }}
+                    className="dtg-btn-secondary px-3 py-1.5 text-xs"
+                >
                     <Icon name="arrowLeft" className="h-3.5 w-3.5" />
                     Back to dashboard
                 </button>
@@ -503,10 +540,31 @@ export default function ArticleEditor({
                     </p>
                 </div>
 
-                <div className="flex flex-wrap gap-2 border-t border-white/[0.08] pt-4">
-                    <button onClick={save} disabled={saving} className="dtg-btn-primary px-3 py-1.5 text-xs">
-                        Save
+                <div className="flex flex-wrap items-center gap-2 border-t border-white/[0.08] pt-4">
+                    <button
+                        onClick={save}
+                        disabled={saving || !dirty}
+                        className="dtg-btn-primary px-3 py-1.5 text-xs"
+                    >
+                        {saving ? <Spinner /> : <Icon name="check" className="h-3.5 w-3.5" />}
+                        {dirty ? "Save changes" : "Saved"}
                     </button>
+
+                    {/* Beside the button, not at the top of the page: this is
+                        the answer to a question asked here. */}
+                    <span
+                        className={`font-mono text-micro ${
+                            dirty ? "text-gold" : "text-muted"
+                        }`}
+                    >
+                        {saving
+                            ? "Saving…"
+                            : dirty
+                              ? "Unsaved changes"
+                              : note === "Saved."
+                                ? "All changes saved"
+                                : "No unsaved changes"}
+                    </span>
 
                     <button
                         onClick={async () => {
