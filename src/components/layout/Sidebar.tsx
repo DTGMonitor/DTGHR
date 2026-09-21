@@ -44,6 +44,17 @@ const navItems = [
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
         ),
     },
+    {
+        // A record rather than news. It sat on the dashboard, where it was the
+        // first thing everybody read every morning and where the staff
+        // bulletin belongs.
+        label: "Activity log",
+        to: "/activity",
+        managementOnly: true,
+        icon: (
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 12h16.5m-16.5 3.75h16.5M3.75 19.5h16.5M5.625 4.5h12.75a1.875 1.875 0 0 1 0 3.75H5.625a1.875 1.875 0 0 1 0-3.75Z" />
+        ),
+    },
 ];
 
 export default function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
