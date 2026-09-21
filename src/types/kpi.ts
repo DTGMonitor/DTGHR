@@ -44,18 +44,30 @@ export const KPI_RATINGS: { rating: number; label: string; factor: number }[] = 
 export const KPI_MAX_SCORE = 130;
 
 /**
- * Bonus multiplier by weighted score, from DTG_KPI_Bonus_Scorecards_2026.
+ * The multiplier by weighted score, from DTG_KPI_Bonus_Scorecards_2026.
  *
  * Note these are NOT the performance-band cut-points. A score of 90 is
- * "Meets Expectations" as a band but earns only half a target bonus — the
+ * "Meets Expectations" as a band but earns only half the multiplier — the
  * workbook intends both statements to be true at once.
+ *
+ * Two labels per tier, and the distinction matters. Bonuses are offered to
+ * management roles only, so outside those the scale must be described without
+ * the word: the multiplier still applies, to salary reviews, but a table that
+ * says "target bonus" to an engineer describes something they are not offered.
  */
-export const BONUS_TIERS: { min: number; multiplier: number; label: string }[] = [
-    { min: 115, multiplier: 1.5, label: "150% of target bonus" },
-    { min: 105, multiplier: 1.25, label: "125% of target bonus" },
-    { min: 95, multiplier: 1.0, label: "Target bonus" },
-    { min: 85, multiplier: 0.5, label: "Half of target bonus" },
-    { min: 0, multiplier: 0, label: "No KPI bonus" },
+export const MULTIPLIER_TIERS: {
+    min: number;
+    multiplier: number;
+    /** Neutral wording. Used for every role. */
+    label: string;
+    /** Bonus wording. Management roles only. */
+    bonusLabel: string;
+}[] = [
+    { min: 115, multiplier: 1.5, label: "Well above target", bonusLabel: "150% of target bonus" },
+    { min: 105, multiplier: 1.25, label: "Above target", bonusLabel: "125% of target bonus" },
+    { min: 95, multiplier: 1.0, label: "At target", bonusLabel: "Target bonus" },
+    { min: 85, multiplier: 0.5, label: "Below target", bonusLabel: "Half of target bonus" },
+    { min: 0, multiplier: 0, label: "No adjustment", bonusLabel: "No KPI bonus" },
 ];
 
 /** Rupiah, no decimals — amounts here are always whole rupiah. */

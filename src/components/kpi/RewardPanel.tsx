@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { kpiService } from "@/services/kpiService";
-import { BONUS_TIERS, formatRupiah, type KpiReviewDetail } from "@/types/kpi";
+import { MULTIPLIER_TIERS, formatRupiah, type KpiReviewDetail } from "@/types/kpi";
 import Icon from "@/components/ui/icons";
 import Alert from "@/components/ui/Alert";
 import Spinner from "@/components/ui/Spinner";
@@ -205,10 +205,10 @@ export default function RewardPanel({
                 {/* ── The scale, for reference ───────────────────────────── */}
                 <details className="border-t border-white/[0.08] pt-4">
                     <summary className="cursor-pointer text-micro font-semibold uppercase tracking-label text-teal-300 hover:text-teal-100">
-                        Bonus tiers
+                        {showBonus ? "Bonus tiers" : "Multiplier scale"}
                     </summary>
                     <ul className="mt-3 space-y-1.5">
-                        {BONUS_TIERS.map((tier) => {
+                        {MULTIPLIER_TIERS.map((tier) => {
                             const active =
                                 review.is_complete &&
                                 (review.total_score ?? 0) >= tier.min &&
@@ -226,7 +226,10 @@ export default function RewardPanel({
                                         {tier.min === 0 ? "below 85" : `${tier.min} and above`}
                                     </span>
                                     <span>×{tier.multiplier}</span>
-                                    <span className="hidden sm:inline">{tier.label}</span>
+                                    {/* Bonus wording only where a bonus exists. */}
+                                    <span className="hidden sm:inline">
+                                        {showBonus ? tier.bonusLabel : tier.label}
+                                    </span>
                                     {active && <Icon name="check" className="h-3.5 w-3.5" />}
                                 </li>
                             );
