@@ -139,6 +139,21 @@ export default function BulletinSection() {
         return [...groups.entries()];
     }, [rest]);
 
+    /*
+     * The current month is open; everything older is folded away.
+     *
+     * Nothing is ever removed -- September's first week stays readable next
+     * year. But this sits on the dashboard, and a list that grows by four
+     * articles a month would push the rest of the page off the screen by
+     * Christmas. The fold keeps the newest month in view and the archive one
+     * click away.
+     */
+    const currentMonth = lead ? articleMonth(lead) : null;
+    const [showArchive, setShowArchive] = useState(false);
+    const recent = byMonth.filter(([m]) => m === currentMonth);
+    const archive = byMonth.filter(([m]) => m !== currentMonth);
+    const archiveCount = archive.reduce((n, [, g]) => n + g.length, 0);
+
     // ── Reading one ─────────────────────────────────────────────────────
     if (openSlug) {
         return (
@@ -280,7 +295,7 @@ export default function BulletinSection() {
                 </div>
             </button>
 
-            {byMonth.map(([month, group]) => (
+            {[...recent, ...(showArchive ? archive : [])].map(([month, group]) => (
                 <section key={month} className="space-y-3">
                     <div className="flex items-center gap-4">
                         <p className="font-mono text-micro uppercase tracking-label text-muted">
@@ -319,6 +334,21 @@ export default function BulletinSection() {
                     </div>
                 </section>
             ))}
+
+            {archiveCount > 0 && (
+                <button
+                    onClick={() => setShowArchive((v) => !v)}
+                    className="dtg-btn-secondary w-full justify-center py-2.5 text-xs"
+                >
+                    <Icon
+                        name={showArchive ? "arrowLeft" : "arrowRight"}
+                        className={`h-3.5 w-3.5 transition-transform ${showArchive ? "rotate-90" : "rotate-90"}`}
+                    />
+                    {showArchive
+                        ? "Hide earlier months"
+                        : `Earlier months · ${archiveCount} article${archiveCount === 1 ? "" : "s"}`}
+                </button>
+            )}
         </div>
     );
 }
