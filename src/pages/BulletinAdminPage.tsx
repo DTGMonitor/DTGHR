@@ -176,13 +176,9 @@ export default function BulletinAdminPage() {
                                     Drafts &amp; scheduled
                                 </h2>
                             </div>
-                            <button
-                                onClick={() => setParams({ edit: "new" })}
-                                className="dtg-btn-primary px-2.5 py-1 text-micro"
-                            >
-                                <Icon name="plus" className="h-3 w-3" />
-                                New draft
-                            </button>
+                            <span className="font-mono text-micro text-muted">
+                                {drafts.length}
+                            </span>
                         </header>
                         {drafts.length === 0 ? (
                             <div className="px-4 py-10 text-center">
@@ -194,13 +190,9 @@ export default function BulletinAdminPage() {
                                     Start as many as you like — they stay here, invisible to staff,
                                     until you publish or schedule each one.
                                 </p>
-                                <button
-                                    onClick={() => setParams({ edit: "new" })}
-                                    className="dtg-btn-primary mx-auto mt-4 px-3 py-1.5 text-xs"
-                                >
-                                    <Icon name="plus" className="h-3.5 w-3.5" />
-                                    Start a draft
-                                </button>
+                                <p className="mt-3 text-micro text-muted">
+                                    Use <span className="text-teal-300">New article</span> above.
+                                </p>
                             </div>
                         ) : (
                             <ul className="divide-y divide-white/[0.05]">

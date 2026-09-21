@@ -97,13 +97,6 @@ export default function BulletinSection() {
     const [article, setArticle] = useState<ArticleDetail | null>(null);
     const [articleLoading, setArticleLoading] = useState(false);
 
-    /*
-     * Whether this viewer may write, straight from the list response. It is a
-     * property of the person rather than of any article, which is why asking
-     * an article about it was wrong: with nothing published yet there was no
-     * article to ask, and therefore no way to write the first one.
-     */
-    const [canWrite, setCanWrite] = useState(false);
 
     const load = useCallback(async () => {
         try {
@@ -111,7 +104,6 @@ export default function BulletinSection() {
             // else, so it is safe to send unconditionally.
             const res = await articleService.list({ includeDrafts: true });
             setItems(res.data.items);
-            setCanWrite(res.data.can_write);
         } catch {
             setError("Could not load the bulletin.");
         } finally {
@@ -310,18 +302,13 @@ export default function BulletinSection() {
             <div className="flex items-center gap-4">
                 <h2 className="dtg-eyebrow whitespace-nowrap">Staff bulletin</h2>
                 <div className="h-px flex-1 bg-white/10" />
+                {/* Reading only. Writing lives on the Bulletin page in the
+                    sidebar -- an author reaching for "new article" from three
+                    different places was three chances to wonder which one was
+                    the real one. */}
                 <span className="font-mono text-micro text-muted">
                     {items.length} article{items.length === 1 ? "" : "s"}
                 </span>
-                {canWrite && (
-                    <button
-                        onClick={() => setParams({ edit: "new" })}
-                        className="dtg-btn-primary px-3 py-1.5 text-xs"
-                    >
-                        <Icon name="plus" className="h-3.5 w-3.5" />
-                        New article
-                    </button>
-                )}
             </div>
 
             {/*
