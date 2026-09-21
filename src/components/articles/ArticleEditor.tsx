@@ -45,6 +45,7 @@ export default function ArticleEditor({
     onClose,
     onChanged,
     onSlugChange,
+    onNew,
     knownCategories = [],
 }: {
     /** An existing article's slug, or "new" to start one. */
@@ -53,6 +54,8 @@ export default function ArticleEditor({
     onChanged: () => void;
     /** The slug follows the title until first publication, so the URL must too. */
     onSlugChange: (slug: string) => void;
+    /** Start another article without returning to the dashboard first. */
+    onNew: () => void;
     /** Categories already in use, so the suggestions grow with the bulletin. */
     knownCategories?: string[];
 }) {
@@ -70,15 +73,19 @@ export default function ArticleEditor({
     const [preview, setPreview] = useState(false);
 
     /*
-     * "new" must create exactly one draft.
+     * "new" must create exactly one draft, and both callers must get it.
      *
-     * The effect depends on `hydrate`, which depends on `slug`, so it re-runs
-     * when the newly created article renames the URL. Without this guard a
-     * re-run while the prop still said "new" would create a second empty
-     * article -- and the writer would never know, because they would be
-     * looking at the first.
+     * The first attempt was a boolean guard, which was worse than the bug it
+     * fixed: React's development double-mount ran the effect twice, the second
+     * run hit the guard and returned having set nothing, and the editor
+     * rendered "Could not open the editor." over a draft that had in fact been
+     * created. Hence the error on every New article, and the draft only
+     * appearing after a refresh.
+     *
+     * Holding the promise instead means the second run awaits the same request
+     * and hydrates from the same result. One draft, both mounts satisfied.
      */
-    const created = useRef(false);
+    const createOnce = useRef<Promise<ArticleDetail> | null>(null);
 
     const bodyRef = useRef<HTMLTextAreaElement>(null);
     const fileRef = useRef<HTMLInputElement>(null);
@@ -100,8 +107,6 @@ export default function ArticleEditor({
         (async () => {
             try {
                 if (slug === "new") {
-                    if (created.current) return;
-                    created.current = true;
                     /*
                      * A new article is created immediately, as a draft, rather
                      * than held in memory until the first save. That gives it
@@ -112,11 +117,17 @@ export default function ArticleEditor({
                      * Drafts are invisible to staff, so a stray "Untitled" is
                      * harmless and can be deleted from here.
                      */
-                    const res = await articleService.create({
-                        title: "Untitled article",
-                        body: "",
-                    });
-                    if (!cancelled) hydrate(res.data);
+                    if (!createOnce.current) {
+                        createOnce.current = articleService
+                            .create({ title: "Untitled article", body: "" })
+                            .then((r) => r.data);
+                    }
+                    const fresh = await createOnce.current;
+                    if (!cancelled) {
+                        hydrate(fresh);
+                        // The list behind this page has one more item now.
+                        onChanged();
+                    }
                 } else {
                     const res = await articleService.get(slug);
                     if (!cancelled) hydrate(res.data);
@@ -130,7 +141,7 @@ export default function ArticleEditor({
         return () => {
             cancelled = true;
         };
-    }, [slug, hydrate]);
+    }, [slug, hydrate, onChanged]);
 
     const save = async (): Promise<ArticleDetail | null> => {
         if (!article) return null;
@@ -317,6 +328,26 @@ export default function ArticleEditor({
                 </button>
 
                 <div className="flex flex-wrap items-center gap-2">
+                    {/* Writing a month's worth in one sitting should not mean
+                        going back to the dashboard between each one. */}
+                    <button
+                        onClick={() => {
+                            if (
+                                dirty &&
+                                !window.confirm(
+                                    "Start another article?\n\nUnsaved edits to this one will be lost.",
+                                )
+                            ) {
+                                return;
+                            }
+                            onNew();
+                        }}
+                        className="dtg-btn-secondary px-3 py-1.5 text-xs"
+                    >
+                        <Icon name="plus" className="h-3.5 w-3.5" />
+                        New article
+                    </button>
+
                     <span
                         className={`dtg-chip ${
                             live

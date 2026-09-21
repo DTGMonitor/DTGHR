@@ -14,6 +14,7 @@ import LeavesPage from "@/pages/LeavesPage";
 import SchedulesPage from "@/pages/SchedulesPage";
 import ActivityLogPage from "@/pages/ActivityLogPage";
 import SettingsPage from "@/pages/SettingsPage";
+import BulletinAdminPage from "@/pages/BulletinAdminPage";
 
 export default function App() {
     return (
@@ -49,6 +50,7 @@ export default function App() {
                             <Route path="/leaves" element={<LeavesPage />} />
                             <Route path="/schedules" element={<SchedulesPage />} />
                             <Route path="/activity" element={<ActivityLogPage />} />
+                            <Route path="/bulletin" element={<BulletinAdminPage />} />
                             <Route path="/settings" element={<SettingsPage />} />
                         </Route>
 

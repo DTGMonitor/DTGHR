@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import { articleService } from "@/services/articleService";
@@ -11,7 +11,6 @@ import {
     type ArticleSummary,
 } from "@/types/article";
 import ArticleBody from "@/components/articles/ArticleBody";
-import ArticleEditor from "@/components/articles/ArticleEditor";
 import AuthImage from "@/components/articles/AuthImage";
 import Icon from "@/components/ui/icons";
 import Spinner from "@/components/ui/Spinner";
@@ -26,8 +25,10 @@ import Alert from "@/components/ui/Alert";
  * sits where the audit trail used to.
  *
  * Shaped around how it is written: a month at a time, one article a week, and
- * September stays put once October arrives. Latest piece large, the rest of
- * the month as cards, earlier months below.
+ * September stays put once October arrives. One bulletin at a time, each with
+ * its figure at full size, swiped through left to right -- a row of thumbnails
+ * reduced every article after the first to a stamp, when the figure is half
+ * the point of a safety notice.
  *
  * Reading happens in place, keyed off ?read= in the URL so an article can
  * still be linked to and survives a refresh.
@@ -103,7 +104,6 @@ export default function BulletinSection() {
      * article to ask, and therefore no way to write the first one.
      */
     const [canWrite, setCanWrite] = useState(false);
-    const editSlug = params.get("edit");
 
     const load = useCallback(async () => {
         try {
@@ -143,13 +143,7 @@ export default function BulletinSection() {
     };
     const close = () => setParams({});
 
-    const [lead, ...rest] = items;
 
-    const byMonth = useMemo(() => {
-        const groups = new Map<string, ArticleSummary[]>();
-        for (const a of rest) groups.set(articleMonth(a), [...(groups.get(articleMonth(a)) ?? []), a]);
-        return [...groups.entries()];
-    }, [rest]);
 
     /*
      * The current month is open; everything older is folded away.
@@ -160,26 +154,52 @@ export default function BulletinSection() {
      * Christmas. The fold keeps the newest month in view and the archive one
      * click away.
      */
-    const currentMonth = lead ? articleMonth(lead) : null;
+    const currentMonth = items.find((a) => a.is_live)
+        ? articleMonth(items.find((a) => a.is_live)!)
+        : null;
     const [showArchive, setShowArchive] = useState(false);
-    const recent = byMonth.filter(([m]) => m === currentMonth);
-    const archive = byMonth.filter(([m]) => m !== currentMonth);
-    const archiveCount = archive.reduce((n, [, g]) => n + g.length, 0);
 
-    // ── Writing ─────────────────────────────────────────────────────────
-    if (editSlug) {
-        return (
-            <ArticleEditor
-                slug={editSlug}
-                onClose={() => setParams({})}
-                onChanged={() => void load()}
-                onSlugChange={(next) => setParams({ edit: next }, { replace: true })}
-                knownCategories={[
-                    ...new Set(items.map((a) => a.category).filter((c): c is string => !!c)),
-                ]}
-            />
-        );
-    }
+    /*
+     * The carousel carries the current month; older months are behind the
+     * fold. Nothing is removed -- September's first week is still readable
+     * next year -- but a track that grows by four slides a month stops being
+     * something you swipe and starts being something you scroll past.
+     */
+    /*
+     * The carousel is what staff see: live articles only.
+     *
+     * Drafts used to sit in it, which meant starting an article put an
+     * "Untitled article" slide in the middle of the bulletin -- alarming for
+     * the writer and meaningless to everyone else. They now have their own
+     * strip below, visible only to the people who can write.
+     */
+    const live = items.filter((a) => a.is_live);
+
+    const visible = showArchive
+        ? live
+        : live.filter((a) => articleMonth(a) === currentMonth);
+    const archiveCount = live.length - visible.length;
+
+    const trackRef = useRef<HTMLDivElement>(null);
+    const [index, setIndex] = useState(0);
+
+    /** Which slide is under the viewport, from the scroll position. */
+    useEffect(() => {
+        const el = trackRef.current;
+        if (!el) return;
+        const onScroll = () => {
+            const slide = el.clientWidth + 16; // gap-4
+            setIndex(Math.round(el.scrollLeft / slide));
+        };
+        el.addEventListener("scroll", onScroll, { passive: true });
+        return () => el.removeEventListener("scroll", onScroll);
+    }, [visible.length]);
+
+    const scrollBy = (delta: number) => {
+        const el = trackRef.current;
+        if (!el) return;
+        el.scrollTo({ left: (index + delta) * (el.clientWidth + 16), behavior: "smooth" });
+    };
 
     // ── Reading one ─────────────────────────────────────────────────────
     if (openSlug) {
@@ -249,13 +269,13 @@ export default function BulletinSection() {
                             three screens apart read as two different things. */}
                         <div className="mt-12 flex flex-wrap gap-2 border-t border-white/10 pt-5">
                             {article.can_edit && (
-                                <button
-                                    onClick={() => setParams({ edit: article.slug })}
+                                <a
+                                    href={`/bulletin?edit=${article.slug}`}
                                     className="dtg-btn-secondary px-3 py-1.5 text-xs"
                                 >
                                     <Icon name="pencil" className="h-3.5 w-3.5" />
                                     Edit this article
-                                </button>
+                                </a>
                             )}
                         </div>
                     </article>
@@ -276,20 +296,11 @@ export default function BulletinSection() {
 
     if (error) return <Alert tone="danger">{error}</Alert>;
 
-    if (!lead) {
+    if (!items.some((a) => a.is_live) && !items.length) {
         return (
             <div className="dtg-panel px-5 py-16 text-center">
                 <Icon name="clipboard" className="mx-auto h-8 w-8 text-teal-500/60" />
                 <p className="mt-3 text-sm text-paper-soft">Nothing published yet.</p>
-                {canWrite && (
-                    <button
-                        onClick={() => setParams({ edit: "new" })}
-                        className="dtg-btn-primary mx-auto mt-4 px-3 py-1.5 text-xs"
-                    >
-                        <Icon name="plus" className="h-3.5 w-3.5" />
-                        Write the first one
-                    </button>
-                )}
             </div>
         );
     }
@@ -313,80 +324,102 @@ export default function BulletinSection() {
                 )}
             </div>
 
-            {/* The lead: this week's piece, given the room it deserves. */}
-            <button
-                onClick={() => open(lead.slug)}
-                className="dtg-panel group block w-full overflow-hidden text-left transition-colors hover:border-white/20"
-            >
-                <div className="grid gap-0 md:grid-cols-[1.15fr_1fr]">
-                    <Cover article={lead} className="h-52 w-full md:h-full md:min-h-[16rem]" />
-                    <div className="p-6 sm:p-7">
-                        <div className="flex flex-wrap items-center gap-2">
-                            <CategoryChip category={lead.category} />
-                            <StatusChip article={lead} />
-                            {lead.is_pinned && (
-                                <span className="dtg-chip border-gold/40 text-gold">
-                                    <Icon name="pin" className="h-3 w-3" />
-                                    Pinned
-                                </span>
-                            )}
-                        </div>
-                        <h3 className="mt-3 text-xl font-bold leading-snug tracking-tight text-paper group-hover:text-signal sm:text-2xl">
-                            {lead.title}
-                        </h3>
-                        {lead.summary && (
-                            <p className="mt-3 line-clamp-4 text-sm leading-relaxed text-paper-soft">
-                                {lead.summary}
-                            </p>
-                        )}
-                        <p className="mt-4 flex items-center gap-2 font-mono text-micro text-muted">
-                            {articleDate(lead) && <span>{articleDate(lead)}</span>}
-                            <span aria-hidden>·</span>
-                            <span>{lead.read_minutes} min read</span>
-                        </p>
-                    </div>
-                </div>
-            </button>
+            {/*
+                One bulletin at a time, each with its figure at full size.
+                Nurhuda's call: a row of thumbnails reduced every article after
+                the first to a stamp, when the figure is half the point of a
+                safety notice.
 
-            {[...recent, ...(showArchive ? archive : [])].map(([month, group]) => (
-                <section key={month} className="space-y-3">
-                    <div className="flex items-center gap-4">
-                        <p className="font-mono text-micro uppercase tracking-label text-muted">
-                            {month}
-                        </p>
-                        <div className="h-px flex-1 bg-white/[0.06]" />
-                    </div>
-
-                    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                        {group.map((a) => (
-                            <button
-                                key={a.id}
-                                onClick={() => open(a.slug)}
-                                className="dtg-panel group flex flex-col overflow-hidden text-left transition-colors hover:border-white/20"
-                            >
-                                <Cover article={a} className="h-36 w-full" />
-                                <div className="flex flex-1 flex-col p-4">
+                A scroll-snap track rather than a JavaScript carousel -- it
+                swipes natively on a phone, scrolls with a trackpad, and the
+                arrows are a convenience rather than the only way through.
+            */}
+            <div className="relative">
+                <div
+                    ref={trackRef}
+                    className="flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-smooth pb-2"
+                    style={{ scrollbarWidth: "none" }}
+                    aria-label="Staff bulletin"
+                >
+                    {visible.map((a) => (
+                        <button
+                            key={a.id}
+                            onClick={() => open(a.slug)}
+                            className="dtg-panel group w-full flex-shrink-0 snap-center overflow-hidden text-left transition-colors hover:border-white/20"
+                        >
+                            <div className="grid gap-0 md:grid-cols-[1.15fr_1fr]">
+                                <Cover
+                                    article={a}
+                                    className="h-56 w-full md:h-full md:min-h-[18rem]"
+                                />
+                                <div className="p-6 sm:p-7">
                                     <div className="flex flex-wrap items-center gap-2">
                                         <CategoryChip category={a.category} />
                                         <StatusChip article={a} />
+                                        {a.is_pinned && (
+                                            <span className="dtg-chip border-gold/40 text-gold">
+                                                <Icon name="pin" className="h-3 w-3" />
+                                                Pinned
+                                            </span>
+                                        )}
                                     </div>
-                                    <h3 className="mt-2.5 text-sm font-semibold leading-snug text-paper group-hover:text-signal">
+                                    <h3 className="mt-3 text-xl font-bold leading-snug tracking-tight text-paper group-hover:text-signal sm:text-2xl">
                                         {a.title}
                                     </h3>
                                     {a.summary && (
-                                        <p className="mt-2 line-clamp-3 text-xs leading-relaxed text-muted">
+                                        <p className="mt-3 line-clamp-5 text-sm leading-relaxed text-paper-soft">
                                             {a.summary}
                                         </p>
                                     )}
-                                    <p className="mt-auto pt-3 font-mono text-micro text-muted">
-                                        {articleDate(a)} · {a.read_minutes} min
+                                    <p className="mt-4 flex flex-wrap items-center gap-2 font-mono text-micro text-muted">
+                                        {articleDate(a) && <span>{articleDate(a)}</span>}
+                                        <span aria-hidden>·</span>
+                                        <span>{a.read_minutes} min read</span>
                                     </p>
                                 </div>
+                            </div>
+                        </button>
+                    ))}
+                </div>
+
+                {visible.length > 1 && (
+                    <div className="mt-3 flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-1.5" aria-hidden="true">
+                            {visible.map((a, i) => (
+                                <span
+                                    key={a.id}
+                                    className={`h-1.5 rounded-full transition-all ${
+                                        i === index ? "w-6 bg-signal" : "w-1.5 bg-white/20"
+                                    }`}
+                                />
+                            ))}
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                            <span className="font-mono text-micro text-muted">
+                                {index + 1} / {visible.length}
+                            </span>
+                            <button
+                                onClick={() => scrollBy(-1)}
+                                disabled={index === 0}
+                                aria-label="Previous article"
+                                className="dtg-btn-secondary px-2 py-1"
+                            >
+                                <Icon name="arrowLeft" className="h-3.5 w-3.5" />
                             </button>
-                        ))}
+                            <button
+                                onClick={() => scrollBy(1)}
+                                disabled={index >= visible.length - 1}
+                                aria-label="Next article"
+                                className="dtg-btn-secondary px-2 py-1"
+                            >
+                                <Icon name="arrowRight" className="h-3.5 w-3.5" />
+                            </button>
+                        </div>
                     </div>
-                </section>
-            ))}
+                )}
+            </div>
+
 
             {archiveCount > 0 && (
                 <button
