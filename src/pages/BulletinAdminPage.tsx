@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import { Navigate, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useSearchParams } from "react-router-dom";
 
 import { articleService } from "@/services/articleService";
+import { useAuth } from "@/contexts/AuthContext";
 import {
     ARTICLE_STATUS_LABELS,
     articleDate,
@@ -34,6 +35,12 @@ const STATUS_TONES: Record<string, string> = {
 };
 
 export default function BulletinAdminPage() {
+    const { user } = useAuth();
+    const isManagement =
+        Boolean(user?.is_management) ||
+        user?.role === "director" ||
+        user?.role === "executive";
+
     const [params, setParams] = useSearchParams();
     const editSlug = params.get("edit");
 
@@ -69,8 +76,39 @@ export default function BulletinAdminPage() {
         }
     };
 
-    // Wait for the answer rather than bouncing somebody out on a null.
-    if (canWrite === false) return <Navigate to="/" replace />;
+    /*
+     * Management see this page whether or not they are authors, and are told
+     * how to become one. Peter has Bulletin in his sidebar; silently bouncing
+     * him back to the dashboard made it a dead link and left him no way to
+     * work out why. Everyone else never sees the entry and is redirected.
+     */
+    if (canWrite === false && !isManagement) return <Navigate to="/" replace />;
+
+    if (canWrite === false) {
+        return (
+            <div className="dtg-fade-in">
+                <p className="dtg-eyebrow">Staff bulletin</p>
+                <h1 className="mt-1.5 text-2xl font-bold tracking-tight text-paper">
+                    Write &amp; schedule
+                </h1>
+                <div className="dtg-panel mt-6 px-5 py-12 text-center">
+                    <Icon name="pencil" className="mx-auto h-8 w-8 text-teal-500/50" />
+                    <p className="mt-3 text-sm text-paper-soft">
+                        You are not set up as a bulletin author yet.
+                    </p>
+                    <p className="mx-auto mt-1.5 max-w-md text-xs leading-relaxed text-muted">
+                        Writing the bulletin is a separate permission from administering the
+                        Hub, so it is not granted automatically. Turn on
+                        <span className="text-paper-soft"> Bulletin author </span>
+                        against your name and this page becomes the writing desk.
+                    </p>
+                    <Link to="/settings" className="dtg-btn-primary mx-auto mt-5 inline-flex px-3 py-1.5 text-xs">
+                        Open Settings
+                    </Link>
+                </div>
+            </div>
+        );
+    }
 
     if (editSlug) {
         return (
