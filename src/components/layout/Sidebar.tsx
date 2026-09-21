@@ -46,7 +46,26 @@ const navItems = [
 export default function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
     const { user } = useAuth();
     const inReviewChain = user?.role === "director" || user?.role === "executive";
-    const items = navItems.filter((item) => !item.reviewChainOnly || inReviewChain);
+
+    /*
+     * The staff directory is management's. Everyone else gets their own record
+     * in the same slot rather than losing the entry altogether: the thing they
+     * actually want from "Employees" is their own details, and a nav item that
+     * simply vanishes reads as something broken.
+     */
+    const isManagement = Boolean(user?.is_management) || inReviewChain;
+
+    const items = navItems
+        .filter((item) => !item.reviewChainOnly || inReviewChain)
+        .map((item) =>
+            item.to === "/employees" && !isManagement
+                ? {
+                      ...item,
+                      label: "My profile",
+                      to: user?.employee_id ? `/employees/${user.employee_id}` : "/employees",
+                  }
+                : item
+        );
 
     return (
         <>

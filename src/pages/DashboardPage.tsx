@@ -167,6 +167,7 @@ export default function DashboardPage() {
             ? buildEmployeeTiles(stats)
             : [];
 
+    const today = new Date();
     const firstName = user?.full_name?.split(" ")[0];
 
     return (
@@ -186,22 +187,36 @@ export default function DashboardPage() {
                     }}
                 />
 
-                <div className="relative flex flex-wrap items-end justify-between gap-6">
+                <div className="relative flex flex-wrap items-center justify-between gap-6">
                     <div className="min-w-0">
+                        {/* The date earns its place: the first thing you check on a
+                            roster-driven morning is what day it actually is. */}
                         <p className="dtg-eyebrow">
-                            {stats?.role === "admin" ? "Organisation overview" : "Your HR summary"}
+                            {today.toLocaleDateString("en-GB", {
+                                weekday: "long",
+                                day: "numeric",
+                                month: "long",
+                                year: "numeric",
+                            })}
                         </p>
-                        <h1 className="mt-2 text-2xl font-bold tracking-tight text-paper sm:text-3xl">
+                        <h1 className="mt-2.5 text-2xl font-bold tracking-tight text-paper sm:text-3xl">
                             {firstName ? `Welcome back, ${firstName}.` : "Welcome back."}
                         </h1>
-                        <p className="mt-2 max-w-xl text-sm leading-relaxed text-teal-100/75">
+                        {/* A 2px signal rule under the greeting, the same device the
+                            marketing site uses to mark a live section. */}
+                        <div className="mt-3 h-0.5 w-12 rounded-full bg-signal" />
+                        <p className="mt-3 max-w-xl text-sm leading-relaxed text-teal-100/75">
                             {stats?.role === "admin"
                                 ? "Headcount, approvals and cover for today, at a glance."
                                 : "Your leave balances, requests and recent activity."}
                         </p>
                     </div>
 
-                    <Wordmark className="hidden h-8 opacity-40 lg:block" />
+                    {/* The wordmark was set at 32px and 40% opacity, which read as a
+                        watermark somebody had forgotten to remove. The asset is
+                        552x198, so it carries far more size than it was being given:
+                        56px is still a downscale, and therefore still crisp. */}
+                    <Wordmark className="hidden h-11 opacity-70 lg:block xl:h-14" />
                 </div>
             </section>
 
