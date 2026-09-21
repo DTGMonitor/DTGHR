@@ -194,3 +194,15 @@ export const SHIFT_CODE_ORDER: ShiftCode[] = [
     ShiftCode.ST,
     ShiftCode.T,
 ];
+
+
+/** A name for a roster row. Deliberately not the full employee record. */
+export interface ScheduleEmployee {
+    id: string;
+    employee_id: string;
+    first_name: string;
+    last_name: string;
+    position: string;
+    work_pattern: string;
+    is_backup_engineer: boolean;
+}

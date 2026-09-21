@@ -1,6 +1,11 @@
 import { useMemo, useState } from "react";
-import type { Employee } from "@/types/employee";
-import { SHIFT_CODE_ORDER, SHIFT_STYLES, ShiftCode } from "@/types/schedule";
+
+import {
+    SHIFT_CODE_ORDER,
+    SHIFT_STYLES,
+    ShiftCode,
+    type ScheduleEmployee,
+} from "@/types/schedule";
 import {
     scheduleService,
     type RosterPatternBlock,
@@ -9,7 +14,7 @@ import {
 import { isoDate } from "@/lib/dates";
 
 interface Props {
-    employees: Employee[];
+    employees: ScheduleEmployee[];
     /** Pre-fills the start date with the month currently on screen. */
     defaultStart: string;
     onClose: () => void;

@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import type { Employee } from "@/types/employee";
+
 import {
     SHIFT_STYLES,
     ShiftCode,
@@ -7,6 +7,7 @@ import {
     type PublicHoliday,
     type ShiftChangeItem,
     type WorkingDaysSummary,
+    type ScheduleEmployee,
 } from "@/types/schedule";
 
 export interface DayColumn {
@@ -19,7 +20,7 @@ export interface DayColumn {
 }
 
 interface Props {
-    employees: Employee[];
+    employees: ScheduleEmployee[];
     days: DayColumn[];
     /** `employeeId|iso` → assigned code. */
     codes: Map<string, ShiftCode>;
@@ -64,7 +65,7 @@ const TOTAL_W = "3.5rem";
 const ANNUAL_W = "4.75rem";
 const PH_W = "3.75rem";
 
-function employeeName(e: Employee) {
+function employeeName(e: ScheduleEmployee) {
     return `${e.first_name} ${e.last_name}`;
 }
 

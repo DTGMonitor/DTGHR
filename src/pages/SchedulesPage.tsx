@@ -4,8 +4,8 @@ import {
     scheduleService,
     type ShiftChangeReview,
 } from "@/services/scheduleService";
-import { employeeService } from "@/services/employeeService";
-import type { Employee } from "@/types/employee";
+// The grid needs a name and a work pattern, not an employee record.
+import type { ScheduleEmployee } from "@/types/schedule";
 import {
     ScheduleStatus,
     ShiftChangeStatus,
@@ -52,7 +52,7 @@ export default function SchedulesPage() {
     const [schedules, setSchedules] = useState<WorkSchedule[]>([]);
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [detail, setDetail] = useState<WorkScheduleDetail | null>(null);
-    const [employees, setEmployees] = useState<Employee[]>([]);
+    const [employees, setEmployees] = useState<ScheduleEmployee[]>([]);
     const [inbox, setInbox] = useState<ShiftChangeRequest[]>([]);
 
     const [loading, setLoading] = useState(true);
@@ -81,13 +81,11 @@ export default function SchedulesPage() {
     /*  Which employee row belongs to the signed-in user               */
     /* -------------------------------------------------------------- */
 
-    const myEmployeeId = useMemo(() => {
-        if (!user) return null;
-        const mine = employees.find(
-            (e) => e.email.toLowerCase() === user.email.toLowerCase(),
-        );
-        return mine?.id ?? null;
-    }, [employees, user]);
+    // The session carries the linked employee id, so there is no need to match
+    // on the email address -- which also stopped working once this list became
+    // names only. A direct link beats a string comparison on an address that
+    // HR may correct at any time.
+    const myEmployeeId = user?.employee_id ?? null;
 
     /* -------------------------------------------------------------- */
     /*  Loaders                                                        */
@@ -124,10 +122,12 @@ export default function SchedulesPage() {
             try {
                 const [items, empRes] = await Promise.all([
                     loadSchedules(),
-                    employeeService.list({ page: 1, page_size: 100 }),
+                    // Not the staff directory -- that is management's. This is
+                    // scoped by the same rule as the schedule itself.
+                    scheduleService.visibleEmployees(),
                 ]);
                 if (cancelled) return;
-                setEmployees(empRes.data.items.filter((e: Employee) => e.is_active));
+                setEmployees(empRes.data);
 
                 const newest = items[0];
                 if (!didAutoSelect.current && newest) {

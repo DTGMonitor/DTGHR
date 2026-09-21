@@ -1,5 +1,6 @@
 import api from "@/lib/api";
 import type {
+    ScheduleEmployee,
     PublicHoliday,
     ShiftChangeRequest,
     ShiftChangeStatus,
@@ -76,6 +77,17 @@ export interface RosterPatternResult {
 }
 
 export const scheduleService = {
+    /**
+     * The people whose roster rows you may see, names only.
+     *
+     * Not the staff directory: that is management's, and asking it for names
+     * is what left the roster empty for everyone else. Scoped server-side by
+     * the same rule the schedule itself uses.
+     */
+    visibleEmployees(): Promise<{ data: ScheduleEmployee[] }> {
+        return api.get("/schedules/employees");
+    },
+
     list(params?: {
         page?: number;
         page_size?: number;
