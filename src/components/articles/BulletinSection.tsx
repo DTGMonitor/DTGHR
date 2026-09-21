@@ -173,6 +173,7 @@ export default function BulletinSection() {
                 slug={editSlug}
                 onClose={() => setParams({})}
                 onChanged={() => void load()}
+                onSlugChange={(next) => setParams({ edit: next }, { replace: true })}
             />
         );
     }

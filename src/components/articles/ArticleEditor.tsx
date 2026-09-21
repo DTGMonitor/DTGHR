@@ -36,11 +36,14 @@ export default function ArticleEditor({
     slug,
     onClose,
     onChanged,
+    onSlugChange,
 }: {
     /** An existing article's slug, or "new" to start one. */
     slug: string;
     onClose: () => void;
     onChanged: () => void;
+    /** The slug follows the title until first publication, so the URL must too. */
+    onSlugChange: (slug: string) => void;
 }) {
     const [article, setArticle] = useState<ArticleDetail | null>(null);
     const [loading, setLoading] = useState(true);
@@ -55,23 +58,39 @@ export default function ArticleEditor({
     const [when, setWhen] = useState("");
     const [preview, setPreview] = useState(false);
 
+    /*
+     * "new" must create exactly one draft.
+     *
+     * The effect depends on `hydrate`, which depends on `slug`, so it re-runs
+     * when the newly created article renames the URL. Without this guard a
+     * re-run while the prop still said "new" would create a second empty
+     * article -- and the writer would never know, because they would be
+     * looking at the first.
+     */
+    const created = useRef(false);
+
     const bodyRef = useRef<HTMLTextAreaElement>(null);
     const fileRef = useRef<HTMLInputElement>(null);
 
     const hydrate = useCallback((a: ArticleDetail) => {
         setArticle(a);
+        // Renaming a draft renames its slug. Keep ?edit= in step, or a refresh
+        // lands on an article that no longer exists under that name.
+        if (a.slug !== slug) onSlugChange(a.slug);
         setTitle(a.title);
         setSummary(a.summary ?? "");
         setCategory(a.category ?? "");
         setBody(a.body ?? "");
         setWhen(toLocalInput(a.publish_at));
-    }, []);
+    }, [slug, onSlugChange]);
 
     useEffect(() => {
         let cancelled = false;
         (async () => {
             try {
                 if (slug === "new") {
+                    if (created.current) return;
+                    created.current = true;
                     /*
                      * A new article is created immediately, as a draft, rather
                      * than held in memory until the first save. That gives it
