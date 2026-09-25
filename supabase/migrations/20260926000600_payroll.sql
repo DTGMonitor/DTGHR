@@ -1383,8 +1383,9 @@ begin
 end;
 $$;
 
--- The latest published KPI result for one person, scored as kpi_service does:
--- N/A lines removed and the rest renormalised to 100, out of 130.
+-- The latest published KPI result for one person, from the KPI area's own
+-- scoring (kpi_score, kpi_bonus_multiplier), so the forecast and the
+-- scorecard can never disagree.
 create or replace function public.compensation_kpi_json(p_employee_id uuid)
 returns jsonb
 language plpgsql
@@ -1394,13 +1395,8 @@ set search_path = public, pg_temp
 as $$
 declare
     rv record;
-    applicable_weight double precision;
-    applicable_count int;
-    rated_count int;
-    total double precision := 0;
+    sc jsonb;
     complete boolean;
-    band text;
-    mult double precision;
 begin
     select r.id, r.period_label into rv
       from public.kpi_reviews r
@@ -1412,41 +1408,22 @@ begin
                                   'kpi_band', null, 'kpi_multiplier', null);
     end if;
 
-    select coalesce(sum(i.weight::float8), 0), count(*)::int
-      into applicable_weight, applicable_count
+    select public.kpi_score(coalesce(jsonb_agg(jsonb_build_object(
+               'weight', i.weight,
+               'rating', i.rating,
+               'is_not_applicable', i.is_not_applicable)
+             order by i.sort_order, i.number), '[]'::jsonb))
+      into sc
       from public.kpi_review_items i
-     where i.review_id = rv.id and not i.is_not_applicable;
+     where i.review_id = rv.id;
 
-    if applicable_count = 0 or applicable_weight <= 0 then
-        total := 0;
-        complete := false;
-    else
-        select coalesce(sum(i.weight::float8 * (100.0::float8 / applicable_weight)
-                            * case i.rating when 5 then 1.30 when 4 then 1.15 when 3 then 1.00
-                                            when 2 then 0.75 when 1 then 0.50 else 0.00 end::float8), 0),
-               count(*)::int
-          into total, rated_count
-          from public.kpi_review_items i
-         where i.review_id = rv.id and not i.is_not_applicable and i.rating is not null;
-        total := public.payroll_r2(total);
-        complete := rated_count = applicable_count;
-    end if;
-
-    if complete then
-        band := case when total >= 115 then 'Outstanding / Key Talent'
-                     when total >= 105 then 'Exceeds Expectations'
-                     when total >= 85  then 'Meets Expectations'
-                     when total >= 70  then 'Developing'
-                     else 'Below Expectations' end;
-        mult := case when total >= 115 then 1.5
-                     when total >= 105 then 1.25
-                     when total >= 95  then 1.0
-                     when total >= 85  then 0.5
-                     else 0.0 end;
-    end if;
-
-    return jsonb_build_object('kpi_period', rv.period_label, 'kpi_score', total,
-                              'kpi_band', band, 'kpi_multiplier', mult);
+    complete := coalesce((sc->>'is_complete')::boolean, false);
+    return jsonb_build_object(
+        'kpi_period', rv.period_label,
+        'kpi_score', (sc->>'total')::float8,
+        'kpi_band', case when complete then sc->>'band_label' end,
+        'kpi_multiplier', case when complete then
+            (public.kpi_bonus_multiplier((sc->>'total')::numeric) ->> 'multiplier')::float8 end);
 end;
 $$;
 

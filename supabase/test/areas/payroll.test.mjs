@@ -556,11 +556,6 @@ export default async ({ db, step, tx, people }) => {
     });
 
     await step("compensation: the list reads the latest published KPI score and multiplier", async () => {
-        // The published status arrives with the KPI area; add it here if it has not.
-        await db.exec(`do $$ begin
-            if exists (select 1 from pg_type where typname = 'kpi_review_status') then
-                alter type public.kpi_review_status add value if not exists 'published';
-            end if; end $$;`);
         await db.exec(`
             insert into public.kpi_reviews (id, employee_id, period_label, period_start, period_end, status)
             values ('dddddddd-0600-0000-0000-0000000000a1', '${EMP.COMP}', 'PAY-FY2039', '2039-01-01', '2039-12-31', 'published'),
