@@ -51,6 +51,23 @@ export default async ({ db, step, tx }) => {
         if ((await visible(U.OTHER)) !== 0) throw new Error("unrelated colleague sees the request");
     });
 
+    await step("integration: switching an employee record off locks the login, however it is done", async () => {
+        const boot = () => tx(U.OTHER, `select public.bootstrap_session() j`);
+        await boot(); // signs in while active
+        await db.exec(`update public.employees set is_active = false where id = '${E.OTHER}'`);
+        const u = (await db.query(`select u.is_active, a.banned_until from public.users u
+                                     join auth.users a on a.id = u.id where u.id = '${U.OTHER}'`)).rows[0];
+        if (u.is_active !== false || u.banned_until === null) throw new Error(JSON.stringify(u));
+        let refused = false;
+        try { await boot(); } catch (e) { refused = e.code === "PT403"; }
+        if (!refused) throw new Error("a deactivated employee still signs in");
+        const active = (await tx(U.OTHER, `select public.is_active_user() a`)).rows[0].a;
+        if (active !== false) throw new Error("is_active_user() still true");
+        // Switched back on, they sign in again.
+        await db.exec(`update public.employees set is_active = true where id = '${E.OTHER}'`);
+        await boot();
+    });
+
     await step("integration: payroll_r2 rounds exactly as Python's round(x, 2)", async () => {
         // Expected values printed by Python 3 for the same floats.
         const cases = [[2.675, 2.67], [0.125, 0.12], [0.375, 0.38], [1.005, 1.0],
