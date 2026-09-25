@@ -630,7 +630,13 @@ export default function SchedulesPage() {
                                 }}
                                 className="rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-sm font-semibold text-paper focus:border-signal/60 focus:outline-none"
                             >
-                                {chronological.map((s) => (
+                                {/* Newest first. The list runs to twenty-one
+                                    months and opens on April 2025, so reaching
+                                    the month you are actually working in meant
+                                    scrolling past a year and a half of history.
+                                    The ‹ › buttons still step in real time
+                                    order, which is what they are for. */}
+                                {[...chronological].reverse().map((s) => (
                                     <option key={s.id} value={s.id} className="bg-surface">
                                         {s.name}
                                     </option>

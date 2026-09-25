@@ -3,6 +3,7 @@ import { Link, Navigate, useSearchParams } from "react-router-dom";
 
 import { articleService } from "@/services/articleService";
 import { useAuth } from "@/contexts/AuthContext";
+import { useDialog } from "@/components/ui/Dialog";
 import {
     ARTICLE_STATUS_LABELS,
     articleDate,
@@ -36,6 +37,7 @@ const STATUS_TONES: Record<string, string> = {
 
 export default function BulletinAdminPage() {
     const { user } = useAuth();
+    const { confirm } = useDialog();
     const isManagement =
         Boolean(user?.is_management) ||
         user?.role === "director" ||
@@ -67,7 +69,13 @@ export default function BulletinAdminPage() {
     }, [load]);
 
     const remove = async (id: string, title: string) => {
-        if (!window.confirm(`Delete "${title}"?\n\nThe article and its figures go for good.`)) return;
+        const ok = await confirm({
+            title: `Delete "${title}"?`,
+            body: "The article and its figures go for good. This cannot be undone.",
+            confirmLabel: "Delete article",
+            tone: "danger",
+        });
+        if (!ok) return;
         try {
             await articleService.remove(id);
             await load();
@@ -98,9 +106,9 @@ export default function BulletinAdminPage() {
                     </p>
                     <p className="mx-auto mt-1.5 max-w-md text-xs leading-relaxed text-muted">
                         Writing the bulletin is a separate permission from administering the
-                        Hub, so it is not granted automatically. Turn on
-                        <span className="text-paper-soft"> Bulletin author </span>
-                        against your name and this page becomes the writing desk.
+                        Hub, so it is not granted automatically. Switch on
+                        <span className="text-paper-soft"> Show the bulletin desk </span>
+                        at the top of Settings and this page becomes the writing desk.
                     </p>
                     <Link to="/settings" className="dtg-btn-primary mx-auto mt-5 inline-flex px-3 py-1.5 text-xs">
                         Open Settings

@@ -20,6 +20,18 @@ import { articleImageUrl, type ArticleImage } from "@/types/article";
 
 const INLINE = /(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`|\[[^\]]+\]\([^)]+\)|<https?:\/\/[^>]+>)/g;
 
+/**
+ * One line of markdown, with the inline marks resolved.
+ *
+ * Exported because a summary is markdown too. The bulletin card printed it
+ * raw, so an article whose first sentence opened with **bold** showed the
+ * asterisks on the dashboard while the article itself rendered correctly --
+ * the same text, parsed in one place and not the other.
+ */
+export function InlineMarkdown({ text }: { text: string }) {
+    return <>{inline(text, "s")}</>;
+}
+
 function inline(text: string, keyPrefix: string): ReactNode[] {
     return text.split(INLINE).filter(Boolean).map((chunk, i) => {
         const key = `${keyPrefix}-${i}`;

@@ -10,7 +10,7 @@ import {
     type ArticleDetail,
     type ArticleSummary,
 } from "@/types/article";
-import ArticleBody from "@/components/articles/ArticleBody";
+import ArticleBody, { InlineMarkdown } from "@/components/articles/ArticleBody";
 import AuthImage from "@/components/articles/AuthImage";
 import Icon from "@/components/ui/icons";
 import Spinner from "@/components/ui/Spinner";
@@ -355,7 +355,7 @@ export default function BulletinSection() {
                                     </h3>
                                     {a.summary && (
                                         <p className="mt-3 line-clamp-5 text-sm leading-relaxed text-paper-soft">
-                                            {a.summary}
+                                            <InlineMarkdown text={a.summary} />
                                         </p>
                                     )}
                                     <p className="mt-4 flex flex-wrap items-center gap-2 font-mono text-micro text-muted">

@@ -1,5 +1,5 @@
 import { useAuth } from "@/contexts/AuthContext";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { ProductLockup } from "@/components/brand/Logo";
 
 function initials(name?: string): string {
@@ -45,7 +45,16 @@ export default function Header({
                     </svg>
                 </button>
 
-                <ProductLockup className="min-w-0" />
+                {/* The logo goes home, as it does on most sites -- Nurhuda
+                    asked for it for every account. The Dashboard is "/"
+                    for everybody; what it shows is decided there. */}
+                <Link
+                    to="/"
+                    aria-label="Go to the dashboard"
+                    className="min-w-0 rounded transition-opacity hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal"
+                >
+                    <ProductLockup className="min-w-0" />
+                </Link>
             </div>
 
             <div className="flex items-center gap-3">

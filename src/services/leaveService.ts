@@ -1,5 +1,11 @@
 import api from "@/lib/api";
-import type { LeaveRequest, LeaveBalance, LeaveType, LeaveStatus } from "@/types/leave";
+import type {
+    LeaveRequest,
+    LeaveBalance,
+    LeaveType,
+    LeaveTypeOption,
+    LeaveStatus,
+} from "@/types/leave";
 
 export interface LeaveRequestCreateData {
     leave_type: LeaveType;
@@ -25,6 +31,11 @@ export const leaveService = {
         leave_type?: LeaveType;
     }): Promise<{ data: { items: LeaveRequest[]; total: number; page: number; page_size: number } }> {
         return api.get("/leaves", { params });
+    },
+
+    /** The kinds of leave this person may actually ask for. */
+    myTypes(): Promise<{ data: LeaveTypeOption[] }> {
+        return api.get("/leaves/types");
     },
 
     submitRequest(data: LeaveRequestCreateData): Promise<{ data: LeaveRequest }> {

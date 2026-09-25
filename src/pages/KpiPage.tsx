@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, Fragment } from "react";
 import { useSearchParams } from "react-router-dom";
 import { employeeService } from "@/services/employeeService";
 import { kpiService } from "@/services/kpiService";
@@ -79,6 +79,43 @@ export default function KpiPage() {
     const canReview = user?.role === "director" || user?.role === "executive";
 
     const [employees, setEmployees] = useState<EmployeeDetail[]>([]);
+
+    /*
+     * Three groups, in the order somebody works through them.
+     *
+     * Your own scorecard is not in any of them. It was sitting in the list you
+     * assess from -- Nurhuda: "ini namaku masih ada di akunku" -- which is an
+     * invitation to open a card you are not allowed to fill in. Peter still
+     * sees hers, because he is the one who assesses her.
+     *
+     * Then permanent and fixed-term apart, as asked, because they are reviewed
+     * on different cycles; and the exempt kept visible with their reason, so
+     * "where is Bintang?" has an answer on the page rather than in somebody's
+     * memory.
+     */
+    const mine = user?.employee_id;
+    const others = employees.filter(
+        (e) =>
+            e.id !== mine &&
+            /* Founders are not assessed and never will be, so listing them
+               under "not assessed this cycle" implies a cycle that is coming.
+               Peter and Mark are simply not part of this page. */
+            !(e.is_management_role && !e.kpi_review_required),
+    );
+    const assessed = others.filter((e) => e.kpi_review_required);
+    const exempt = others.filter((e) => !e.kpi_review_required);
+    const permanent = assessed.filter((e) => e.employment_type === "permanent");
+    const fixedTerm = assessed.filter((e) => e.employment_type !== "permanent");
+
+    const groups = [
+        { label: "Permanent", rows: permanent, note: "" },
+        { label: "Fixed term", rows: fixedTerm, note: "PKWT" },
+        {
+            label: "Not assessed this cycle",
+            rows: exempt,
+            note: "Exempt — the reason is on each profile",
+        },
+    ];
     const [reviews, setReviews] = useState<KpiReviewSummary[]>([]);
     const [templates, setTemplates] = useState<KpiTemplateSummary[]>([]);
     const [loading, setLoading] = useState(true);
@@ -129,7 +166,11 @@ export default function KpiPage() {
             const details = await Promise.all(
                 emps.data.items.map((e) => employeeService.get(e.id).then((r) => r.data))
             );
-            setEmployees(details.filter((e) => e.kpi_review_required));
+            /* Everybody, including the exempt. They used to be filtered out
+               here, which is why Nurhuda asked where Bintang and Maulana had
+               gone -- they were not missing, they were invisible. They are
+               listed below the assessed with their reason instead. */
+            setEmployees(details);
             setReviews(revs.data.items);
             setTemplates(tpls.data);
         } catch {
@@ -160,7 +201,7 @@ export default function KpiPage() {
     }, [reviews, period]);
 
     const stats = useMemo(() => {
-        const rows = employees.map((e) => byEmployee.get(e.id));
+        const rows = assessed.map((e) => byEmployee.get(e.id));
         return {
             approved: rows.filter((r) => r?.status === "approved").length,
             awaiting: rows.filter((r) => r?.status === "submitted").length,
@@ -175,7 +216,7 @@ export default function KpiPage() {
                 <Icon name="chart" className="mx-auto h-8 w-8 text-teal-700" />
                 <p className="mt-3 text-sm text-paper-soft">Performance is not available</p>
                 <p className="mx-auto mt-1 max-w-md text-xs leading-relaxed text-muted">
-                    Scorecards are limited to the review chain in this release.
+                    KPI achievements are limited to the review chain in this release.
                 </p>
             </div>
         );
@@ -199,13 +240,13 @@ export default function KpiPage() {
                     className="inline-flex items-center gap-1.5 text-micro font-semibold uppercase tracking-label text-teal-300 transition-colors hover:text-teal-100"
                 >
                     <Icon name="arrowLeft" className="h-3.5 w-3.5" />
-                    All scorecards
+                    All KPI achievements
                 </button>
 
                 {openLoading || !openEmployee ? (
                     <div className="flex items-center justify-center gap-2.5 py-24 text-sm text-paper-soft">
                         <Spinner className="h-4 w-4 text-signal" />
-                        Loading scorecard…
+                        Loading KPI achievement…
                     </div>
                 ) : (
                     <>
@@ -240,10 +281,10 @@ export default function KpiPage() {
                 <div>
                     <p className="dtg-eyebrow">Performance</p>
                     <h1 className="mt-2 text-2xl font-bold tracking-tight text-paper">
-                        KPI scorecards
+                        KPI achievement
                     </h1>
                     <p className="mt-1.5 text-sm text-paper-soft">
-                        One scorecard per person per period, scored out of{" "}
+                        One KPI achievement per person per period, scored out of{" "}
                         <span className="font-mono text-paper">{KPI_MAX_SCORE}</span>.
                     </p>
                 </div>
@@ -292,14 +333,32 @@ export default function KpiPage() {
                     <thead>
                         <tr className="border-b border-white/10 bg-deep/40">
                             <th className="dtg-th">Employee</th>
-                            <th className="dtg-th">Scorecard</th>
+                            <th className="dtg-th">Achievement</th>
                             <th className="dtg-th">{period}</th>
                             <th className="dtg-th text-right">Score</th>
                             <th className="dtg-th text-right">Open</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-white/[0.06]">
-                        {employees.map((emp) => {
+                        {/* One heading per group. A heading row rather than
+                            three tables keeps the columns aligned across
+                            them, which is the point of the columns. */}
+                        {groups.map((g) =>
+                            g.rows.length === 0 ? null : (
+                                <Fragment key={g.label}>
+                                    {groups.filter((x) => x.rows.length).length > 1 && (
+                                        <tr>
+                                            <td colSpan={5} className="bg-white/[0.03] px-4 py-2">
+                                                <span className="dtg-eyebrow">{g.label}</span>
+                                                {g.note && (
+                                                    <span className="ml-2 text-micro text-muted">
+                                                        {g.note}
+                                                    </span>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    )}
+                                    {g.rows.map((emp) => {
                             const review = byEmployee.get(emp.id);
                             return (
                                 <tr key={emp.id} className="transition-colors hover:bg-white/[0.03]">
@@ -346,11 +405,14 @@ export default function KpiPage() {
                                     </td>
                                 </tr>
                             );
-                        })}
+                                    })}
+                                </Fragment>
+                            ),
+                        )}
                     </tbody>
                 </table>
 
-                {employees.length === 0 && (
+                {groups.every((g) => g.rows.length === 0) && (
                     <div className="px-5 py-16 text-center">
                         <Icon name="users" className="mx-auto h-8 w-8 text-teal-700" />
                         <p className="mt-3 text-sm text-paper-soft">No employees to score</p>

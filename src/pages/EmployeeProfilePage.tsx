@@ -1,18 +1,18 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { employeeService } from "@/services/employeeService";
-import { kpiService } from "@/services/kpiService";
 import { useAuth } from "@/contexts/AuthContext";
 import {
     EMPLOYMENT_TYPE_LABELS,
     WORK_PATTERN_LABELS,
     type EmployeeDetail,
 } from "@/types/employee";
-import type { KpiTemplateSummary } from "@/types/kpi";
 import ProfileSection, { type FieldDef } from "@/components/employees/ProfileSection";
 import PhotoField from "@/components/employees/PhotoField";
 import Icon from "@/components/ui/icons";
 import Spinner from "@/components/ui/Spinner";
+import RoleHistory from "@/components/employees/RoleHistory";
+import ProfileRequests from "@/components/employees/ProfileRequests";
 import Alert from "@/components/ui/Alert";
 
 type TabKey = "personal" | "employment" | "statutory";
@@ -35,6 +35,23 @@ const GENDERS = [
     { value: "female", label: "Female" },
 ];
 
+/*
+ * PTKP — the code that sets somebody's tax-free allowance.
+ *
+ * TK is tidak kawin, K is kawin, K/I is married with the spouse's income
+ * combined on one return. The digit is dependants, capped at three by the tax
+ * office however many there are.
+ *
+ * Not derived from marital status: a married employee with two children is
+ * K/2, and the same person filing jointly is K/I/2. Payroll needs the code
+ * itself, because that is what appears on the PPh 21 calculation.
+ */
+const PTKP = [
+    "TK/0", "TK/1", "TK/2", "TK/3",
+    "K/0", "K/1", "K/2", "K/3",
+    "K/I/0", "K/I/1", "K/I/2", "K/I/3",
+].map((code) => ({ value: code, label: code }));
+
 const MARITAL = [
     { value: "single", label: "Single" },
     { value: "married", label: "Married" },
@@ -45,10 +62,12 @@ const MARITAL = [
 export default function EmployeeProfilePage() {
     const { employeeId } = useParams<{ employeeId: string }>();
     const { user } = useAuth();
-    const isHR = !!user?.is_superuser;
+    /* Editing a record follows the People admin tick, not superuser: that is
+       the permission the API enforces, and gating the page on something
+       stricter hides a pencil from somebody the server would have allowed. */
+    const isHR = Boolean(user?.can_manage_people);
 
     const [employee, setEmployee] = useState<EmployeeDetail | null>(null);
-    const [templates, setTemplates] = useState<KpiTemplateSummary[]>([]);
     // The tab lives in the URL so a profile section can be linked to and
     // survives a refresh -- "have a look at his KPI" should be one link.
     const [searchParams, setSearchParams] = useSearchParams();
@@ -75,16 +94,6 @@ export default function EmployeeProfilePage() {
     useEffect(() => {
         load();
     }, [load]);
-
-    // Only the review chain can list templates; a plain employee viewing a
-    // profile would get a 403, which is expected rather than an error.
-    useEffect(() => {
-        if (!isHR) return;
-        kpiService
-            .listTemplates()
-            .then((res) => setTemplates(res.data))
-            .catch(() => setTemplates([]));
-    }, [isHR]);
 
     const save = async (patch: Record<string, unknown>) => {
         if (!employeeId) return;
@@ -114,6 +123,35 @@ export default function EmployeeProfilePage() {
         );
     }
 
+    /*
+     * Peter and Mark are the founders, not staff.
+     *
+     * Nurhuda: they are the owners, so a work location, an active flag, an
+     * employment type and a schedule say nothing about them — they do not
+     * report anywhere, do not carry a roster and are not going to be
+     * deactivated. And they are Australian, so the whole statutory and payroll
+     * side (NIK, NPWP, BPJS, an Indonesian bank account) is not theirs to
+     * fill in.
+     *
+     * The same test used everywhere else: management, and exempt from review.
+     */
+    /* Who is *looking*, as opposed to who is being looked at. */
+    const viewerIsManagement = Boolean(
+        user?.is_superuser ||
+            user?.is_management ||
+            user?.role === "director" ||
+            user?.role === "executive",
+    );
+
+    const isFounder = Boolean(
+        employee.is_management_role && employee.kpi_review_required === false,
+    );
+
+    /* A permanent contract has no end date to show. Fixed-term (PKWT) does,
+       and Nurhuda wants that one kept to admin and management — an engineer
+       does not need a countdown to their own contract running out. */
+    const isPermanent = employee.employment_type === "permanent";
+
     const personalFields: FieldDef[] = [
         { key: "first_name", label: "First name" },
         { key: "last_name", label: "Last name" },
@@ -125,6 +163,13 @@ export default function EmployeeProfilePage() {
         { key: "gender", label: "Gender", type: "select", options: GENDERS },
         { key: "marital_status", label: "Marital status", type: "select", options: MARITAL },
         { key: "religion", label: "Religion" },
+        {
+            key: "ptkp_status",
+            label: "PTKP status",
+            type: "select",
+            options: PTKP,
+            help: "Tax status for PPh 21. K/1 is married with one dependant; K/I/… is married with the spouse's income combined.",
+        },
         { key: "address", label: "Address", type: "textarea", wide: true },
     ];
 
@@ -144,7 +189,7 @@ export default function EmployeeProfilePage() {
         { key: "position", label: "Position" },
         { key: "department", label: "Department" },
         { key: "job_level", label: "Level" },
-        { key: "date_of_joining", label: "Joined", type: "date" },
+        { key: "date_of_joining", label: "Hire date", type: "date" },
         {
             key: "employment_type",
             label: "Employment type",
@@ -171,35 +216,15 @@ export default function EmployeeProfilePage() {
             })),
             help: "Determines which schedule this person sees.",
         },
-        {
-            key: "is_backup_engineer",
-            label: "Back-up engineer",
-            type: "toggle",
-            help: "Office-day staff covering the roster can also view it. Clearing this withdraws that access.",
-        },
-        {
-            key: "is_management_role",
-            label: "Management role",
-            type: "toggle",
-            help:
-                "Annual bonuses are offered to management roles only. " +
-                "For everyone else the scorecard shows no bonus at all, rather than one of zero.",
-        },
-        {
-            key: "can_write_articles",
-            label: "Bulletin author",
-            type: "toggle",
-            help:
-                "Can write, schedule and publish staff articles. This is not platform " +
-                "administration — it grants the bulletin and nothing else.",
-        },
-        {
-            key: "kpi_template_id",
-            label: "KPI scorecard",
-            type: "select",
-            options: templates.map((t) => ({ value: t.id, label: t.title })),
-            help: "The role framework this person is assessed against. Fill the scorecard in under Performance.",
-        },
+        /*
+            Back-up engineer, Management role, Bulletin author and the role
+            scorecard used to sit here. They are permissions and configuration
+            rather than employment facts, they are now set in Settings against
+            everybody at once, and answering "who can publish the bulletin?"
+            by opening eleven profiles in turn is what Settings exists to
+            stop. The scorecard field also rendered its raw template id, so
+            the profile was showing a database key as though it were data.
+        */
         { key: "is_active", label: "Active", type: "toggle" },
     ];
 
@@ -216,7 +241,49 @@ export default function EmployeeProfilePage() {
         { key: "bank_account_holder", label: "Account holder" },
     ];
 
-    const visibleTabs = TABS.filter((t) => !t.adminOnly || isHR);
+    /*
+     * What a founder's employment card leaves out, and why.
+     *
+     * Everything here describes an employment relationship DTG does not have
+     * with Peter or Mark. Rather than show the fields empty — which reads as
+     * missing data somebody should go and fill in — they are absent.
+     */
+    const employmentShown = employmentFields.filter((f) => {
+        if (
+            isFounder &&
+            [
+                "work_location",
+                "work_pattern",
+                "employment_type",
+                "is_active",
+                // A founder was not hired. There is no start of employment to
+                // record, because there was no employment to start.
+                "date_of_joining",
+            ].includes(f.key)
+        ) {
+            return false;
+        }
+        // A permanent contract has no end date; showing "Not set" invites
+        // somebody to set one.
+        if (f.key === "contract_end_date") {
+            if (isPermanent || isFounder) return false;
+            /* Nurhuda: the end date on a fixed-term contract stays with admin
+               and management. An engineer opening their own profile does not
+               need a countdown to their own contract running out — that is a
+               conversation, not a field. */
+            if (!viewerIsManagement) return false;
+        }
+        // The level ladder is for staff. "President Director, level: not set"
+        // is a question with no answer rather than a gap.
+        if (isFounder && f.key === "job_level") return false;
+        return true;
+    });
+
+    /* Statutory identifiers and an Indonesian bank account, for two
+       Australians who have neither. */
+    const visibleTabs = TABS.filter((t) => !t.adminOnly || isHR).filter(
+        (t) => !(isFounder && t.key === "statutory"),
+    );
 
     return (
         <div className="dtg-fade-in space-y-5">
@@ -244,15 +311,20 @@ export default function EmployeeProfilePage() {
                         <span className="dtg-chip border-teal-300/35 bg-teal-300/10 text-teal-300">
                             {employee.employee_id}
                         </span>
-                        <span className="dtg-chip border-white/12 bg-white/[0.04] text-paper-soft">
-                            {WORK_PATTERN_LABELS[employee.work_pattern]}
-                        </span>
+                        {/* A founder carries no schedule, so naming one is
+                            noise; and neither of them is going to be marked
+                            former staff. */}
+                        {!isFounder && (
+                            <span className="dtg-chip border-white/12 bg-white/[0.04] text-paper-soft">
+                                {WORK_PATTERN_LABELS[employee.work_pattern]}
+                            </span>
+                        )}
                         {employee.is_backup_engineer && (
                             <span className="dtg-chip border-gold/35 bg-gold/10 text-gold">
                                 Back-up engineer
                             </span>
                         )}
-                        {employee.is_active ? (
+                        {isFounder ? null : employee.is_active ? (
                             <span className="dtg-chip border-signal/35 bg-signal/10 text-signal">
                                 <span className="h-1.5 w-1.5 rounded-full bg-signal" />
                                 Active
@@ -262,15 +334,13 @@ export default function EmployeeProfilePage() {
                                 Former staff
                             </span>
                         )}
-                        {employee.has_account ? (
-                            <span className="dtg-chip border-white/12 bg-white/[0.04] text-paper-soft">
-                                Has login
-                            </span>
-                        ) : (
-                            <span className="dtg-chip border-white/12 bg-white/[0.04] text-muted">
-                                No login
-                            </span>
-                        )}
+                        {/* "Has login" used to sit here. Nurhuda: it is not
+                            information anybody needs, on somebody else's
+                            profile or on their own — you know whether you can
+                            sign in by having signed in. Creating a login is
+                            still an action in the directory, where an action
+                            belongs; it is just no longer announced as a fact
+                            about a person. */}
                     </div>
 
                     {!employee.is_active && (
@@ -324,14 +394,33 @@ export default function EmployeeProfilePage() {
             )}
 
             {tab === "employment" && (
-                <ProfileSection
-                    eyebrow="Role"
-                    title="Employment"
-                    fields={employmentFields}
-                    employee={employee}
-                    canEdit={isHR}
-                    onSave={save}
-                />
+                <div className="space-y-4">
+                    <ProfileSection
+                        eyebrow="Role"
+                        title="Employment"
+                        fields={employmentShown}
+                        employee={employee}
+                        canEdit={isHR}
+                        onSave={save}
+                    />
+                    {/* Directly under the fields it records, so a promotion and
+                        its history are read in the same glance.
+
+                        Not for the founders: a career history is the record of
+                        somebody moving through the company, and they own it.
+                        There is no promotion for a founder to have had. */}
+                    {!isFounder && <RoleHistory employeeId={employee.id} canEdit={isHR} />}
+                </div>
+            )}
+
+            {/* Your own record, and you cannot edit it: the way to correct a
+                bank account or a PTKP code is to ask. Shown on your own
+                profile only — raising a request on somebody else's behalf is
+                an administrator editing the record directly. */}
+            {tab === "personal" && user?.employee_id === employee.id && (
+                <div className="mt-4">
+                    <ProfileRequests mine />
+                </div>
             )}
 
             {tab === "statutory" && (

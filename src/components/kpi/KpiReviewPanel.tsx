@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useDialog } from "@/components/ui/Dialog";
 import { kpiService } from "@/services/kpiService";
 import type { EmployeeDetail } from "@/types/employee";
 import {
@@ -12,7 +13,6 @@ import {
 import Icon from "@/components/ui/icons";
 import Spinner from "@/components/ui/Spinner";
 import Alert from "@/components/ui/Alert";
-import RewardPanel from "@/components/kpi/RewardPanel";
 
 /** The current review year. Reviews are annual — the reward model works on a
  *  full year, so a quarterly card could never produce a bonus figure. */
@@ -258,6 +258,7 @@ export default function KpiReviewPanel({ employee }: { employee: EmployeeDetail 
     const [reviews, setReviews] = useState<KpiReviewSummary[]>([]);
     const [active, setActive] = useState<KpiReviewDetail | null>(null);
     const [loading, setLoading] = useState(true);
+    const { confirm, prompt } = useDialog();
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -319,10 +320,10 @@ export default function KpiReviewPanel({ employee }: { employee: EmployeeDetail 
         return (
             <section className="dtg-panel px-5 py-14 text-center">
                 <Icon name="chart" className="mx-auto h-8 w-8 text-teal-700" />
-                <p className="mt-3 text-sm text-paper-soft">No KPI scorecard assigned</p>
+                <p className="mt-3 text-sm text-paper-soft">No KPI framework assigned</p>
                 <p className="mx-auto mt-1 max-w-md text-xs leading-relaxed text-muted">
-                    {employee.first_name} does not have a role scorecard yet. Assign one under
-                    Employment before opening a review.
+                    {employee.first_name} has no KPI framework yet. Assign one in
+                    Settings, under Role scorecards, before opening a review.
                 </p>
             </section>
         );
@@ -404,10 +405,13 @@ export default function KpiReviewPanel({ employee }: { employee: EmployeeDetail 
                                         {active.template_bands}
                                     </p>
                                 )}
-                                <p className="mt-2 font-mono text-micro text-muted">
-                                    Assessed by {active.assessor_name ?? "—"} · approved by{" "}
-                                    {active.approver_name ?? "—"}
-                                </p>
+                                {/* "Assessed by … · approved by …" used to sit
+                                    here. Nurhuda asked for it gone: either
+                                    reviewer may fill a card in now, so naming
+                                    one of them as *the* assessor was both
+                                    noise and, increasingly, wrong. Who
+                                    actually signed is still recorded on the
+                                    review and shows in the activity log. */}
                             </div>
                             <div className="w-full max-w-xs">
                                 <ScoreBar review={active} />
@@ -460,11 +464,16 @@ export default function KpiReviewPanel({ employee }: { employee: EmployeeDetail 
                                             Approve
                                         </button>
                                         <button
-                                            onClick={() => {
-                                                const note = window.prompt(
-                                                    "What needs changing before this can be approved?"
-                                                );
-                                                if (note && note.trim()) {
+                                            onClick={async () => {
+                                                const note = await prompt({
+                                                    title: "Return for revision",
+                                                    body: `${active.employee_name ?? "The reviewer"} gets the scorecard back to change, with your note on it.`,
+                                                    label: "What needs changing",
+                                                    multiline: true,
+                                                    required: true,
+                                                    confirmLabel: "Return it",
+                                                });
+                                                if (note) {
                                                     act(() => kpiService.return(active.id, note));
                                                 }
                                             }}
@@ -482,16 +491,13 @@ export default function KpiReviewPanel({ employee }: { employee: EmployeeDetail 
                                     reaches an employee by accident. */}
                                 {active.can_publish && (
                                     <button
-                                        onClick={() => {
+                                        onClick={async () => {
                                             if (
-                                                window.confirm(
-                                                    `Publish this scorecard to ${
-                                                        active.employee_name ?? "the employee"
-                                                    }?
-
-They will be able to read their ratings, ` +
-                                                        `score and band. Salary and bonus are never shown.`
-                                                )
+                                                await confirm({
+                                                    title: `Publish this KPI achievement to ${active.employee_name ?? "the employee"}?`,
+                                                    body: "They will be able to read their ratings, score and band. Salary and bonus are never shown.",
+                                                    confirmLabel: "Publish",
+                                                })
                                             ) {
                                                 act(() => kpiService.publish(active.id));
                                             }
@@ -506,13 +512,13 @@ They will be able to read their ratings, ` +
 
                                 {active.can_unpublish && (
                                     <button
-                                        onClick={() => {
+                                        onClick={async () => {
                                             if (
-                                                window.confirm(
-                                                    "Withdraw this published scorecard?\n\n" +
-                                                        "It becomes invisible to the employee again and " +
-                                                        "editable. The approval is kept."
-                                                )
+                                                await confirm({
+                                                    title: "Withdraw this published KPI achievement?",
+                                                    body: "It becomes invisible to the employee again and editable. The approval is kept.",
+                                                    confirmLabel: "Withdraw",
+                                                })
                                             ) {
                                                 act(() => kpiService.unpublish(active.id));
                                             }
@@ -528,13 +534,14 @@ They will be able to read their ratings, ` +
                                     consequence spelled out rather than "are you sure". */}
                                 {active.can_reset && (
                                     <button
-                                        onClick={() => {
+                                        onClick={async () => {
                                             if (
-                                                window.confirm(
-                                                    "Reset this scorecard?\n\n" +
-                                                        "Every rating, note and sign-off is cleared and it " +
-                                                        "goes back to an empty draft. This cannot be undone."
-                                                )
+                                                await confirm({
+                                                    title: "Reset this KPI achievement?",
+                                                    body: "Every rating, note and sign-off is cleared and it goes back to an empty draft. This cannot be undone.",
+                                                    confirmLabel: "Reset scorecard",
+                                                    tone: "danger",
+                                                })
                                             ) {
                                                 act(() => kpiService.reset(active.id));
                                             }
@@ -578,7 +585,9 @@ They will be able to read their ratings, ` +
                         </ul>
                     </section>
 
-                    <RewardPanel review={active} onChange={setActive} />
+                    {/* No reward block. Nurhuda, September 2026: the scorecard
+                        scores performance; the multiplier, the integrity gate
+                        and salary sit together on the Salary page. */}
                 </>
             )}
         </div>

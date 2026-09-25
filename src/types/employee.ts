@@ -55,6 +55,8 @@ export interface EmployeeDetail extends Employee {
     gender: string | null;
     marital_status: string | null;
     religion: string | null;
+    /** PTKP code for PPh 21 — K/0, K/1, TK/0 and so on. */
+    ptkp_status: string | null;
     address: string | null;
     personal_email: string | null;
 
@@ -98,6 +100,14 @@ export interface EmployeeDetail extends Employee {
      * field still reads as a promise that one is coming.
      */
     is_management_role: boolean;
+    can_manage_people: boolean;
+    can_manage_contracts: boolean;
+    /** An annual bonus exists for this person. Independent of management. */
+    bonus_eligible: boolean;
+    /** May request study leave, which is granted rather than accrued. */
+    study_leave_eligible: boolean;
+    /** IT tickets land on this person. */
+    is_it_support: boolean;
 
     /**
      * Content author for the staff bulletin.

@@ -59,7 +59,20 @@ export default function EmployeesPage() {
     const [accountError, setAccountError] = useState<string | null>(null);
 
     const { user } = useAuth();
-    const isHR = !!user?.is_superuser;
+    /*
+     * Two permissions, not one.
+     *
+     * This was a single `is_superuser` check, which showed Peter an "Add
+     * employee" button the API then refused -- he is an administrator but
+     * Nurhuda had not made him a people admin. A button that 403s is worse
+     * than no button.
+     *
+     * Adding and editing a record needs the people-admin flag; deactivating
+     * somebody and handing out a login stay with the administrator, because
+     * neither is data entry.
+     */
+    const canManagePeople = !!user?.can_manage_people;
+    const isAdmin = !!user?.is_superuser;
 
     const [formTarget, setFormTarget] = useState<Employee | null | undefined>(undefined);
     // undefined = modal closed, null = create mode, Employee = edit mode
@@ -176,7 +189,7 @@ export default function EmployeesPage() {
                         {total === 1 ? "" : "s"} at Digital Twin Geotechnical
                     </p>
                 </div>
-                {isHR && (
+                {canManagePeople && (
                     <button onClick={() => setFormTarget(null)} className="dtg-btn-primary">
                         <Icon name="plus" className="h-4 w-4" />
                         Add employee
@@ -222,7 +235,7 @@ export default function EmployeesPage() {
                     onChange={handleDeptChange}
                     className="dtg-input sm:w-56"
                 />
-                {isHR && (
+                {isAdmin && (
                     <label className="flex flex-shrink-0 cursor-pointer items-center gap-2 rounded-lg border border-white/10 bg-deep/60 px-3.5 py-2.5 text-xs text-paper-soft">
                         <input
                             type="checkbox"
@@ -271,7 +284,7 @@ export default function EmployeesPage() {
                                 Clear filters
                             </button>
                         ) : (
-                            isHR && (
+                            canManagePeople && (
                                 <button onClick={() => setFormTarget(null)} className="dtg-btn-primary mt-4">
                                     <Icon name="plus" className="h-4 w-4" />
                                     Add the first employee
@@ -288,7 +301,7 @@ export default function EmployeesPage() {
                                     <th className="dtg-th">ID</th>
                                     <th className="dtg-th">Department</th>
                                     <th className="dtg-th">Position</th>
-                                    <th className="dtg-th">Joined</th>
+                                    <th className="dtg-th">Hire date</th>
                                     <th className="dtg-th">Status</th>
                                     <th className="dtg-th text-right">Actions</th>
                                 </tr>
@@ -327,7 +340,7 @@ export default function EmployeesPage() {
                                         </td>
                                         <td className="dtg-td text-right">
                                             <div className="inline-flex items-center gap-0.5">
-                                                {isHR && (
+                                                {canManagePeople && (
                                                     <button
                                                         onClick={() => setFormTarget(emp)}
                                                         className="rounded p-2 text-teal-500 transition-colors hover:bg-white/[0.06] hover:text-teal-100"
@@ -337,7 +350,7 @@ export default function EmployeesPage() {
                                                         <Icon name="pencil" className="h-4 w-4" />
                                                     </button>
                                                 )}
-                                                {isHR && (
+                                                {isAdmin && (
                                                     <button
                                                         onClick={() => setDeleteTarget(emp)}
                                                         className="rounded p-2 text-teal-500 transition-colors hover:bg-danger/10 hover:text-danger"
@@ -347,7 +360,7 @@ export default function EmployeesPage() {
                                                         <Icon name="userMinus" className="h-4 w-4" />
                                                     </button>
                                                 )}
-                                                {isHR && !emp.has_account && (
+                                                {isAdmin && !emp.has_account && (
                                                     <button
                                                         onClick={() => handleCreateAccount(emp)}
                                                         className="rounded p-2 text-teal-500 transition-colors hover:bg-signal/10 hover:text-signal"
@@ -356,15 +369,6 @@ export default function EmployeesPage() {
                                                     >
                                                         <Icon name="key" className="h-4 w-4" />
                                                     </button>
-                                                )}
-                                                {emp.has_account && (
-                                                    <span
-                                                        title="Login account active"
-                                                        className="p-2 text-signal"
-                                                        aria-label="Has a login account"
-                                                    >
-                                                        <Icon name="check" className="h-4 w-4" />
-                                                    </span>
                                                 )}
                                             </div>
                                         </td>

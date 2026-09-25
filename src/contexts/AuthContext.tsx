@@ -26,6 +26,15 @@ interface AuthContextValue {
     loginWithMicrosoft: () => Promise<void>;
     /** Whether Entra SSO is configured in this build */
     isSsoAvailable: boolean;
+    /**
+     * Re-read the session from the server.
+     *
+     * Capabilities live on the employee record, so switching one on for
+     * yourself in Settings has to reach the sidebar somehow. Without this the
+     * Bulletin entry appears only on the next sign-in, which reads as the
+     * toggle not having worked.
+     */
+    refreshUser: () => Promise<void>;
     /** Change password (first-time email/password users) */
     changePassword: (newPassword: string) => Promise<void>;
     logout: () => void;
@@ -147,6 +156,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // stays signed in to their Microsoft / Entra account.  On re-login the
     // existing MSAL session token is reused if still valid.
     // -----------------------------------------------------------------------
+    const refreshUser = useCallback(async () => {
+        const res = await api.get<UserResponse>("/auth/me");
+        setUser(res.data);
+    }, []);
+
     const logout = useCallback(() => {
         localStorage.removeItem(TOKEN_KEY);
         setUser(null);
@@ -162,6 +176,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 loginWithMicrosoft,
                 isSsoAvailable: isAzureSsoConfigured,
                 changePassword,
+                refreshUser,
                 logout,
             }}
         >

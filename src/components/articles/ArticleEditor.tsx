@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { useDialog } from "@/components/ui/Dialog";
 import { articleService } from "@/services/articleService";
 import { articleImageUrl, type ArticleDetail } from "@/types/article";
 import ArticleBody from "@/components/articles/ArticleBody";
@@ -61,6 +62,7 @@ export default function ArticleEditor({
 }) {
     const [article, setArticle] = useState<ArticleDetail | null>(null);
     const [loading, setLoading] = useState(true);
+    const { confirm } = useDialog();
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [note, setNote] = useState<string | null>(null);
@@ -235,11 +237,12 @@ export default function ArticleEditor({
          * fixable in a line. Rewriting somebody's text behind their back to
          * tidy it up would be worse than the broken image.
          */
-        const ok = window.confirm(
-            `Remove ${filename}?\n\n` +
-                "If the text still refers to it, that figure will show as missing until you " +
-                "delete the line.",
-        );
+        const ok = await confirm({
+            title: `Remove ${filename}?`,
+            body: "If the text still refers to it, that figure will show as missing until you delete the line.",
+            confirmLabel: "Remove figure",
+            tone: "danger",
+        });
         if (!ok) return;
 
         setSaving(true);
@@ -310,12 +313,17 @@ export default function ArticleEditor({
         <section className="dtg-fade-in space-y-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
                 <button
-                    onClick={() => {
+                    onClick={async () => {
                         // Leaving is how work gets lost, so it asks -- but only
                         // when there is actually something to lose.
                         if (
                             dirty &&
-                            !window.confirm("Leave without saving?\n\nYour edits to this article will be lost.")
+                            !(await confirm({
+                                title: "Leave without saving?",
+                                body: "Your edits to this article will be lost.",
+                                confirmLabel: "Discard edits",
+                                tone: "danger",
+                            }))
                         ) {
                             return;
                         }
@@ -331,12 +339,15 @@ export default function ArticleEditor({
                     {/* Writing a month's worth in one sitting should not mean
                         going back to the dashboard between each one. */}
                     <button
-                        onClick={() => {
+                        onClick={async () => {
                             if (
                                 dirty &&
-                                !window.confirm(
-                                    "Start another article?\n\nUnsaved edits to this one will be lost.",
-                                )
+                                !(await confirm({
+                                    title: "Start another article?",
+                                    body: "Unsaved edits to this one will be lost.",
+                                    confirmLabel: "Start a new one",
+                                    tone: "danger",
+                                }))
                             ) {
                                 return;
                             }
@@ -632,8 +643,13 @@ export default function ArticleEditor({
 
                     {live && (
                         <button
-                            onClick={() => {
-                                if (window.confirm("Withdraw this article?\n\nStaff stop seeing it. Its original date is kept, so republishing does not move it to the top.")) {
+                            onClick={async () => {
+                                const ok = await confirm({
+                                    title: "Withdraw this article?",
+                                    body: "Staff stop seeing it. Its original date is kept, so republishing does not move it to the top.",
+                                    confirmLabel: "Withdraw",
+                                });
+                                if (ok) {
                                     void act(() => articleService.unpublish(article.id), "Withdrawn.");
                                 }
                             }}
@@ -645,8 +661,14 @@ export default function ArticleEditor({
                     )}
 
                     <button
-                        onClick={() => {
-                            if (window.confirm(`Delete "${article.title}"?\n\nThe article and its figures go for good. This cannot be undone.`)) {
+                        onClick={async () => {
+                            const ok = await confirm({
+                                title: `Delete "${article.title}"?`,
+                                body: "The article and its figures go for good. This cannot be undone.",
+                                confirmLabel: "Delete article",
+                                tone: "danger",
+                            });
+                            if (ok) {
                                 void articleService.remove(article.id).then(() => {
                                     onChanged();
                                     onClose();

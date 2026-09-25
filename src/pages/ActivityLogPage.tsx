@@ -108,7 +108,7 @@ export default function ActivityLogPage() {
                     Activity log
                 </h1>
                 <p className="mt-1.5 text-sm text-paper-soft">
-                    Every change to people, leave, rosters and scorecards, and who made it.
+                    Every change to people, leave, rosters and KPI achievements, and who made it.
                 </p>
             </header>
 

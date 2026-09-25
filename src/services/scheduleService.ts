@@ -68,6 +68,10 @@ export interface RosterPatternData {
     offset_days?: number;
     overwrite?: boolean;
     apply_public_holidays?: boolean;
+    /** Resume each person on the leg the roster already has them on. */
+    continue_rotation?: boolean;
+    /** Monday to Friday only, for office-day staff. */
+    weekdays_only?: boolean;
 }
 
 export interface RosterPatternResult {
@@ -153,6 +157,23 @@ export const scheduleService = {
 
     publicHolidays(year?: number): Promise<{ data: PublicHoliday[] }> {
         return api.get("/schedules/public-holidays", { params: { year } });
+    },
+    /*
+     * The calendar is editable because it has to be. Lunar and Hijri dates
+     * move when the SKB for a future year is finally published, and cuti
+     * bersama is announced late — so a correction is a form, not a release.
+     */
+    addHoliday(body: { date: string; name: string; is_national: boolean }) {
+        return api.post<PublicHoliday>("/schedules/public-holidays", body);
+    },
+    updateHoliday(
+        id: string,
+        body: Partial<{ date: string; name: string; is_national: boolean }>,
+    ) {
+        return api.patch<PublicHoliday>(`/schedules/public-holidays/${id}`, body);
+    },
+    removeHoliday(id: string) {
+        return api.delete(`/schedules/public-holidays/${id}`);
     },
 
     publish(id: string): Promise<{ data: WorkSchedule }> {
