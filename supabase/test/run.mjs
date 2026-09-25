@@ -328,7 +328,11 @@ await step("overwrite=false skips cells that already hold a code", async () => {
     if (cells.rows[0].shift_code !== "DS") throw new Error(`overwritten to ${cells.rows[0].shift_code}`);
 });
 
-await step("public holidays are stamped as PH", async () => {
+// FastAPI rule (schedules.py generate_roster_pattern): a holiday replaces the
+// code only in office-day (weekdays_only) mode. A rotating crew works through
+// it and earns the loading, so a rotating pattern keeps its code on 7 Sep.
+// PH stamping in weekdays_only mode is covered in areas/schedules.test.mjs.
+await step("a rotating pattern leaves the crew working on public holidays", async () => {
     await tx(ADMIN, `select public.apply_roster_pattern(
         array['aaaaaaaa-0000-0000-0000-000000000002'::uuid],
         '[{"shift_code":"DS","days":2}]'::jsonb,
@@ -339,7 +343,7 @@ await step("public holidays are stamped as PH", async () => {
           order by date`);
     if (r.rows.length !== 4) throw new Error(`expected 4 cells, got ${r.rows.length}`);
     const byDate = Object.fromEntries(r.rows.map((x) => [x.d, x.shift_code]));
-    if (byDate["2026-09-07"] !== "PH") throw new Error(`7 Sep is ${byDate["2026-09-07"]}`);
+    if (byDate["2026-09-07"] !== "DS") throw new Error(`7 Sep is ${byDate["2026-09-07"]}`);
     if (byDate["2026-09-08"] === "PH") throw new Error("cuti bersama should not be stamped PH");
 });
 
