@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import type { Employee } from "@/types/employee";
+
 import {
     SHIFT_STYLES,
     ShiftCode,
@@ -7,6 +7,7 @@ import {
     type PublicHoliday,
     type ShiftChangeItem,
     type WorkingDaysSummary,
+    type ScheduleEmployee,
 } from "@/types/schedule";
 
 export interface DayColumn {
@@ -19,7 +20,7 @@ export interface DayColumn {
 }
 
 interface Props {
-    employees: Employee[];
+    employees: ScheduleEmployee[];
     days: DayColumn[];
     /** `employeeId|iso` → assigned code. */
     codes: Map<string, ShiftCode>;
@@ -62,9 +63,9 @@ const NAME_W = "15rem";
    in sharing the leftover space, and "Total days" would stretch with them. */
 const TOTAL_W = "3.5rem";
 const ANNUAL_W = "4.75rem";
-const PH_W = "3.75rem";
+const PH_W = "5rem";  // "Holidays worked" needs more room than "PH" did.
 
-function employeeName(e: Employee) {
+function employeeName(e: ScheduleEmployee) {
     return `${e.first_name} ${e.last_name}`;
 }
 
@@ -170,11 +171,14 @@ export default function RosterGrid({
                             rowSpan={2}
                             style={{ width: PH_W }}
                             className="sticky right-0 z-20 border-b border-l border-white/10 bg-surface px-2 py-2 text-center align-bottom font-semibold text-paper-soft"
-                            title="National public holidays this employee was rostered to work"
+                            title="National public holidays this employee was rostered to work. Cuti bersama is excluded — it is a government day off, not a worked holiday."
                         >
-                            PH
+                            {/* It read "PH loading", which is payroll's word for
+                                the premium, not a word anybody else uses. The
+                                column counts holidays worked, so it says so. */}
+                            Holidays
                             <span className="block text-[10px] font-normal text-muted">
-                                loading
+                                worked
                             </span>
                         </th>
                     </tr>
@@ -455,7 +459,11 @@ function TotalCells({ summary }: { summary: WorkingDaysSummary | undefined }) {
                     (taken ? `, ${taken} taken this month` : "")
                 }
             >
-                {leave.toFixed(1)}
+                {/* Two places, not one. The accrual is thirtieths and
+                    thirty-firsts -- 11.67, 4.97, -3.45 -- and rounding to
+                    11.7 or 12 throws away the part that shows there is a
+                    calculation behind it. */}
+                {leave.toFixed(2)}
             </td>
             <td
                 className="sticky right-0 z-10 border-b border-l border-white/10 bg-surface px-2 py-2 text-center font-semibold text-paper"

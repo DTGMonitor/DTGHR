@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { LeaveType } from "@/types/leave";
-import type { LeaveBalance } from "@/types/leave";
+import type { LeaveBalance, LeaveTypeOption } from "@/types/leave";
 import { leaveService, type LeaveRequestCreateData } from "@/services/leaveService";
 
 interface Props {
@@ -9,11 +9,19 @@ interface Props {
     onSubmitted: () => void;
 }
 
-const LEAVE_TYPE_LABELS: Record<LeaveType, string> = {
-    [LeaveType.ANNUAL]: "Annual Leave",
-    [LeaveType.SICK]: "Sick Leave",
-    [LeaveType.PERSONAL]: "Personal Leave",
-    [LeaveType.UNPAID]: "Unpaid Leave",
+/*
+ * The choices come from the API, not from a list here.
+ *
+ * Study leave is a grant rather than an entitlement — Nurhuda: "study leave
+ * hanya muncul di saya ya. yg lain egag muncul" — and who has it is a setting
+ * she changes. The handbook's family and special categories are also narrowed
+ * per person. A list hard-coded in the page would be wrong for somebody the
+ * day after it shipped.
+ */
+const GROUP_TITLES: Record<LeaveTypeOption["group"], string> = {
+    core: "Leave",
+    family: "Family and wellbeing",
+    special: "Special leave",
 };
 
 function calcWorkingDays(start: string, end: string): number {
@@ -41,6 +49,16 @@ export default function LeaveRequestModal({ balances, onClose, onSubmitted }: Pr
     });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [types, setTypes] = useState<LeaveTypeOption[]>([]);
+
+    useEffect(() => {
+        void leaveService
+            .myTypes()
+            .then((res) => setTypes(res.data))
+            // A failure here leaves the picker empty rather than silently
+            // offering leave somebody may not be entitled to.
+            .catch(() => setError("Could not load the kinds of leave available to you."));
+    }, []);
 
     useEffect(() => {
         const days = calcWorkingDays(form.start_date, form.end_date);
@@ -48,6 +66,10 @@ export default function LeaveRequestModal({ balances, onClose, onSubmitted }: Pr
     }, [form.start_date, form.end_date]);
 
     const selectedBalance = balances.find((b) => b.leave_type === form.leave_type);
+    const selectedType = types.find((t) => t.value === form.leave_type);
+    const groups = (["core", "family", "special"] as const).filter((g) =>
+        types.some((t) => t.group === g),
+    );
 
     const handleChange = (
         e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
@@ -123,13 +145,41 @@ export default function LeaveRequestModal({ balances, onClose, onSubmitted }: Pr
                                 className={inputClass + " cursor-pointer"}
                                 required
                             >
-                                {Object.values(LeaveType).map((t) => (
-                                    <option key={t} value={t} className="bg-surface">
-                                        {LEAVE_TYPE_LABELS[t]}
-                                    </option>
+                                {groups.map((g) => (
+                                    <optgroup key={g} label={GROUP_TITLES[g]} className="bg-surface">
+                                        {types
+                                            .filter((t) => t.group === g)
+                                            .map((t) => (
+                                                <option
+                                                    key={t.value}
+                                                    value={t.value}
+                                                    className="bg-surface"
+                                                >
+                                                    {t.label}
+                                                    {t.allowance_days
+                                                        ? ` · ${t.allowance_days} day${
+                                                              t.allowance_days === 1 ? "" : "s"
+                                                          }`
+                                                        : ""}
+                                                </option>
+                                            ))}
+                                    </optgroup>
                                 ))}
                             </select>
                         </div>
+
+                        {/* The handbook's own wording, so nobody has to go and
+                            find the handbook to know what they are entitled to. */}
+                        {selectedType && (
+                            <p className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-xs leading-relaxed text-paper-soft">
+                                {selectedType.note}
+                                {selectedType.needs_document && (
+                                    <span className="mt-1 block text-gold">
+                                        Please attach or bring the supporting certificate.
+                                    </span>
+                                )}
+                            </p>
+                        )}
 
                         {/* Balance info */}
                         {selectedBalance && (

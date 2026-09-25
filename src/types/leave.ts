@@ -1,8 +1,36 @@
 export enum LeaveType {
     ANNUAL = "annual",
     SICK = "sick",
-    PERSONAL = "personal",
-    UNPAID = "unpaid",
+    STUDY = "study",
+
+    // The handbook's Family & Wellbeing Leave.
+    MATERNITY = "maternity",
+    PATERNITY = "paternity",
+    MISCARRIAGE = "miscarriage",
+    MENSTRUAL = "menstrual",
+
+    // The handbook's Special Leave — fully paid, fixed allowances.
+    MARRIAGE = "marriage",
+    CHILD_MARRIAGE = "child_marriage",
+    CHILD_CEREMONY = "child_ceremony",
+    BEREAVEMENT = "bereavement",
+    BEREAVEMENT_HOUSEHOLD = "bereavement_household",
+}
+
+/**
+ * One kind of leave, as the API offers it to this person.
+ *
+ * Served rather than listed here, because who may ask for study leave is a
+ * setting an administrator changes — a list baked into the front end would go
+ * stale the moment somebody is granted it.
+ */
+export interface LeaveTypeOption {
+    value: LeaveType;
+    label: string;
+    group: "core" | "family" | "special";
+    allowance_days: number | null;
+    note: string;
+    needs_document: boolean;
 }
 
 export enum LeaveStatus {
@@ -44,49 +72,17 @@ export interface LeaveBalance {
     total_days: number;
     used_days: number;
     remaining_days: number;
-}
-
-/**
- * The headline figures for one employee, derived from their balances and
- * requests. The dashboard and the Leaves page both read this, so the two can
- * never disagree.
- */
-export interface LeaveOverview {
-    year: number;
-    annual: { total: number; used: number; remaining: number };
-    sick: { total: number; used: number; remaining: number };
-    /** Requests still awaiting a decision, whatever their dates. */
-    pending_count: number;
-    pending_days: number;
-    /** Approved days starting this year, every leave type including unpaid. */
-    used_days: number;
-    used_by_type: Record<LeaveType, number>;
-    /** The next approved leave that has not ended yet. */
-    next_leave: LeaveRequest | null;
-    balances: LeaveBalance[];
-}
-
-export type LeaveActivityAction =
-    | "LEAVE_REQUESTED"
-    | "LEAVE_APPROVED"
-    | "LEAVE_REJECTED"
-    | "LEAVE_CANCELLED";
-
-/** One row of leave_activity_view: an audit entry joined to its request. */
-export interface LeaveActivity {
-    id: string;
-    action: LeaveActivityAction;
-    description: string;
-    actor_id: string | null;
-    actor_name: string;
-    created_at: string;
-    leave_request_id: string;
-    employee_id: string;
-    employee_name: string;
-    leave_type: LeaveType;
-    start_date: string;
-    end_date: string;
-    days_requested: number;
-    status: LeaveStatus;
-    reviewer_note: string | null;
+    /**
+     * The same entitlement as at today rather than at the year end.
+     *
+     * Annual leave accrues monthly, so in September the figure December will
+     * close on is several days lower than the one you can book against now.
+     * Both are true; a single number with no date on it is what confused the
+     * card before.
+     */
+    as_at?: string | null;
+    accrued_now?: number | null;
+    used_now?: number | null;
+    remaining_now?: number | null;
+    year_end?: string | null;
 }

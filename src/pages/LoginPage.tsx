@@ -3,8 +3,8 @@ import { useNavigate, useLocation, Navigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { isApiError } from "@/lib/supabase";
 import AuthShell from "@/components/layout/AuthShell";
-import Alert from "@/components/ui/Alert";
 import Spinner from "@/components/ui/Spinner";
+import Alert from "@/components/ui/Alert";
 
 export default function LoginPage() {
     const { loginWithEmail, loginWithMicrosoft, isSsoAvailable, isAuthenticated, isLoading } = useAuth();
@@ -26,7 +26,7 @@ export default function LoginPage() {
     if (isLoading) {
         return (
             <div className="flex min-h-screen items-center justify-center bg-night">
-                <Spinner className="h-8 w-8" />
+                <Spinner className="h-7 w-7 text-signal" />
             </div>
         );
     }
@@ -41,7 +41,7 @@ export default function LoginPage() {
             navigate(from, { replace: true });
         } catch (err) {
             if (isApiError(err)) {
-                setError(err.response.data.detail || "Login failed. Please try again.");
+                setError(err.response?.data?.detail ?? "Login failed. Please try again.");
             } else {
                 setError("An unexpected error occurred.");
             }
@@ -54,7 +54,7 @@ export default function LoginPage() {
         <AuthShell
             eyebrow="HR Hub"
             title="Sign in"
-            subtitle="Use your DTG work account."
+            subtitle="Use your DTG account to continue."
         >
             {/* Microsoft login — hidden when Entra SSO is not configured
                 for this build, so the button never leads to a dead end. */}
@@ -71,14 +71,12 @@ export default function LoginPage() {
                             <rect x="11" y="1" width="9" height="9" fill="#7fba00" />
                             <rect x="11" y="11" width="9" height="9" fill="#ffb900" />
                         </svg>
-                        Sign in with Microsoft
+                        Continue with Microsoft
                     </button>
 
                     <div className="my-6 flex items-center gap-3">
                         <div className="h-px flex-1 bg-white/10" />
-                        <span className="text-micro font-semibold uppercase tracking-label text-muted">
-                            or
-                        </span>
+                        <span className="text-micro font-semibold uppercase tracking-eyebrow text-muted">or</span>
                         <div className="h-px flex-1 bg-white/10" />
                     </div>
                 </>
@@ -95,6 +93,7 @@ export default function LoginPage() {
                         id="email"
                         type="email"
                         required
+                        autoComplete="username"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         placeholder="you@dtgeotech.com"
@@ -110,6 +109,7 @@ export default function LoginPage() {
                         id="password"
                         type="password"
                         required
+                        autoComplete="current-password"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         placeholder="••••••••"
@@ -121,7 +121,7 @@ export default function LoginPage() {
                     id="login-button"
                     type="submit"
                     disabled={isSubmitting}
-                    className="dtg-btn-primary w-full"
+                    className="dtg-btn-primary w-full py-3"
                 >
                     {isSubmitting ? (
                         <>

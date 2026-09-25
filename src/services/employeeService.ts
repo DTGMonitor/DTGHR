@@ -1,5 +1,5 @@
-import { rpc, sanitiseFilterValue, supabase, toApiError } from "@/lib/supabase";
-import type { Employee, EmployeeListResponse } from "@/types/employee";
+import api, { API_BASE_URL } from "@/lib/api";
+import type { Employee, EmployeeDetail, EmployeeListResponse } from "@/types/employee";
 
 export interface CreateAccountResult {
     user_id: string;
@@ -19,134 +19,107 @@ export interface EmployeeCreateData {
     annual_leave_opening_balance?: number;
 }
 
-export interface EmployeeUpdateData {
-    first_name?: string;
-    last_name?: string;
-    email?: string;
-    phone?: string;
-    department?: string;
-    position?: string;
-    date_of_joining?: string;
-    annual_leave_opening_balance?: number;
-    is_active?: boolean;
-}
-
-const SEARCH_COLUMNS = ["first_name", "last_name", "email", "employee_id"];
-
-export type EmployeeSortKey = "name" | "employee_id" | "department" | "position" | "date_of_joining";
-export type EmployeeStatusFilter = "active" | "inactive" | "all";
-export type EmployeeAccountFilter = "all" | "with" | "without";
-
-/** Sorting by name orders on first then last, the way the directory reads. */
-const SORT_COLUMNS: Record<EmployeeSortKey, string[]> = {
-    name: ["first_name", "last_name"],
-    employee_id: ["employee_id"],
-    department: ["department", "first_name"],
-    position: ["position", "first_name"],
-    date_of_joining: ["date_of_joining"],
-};
+/**
+ * Everything HR may change on a record.
+ *
+ * Derived from `EmployeeDetail` rather than restated, so a field added to the
+ * profile cannot be silently left out of the save payload.
+ */
+export type EmployeeUpdateData = Partial<
+    Pick<
+        EmployeeDetail,
+        | "employee_id"
+        | "first_name"
+        | "last_name"
+        | "email"
+        | "phone"
+        | "department"
+        | "position"
+        | "date_of_joining"
+        | "annual_leave_opening_balance"
+        | "is_active"
+        | "date_of_birth"
+        | "place_of_birth"
+        | "gender"
+        | "marital_status"
+        | "religion"
+        | "address"
+        | "personal_email"
+        | "emergency_contact_name"
+        | "emergency_contact_relationship"
+        | "emergency_contact_phone"
+        | "national_id"
+        | "tax_id"
+        | "bpjs_health_no"
+        | "bpjs_employment_no"
+        | "bank_name"
+        | "bank_account_number"
+        | "bank_account_holder"
+        | "employment_type"
+        | "contract_end_date"
+        | "job_level"
+        | "work_location"
+        | "work_pattern"
+        | "is_backup_engineer"
+        | "kpi_template_id"
+    >
+>;
 
 export const employeeService = {
-    async list(params: {
+    list(params: {
         page?: number;
         page_size?: number;
         search?: string;
         department?: string;
-        status?: EmployeeStatusFilter;
-        account?: EmployeeAccountFilter;
-        on_leave_only?: boolean;
-        sort?: EmployeeSortKey;
-        ascending?: boolean;
+        /** Administrators only; the server ignores it for anyone else. */
+        include_inactive?: boolean;
     }): Promise<{ data: EmployeeListResponse }> {
-        const page = params.page ?? 1;
-        const pageSize = params.page_size ?? 20;
-        const from = (page - 1) * pageSize;
-
-        let query = supabase.from("employees_view").select("*", { count: "exact" });
-
-        const status = params.status ?? "active";
-        if (status !== "all") query = query.eq("is_active", status === "active");
-        if (params.account === "with") query = query.eq("has_account", true);
-        if (params.account === "without") query = query.eq("has_account", false);
-        if (params.on_leave_only) query = query.eq("on_leave_today", true);
-
-        const search = sanitiseFilterValue(params.search ?? "");
-        if (search) {
-            query = query.or(SEARCH_COLUMNS.map((c) => `${c}.ilike.%${search}%`).join(","));
-        }
-
-        const department = sanitiseFilterValue(params.department ?? "");
-        if (department) {
-            query = query.eq("department", department);
-        }
-
-        if (params.sort) {
-            for (const column of SORT_COLUMNS[params.sort]) {
-                query = query.order(column, { ascending: params.ascending ?? true });
-            }
-        } else {
-            query = query.order("created_at", { ascending: false });
-        }
-
-        const { data, error, count } = await query.range(from, from + pageSize - 1);
-
-        if (error) throw toApiError(error);
-
-        return {
-            data: {
-                items: (data ?? []) as Employee[],
-                total: count ?? 0,
-                page,
-                page_size: pageSize,
-            },
-        };
+        return api.get("/employees", { params });
     },
 
-    /** Every department in use, for the filter dropdown. */
-    async departments(): Promise<string[]> {
-        const { data, error } = await supabase.from("employees_view").select("department");
-        if (error) throw toApiError(error);
-        const names = new Set((data ?? []).map((r) => (r as { department: string }).department));
-        return [...names].filter(Boolean).sort((a, b) => a.localeCompare(b));
+    get(id: string): Promise<{ data: EmployeeDetail }> {
+        return api.get(`/employees/${id}`);
     },
 
-    async get(id: string): Promise<{ data: Employee }> {
-        const { data, error } = await supabase
-            .from("employees_view")
-            .select("*")
-            .eq("id", id)
-            .single();
-        if (error) throw toApiError(error);
-        return { data: data as Employee };
+    /**
+     * URL for an employee's photo.
+     *
+     * `updated_at` is used as a cache-buster: the bytes are served with a
+     * short private cache, so without it a freshly uploaded photo would keep
+     * showing the old one until the cache expired.
+     */
+    photoUrl(id: string, updatedAt?: string): string {
+        const base = `${API_BASE_URL}/employees/${id}/photo`;
+        return updatedAt ? `${base}?v=${encodeURIComponent(updatedAt)}` : base;
     },
 
-    async create(data: EmployeeCreateData): Promise<{ data: Employee }> {
-        return { data: await rpc<Employee>("create_employee", { p_payload: data }) };
+    uploadPhoto(id: string, file: File): Promise<void> {
+        const form = new FormData();
+        form.append("file", file);
+        // Content-Type is deliberately left unset: the browser has to add the
+        // multipart boundary itself, and naming the type here strips it.
+        return api.put(`/employees/${id}/photo`, form, {
+            headers: { "Content-Type": undefined },
+        });
     },
 
-    async update(id: string, data: EmployeeUpdateData): Promise<{ data: Employee }> {
-        return {
-            data: await rpc<Employee>("update_employee", {
-                p_employee_id: id,
-                p_payload: data,
-            }),
-        };
+    deletePhoto(id: string): Promise<void> {
+        return api.delete(`/employees/${id}/photo`);
     },
 
-    /** Off-boarding: hides them from the directory and revokes their sign-in. */
-    async delete(id: string): Promise<void> {
-        await rpc<null>("deactivate_employee", { p_employee_id: id });
+    create(data: EmployeeCreateData): Promise<{ data: Employee }> {
+        return api.post("/employees", data);
     },
 
-    async reactivate(id: string): Promise<{ data: Employee }> {
-        return { data: await rpc<Employee>("reactivate_employee", { p_employee_id: id }) };
+    update(id: string, data: EmployeeUpdateData): Promise<{ data: Employee }> {
+        return api.put(`/employees/${id}`, data);
     },
 
-    async createAccount(id: string): Promise<{ data: CreateAccountResult }> {
-        return {
-            data: await rpc<CreateAccountResult>("create_employee_account", {
-                p_employee_id: id,
-            }),
-        };
+    delete(id: string): Promise<void> {
+        return api.delete(`/employees/${id}`);
+    },
+
+    createAccount(id: string): Promise<{ data: CreateAccountResult }> {
+        return api.post(`/employees/${id}/create-account`);
     },
 };

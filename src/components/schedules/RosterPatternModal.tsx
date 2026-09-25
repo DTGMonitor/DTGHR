@@ -1,6 +1,11 @@
 import { useMemo, useState } from "react";
-import type { Employee } from "@/types/employee";
-import { SHIFT_CODE_ORDER, SHIFT_STYLES, ShiftCode } from "@/types/schedule";
+
+import {
+    SHIFT_CODE_ORDER,
+    SHIFT_STYLES,
+    ShiftCode,
+    type ScheduleEmployee,
+} from "@/types/schedule";
 import {
     scheduleService,
     type RosterPatternBlock,
@@ -9,7 +14,7 @@ import {
 import { isoDate } from "@/lib/dates";
 
 interface Props {
-    employees: Employee[];
+    employees: ScheduleEmployee[];
     /** Pre-fills the start date with the month currently on screen. */
     defaultStart: string;
     onClose: () => void;
@@ -75,6 +80,8 @@ export default function RosterPatternModal({
     const [offsetDays, setOffsetDays] = useState(0);
     const [overwrite, setOverwrite] = useState(true);
     const [applyHolidays, setApplyHolidays] = useState(true);
+    const [continueRotation, setContinueRotation] = useState(true);
+    const [weekdaysOnly, setWeekdaysOnly] = useState(false);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState("");
 
@@ -114,6 +121,8 @@ export default function RosterPatternModal({
                 offset_days: offsetDays,
                 overwrite,
                 apply_public_holidays: applyHolidays,
+                continue_rotation: continueRotation,
+                weekdays_only: weekdaysOnly,
             });
             onApplied(data);
         } catch (err: unknown) {
@@ -386,7 +395,63 @@ export default function RosterPatternModal({
                             onChange={(e) => setApplyHolidays(e.target.checked)}
                             className="h-3.5 w-3.5 rounded border-white/20 bg-transparent"
                         />
-                        Mark Indonesian public holidays as PH
+                        <span>
+                            Mark Indonesian public holidays as PH
+                            <span className="mt-0.5 block text-micro text-muted">
+                                Office days only. The rotating crew works through holidays and
+                                earns the loading instead, as the workbook has it.
+                            </span>
+                        </span>
+                    </label>
+                    {/*
+                        On by default, because restarting the cycle is almost
+                        never what you want. Generating January without it puts
+                        the whole crew back on day one together -- Aris, who
+                        finishes December on nights, would start January on
+                        dayshift beside the people who just came off theirs.
+                    */}
+                    {/*
+                        Office-day staff are not on a rotation at all — they
+                        carry a flat D on working weekdays and nothing at the
+                        weekend. A cycle cannot express that: it counts days
+                        from an anchor and knows nothing about Saturdays. So
+                        this is a mode rather than another pattern.
+                    */}
+                    <label className="flex cursor-pointer items-start gap-2 text-xs text-paper-soft">
+                        <input
+                            type="checkbox"
+                            checked={weekdaysOnly}
+                            onChange={(e) => setWeekdaysOnly(e.target.checked)}
+                            className="mt-0.5 h-3.5 w-3.5 rounded border-white/20 bg-transparent"
+                        />
+                        <span>
+                            Office days — weekdays plus Break
+                            <span className="mt-0.5 block text-micro text-muted">
+                                The pattern runs Monday to Friday and weekends are marked B, the
+                                way the workbook has them. Use a single-code pattern such as
+                                1 × D for staff who are not on the rotation.
+                            </span>
+                        </span>
+                    </label>
+                    <label
+                        className={`flex cursor-pointer items-start gap-2 text-xs text-paper-soft ${
+                            weekdaysOnly ? "opacity-40" : ""
+                        }`}
+                    >
+                        <input
+                            type="checkbox"
+                            disabled={weekdaysOnly}
+                            checked={continueRotation && !weekdaysOnly}
+                            onChange={(e) => setContinueRotation(e.target.checked)}
+                            className="mt-0.5 h-3.5 w-3.5 rounded border-white/20 bg-transparent"
+                        />
+                        <span>
+                            Carry on from where each person already is
+                            <span className="mt-0.5 block text-micro text-muted">
+                                Reads the last block each person worked and resumes them on the
+                                next leg. Turn off only to re-phase a crew deliberately.
+                            </span>
+                        </span>
                     </label>
                 </div>
 

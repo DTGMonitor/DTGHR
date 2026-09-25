@@ -1,5 +1,6 @@
-import { rpc, supabase, toApiError } from "@/lib/supabase";
+import api from "@/lib/api";
 import type {
+    ScheduleEmployee,
     PublicHoliday,
     ShiftChangeRequest,
     ShiftChangeStatus,
@@ -67,6 +68,10 @@ export interface RosterPatternData {
     offset_days?: number;
     overwrite?: boolean;
     apply_public_holidays?: boolean;
+    /** Resume each person on the leg the roster already has them on. */
+    continue_rotation?: boolean;
+    /** Monday to Friday only, for office-day staff. */
+    weekdays_only?: boolean;
 }
 
 export interface RosterPatternResult {
@@ -76,194 +81,110 @@ export interface RosterPatternResult {
 }
 
 export const scheduleService = {
-    async list(params?: {
+    /**
+     * The people whose roster rows you may see, names only.
+     *
+     * Not the staff directory: that is management's, and asking it for names
+     * is what left the roster empty for everyone else. Scoped server-side by
+     * the same rule the schedule itself uses.
+     */
+    visibleEmployees(): Promise<{ data: ScheduleEmployee[] }> {
+        return api.get("/schedules/employees");
+    },
+
+    list(params?: {
         page?: number;
         page_size?: number;
     }): Promise<{ data: WorkScheduleListResponse }> {
-        const page = params?.page ?? 1;
-        const pageSize = params?.page_size ?? 20;
-        const from = (page - 1) * pageSize;
-
-        // RLS hides draft periods from anyone who is not a superuser, so this
-        // needs no role branch of its own.
-        const { data, error, count } = await supabase
-            .from("work_schedules")
-            .select("*", { count: "exact" })
-            .order("start_date", { ascending: false })
-            .range(from, from + pageSize - 1);
-
-        if (error) throw toApiError(error);
-
-        return {
-            data: {
-                items: (data ?? []) as WorkSchedule[],
-                total: count ?? 0,
-                page,
-                page_size: pageSize,
-            },
-        };
+        return api.get("/schedules", { params });
     },
 
-    /**
-     * The whole roster period in one call: cells, approved-leave overlays,
-     * open proposals, the public holidays it spans and the right-hand totals.
-     * The old endpoint assembled this from six queries behind a lambda.
-     */
-    async get(id: string): Promise<{ data: WorkScheduleDetail }> {
-        return {
-            data: await rpc<WorkScheduleDetail>("get_schedule_detail", { p_schedule_id: id }),
-        };
+    get(id: string): Promise<{ data: WorkScheduleDetail }> {
+        return api.get(`/schedules/${id}`);
     },
 
-    async create(data: ScheduleCreateData): Promise<{ data: WorkSchedule }> {
-        return {
-            data: await rpc<WorkSchedule>("create_schedule", {
-                p_name: data.name,
-                p_start_date: data.start_date,
-                p_end_date: data.end_date,
-            }),
-        };
+    create(data: ScheduleCreateData): Promise<{ data: WorkSchedule }> {
+        return api.post("/schedules", data);
     },
 
-    async saveAssignments(
+    saveAssignments(
         id: string,
         assignments: ShiftAssignmentInput[],
     ): Promise<{ data: WorkScheduleDetail }> {
-        return {
-            data: await rpc<WorkScheduleDetail>("save_schedule_assignments", {
-                p_schedule_id: id,
-                p_assignments: assignments,
-            }),
-        };
+        return api.put(`/schedules/${id}/assignments`, { assignments });
     },
 
     /** Superuser: set or clear one cell straight away. */
-    async setCell(
+    setCell(
         id: string,
         data: ShiftCellUpdate,
     ): Promise<{ data: ShiftAssignment | null }> {
-        return {
-            data: await rpc<ShiftAssignment | null>("set_schedule_cell", {
-                p_schedule_id: id,
-                p_employee_id: data.employee_id,
-                p_date: data.date,
-                p_shift_code: data.shift_code,
-            }),
-        };
+        return api.put(`/schedules/${id}/cell`, data);
     },
 
     /** Anyone: propose a change; it only lands once a superuser approves. */
-    async proposeChange(
+    proposeChange(
         id: string,
         data: ShiftChangeCreate,
     ): Promise<{ data: ShiftChangeRequest }> {
-        return {
-            data: await rpc<ShiftChangeRequest>("propose_shift_changes", {
-                p_schedule_id: id,
-                p_items: data.items,
-                p_reason: data.reason ?? null,
-            }),
-        };
+        return api.post(`/schedules/${id}/change-requests`, data);
     },
 
-    async listChangeRequests(params?: {
+    listChangeRequests(params?: {
         status?: ShiftChangeStatus;
         schedule_id?: string;
     }): Promise<{ data: ShiftChangeRequest[] }> {
-        return {
-            data: await rpc<ShiftChangeRequest[]>("list_change_requests", {
-                p_status: params?.status ?? null,
-                p_schedule_id: params?.schedule_id ?? null,
-            }),
-        };
+        return api.get("/schedules/change-requests", { params });
     },
 
     /** Superuser: accept or turn down a proposal, whole or in part. */
-    async reviewChange(
+    reviewChange(
         requestId: string,
         review: ShiftChangeReview = {},
     ): Promise<{ data: ShiftChangeRequest }> {
-        return {
-            data: await rpc<ShiftChangeRequest>("review_shift_change", {
-                p_request_id: requestId,
-                p_approved_item_ids: review.approved_item_ids ?? null,
-                p_rejected_item_ids: review.rejected_item_ids ?? null,
-                p_review_note: review.review_note ?? null,
-            }),
-        };
+        return api.put(`/schedules/change-requests/${requestId}/review`, review);
     },
 
     /** Withdraw one's own still-pending proposal. */
-    async cancelChange(requestId: string): Promise<void> {
-        await rpc<null>("cancel_shift_change", { p_request_id: requestId });
+    cancelChange(requestId: string): Promise<void> {
+        return api.delete(`/schedules/change-requests/${requestId}`);
     },
 
     /** Superuser: repeat a rotation across a date range, creating months as needed. */
-    async applyPattern(data: RosterPatternData): Promise<{ data: RosterPatternResult }> {
-        return {
-            data: await rpc<RosterPatternResult>("apply_roster_pattern", {
-                p_employee_ids: data.employee_ids,
-                p_pattern: data.pattern,
-                p_start_date: data.start_date,
-                p_end_date: data.end_date,
-                p_offset_days: data.offset_days ?? 0,
-                p_overwrite: data.overwrite ?? true,
-                p_apply_public_holidays: data.apply_public_holidays ?? true,
-            }),
-        };
+    applyPattern(data: RosterPatternData): Promise<{ data: RosterPatternResult }> {
+        return api.post("/schedules/roster-pattern", data);
     },
 
-    async publicHolidays(year?: number): Promise<{ data: PublicHoliday[] }> {
-        let query = supabase.from("public_holidays").select("*");
-        if (year) {
-            query = query.gte("date", `${year}-01-01`).lte("date", `${year}-12-31`);
-        }
-        const { data, error } = await query.order("date", { ascending: true });
-        if (error) throw toApiError(error);
-        return { data: (data ?? []) as PublicHoliday[] };
+    publicHolidays(year?: number): Promise<{ data: PublicHoliday[] }> {
+        return api.get("/schedules/public-holidays", { params: { year } });
     },
-
-    /** Holidays from a date onwards -- national and cuti bersama both. */
-    async upcomingHolidays(fromIso: string, limit = 5): Promise<{ data: PublicHoliday[] }> {
-        const { data, error } = await supabase
-            .from("public_holidays")
-            .select("*")
-            .gte("date", fromIso)
-            .order("date", { ascending: true })
-            .limit(limit);
-        if (error) throw toApiError(error);
-        return { data: (data ?? []) as PublicHoliday[] };
-    },
-
-    /**
-     * One employee's codes over a date range. RLS only returns cells in
-     * published periods (everything, for HR), so a draft month reads as empty.
+    /*
+     * The calendar is editable because it has to be. Lunar and Hijri dates
+     * move when the SKB for a future year is finally published, and cuti
+     * bersama is announced late — so a correction is a form, not a release.
      */
-    async shiftsFor(
-        employeeId: string,
-        fromIso: string,
-        toIso: string
-    ): Promise<{ data: Pick<ShiftAssignment, "date" | "shift_code">[] }> {
-        const { data, error } = await supabase
-            .from("shift_assignments")
-            .select("date, shift_code")
-            .eq("employee_id", employeeId)
-            .gte("date", fromIso)
-            .lte("date", toIso)
-            .order("date", { ascending: true });
-        if (error) throw toApiError(error);
-        return { data: (data ?? []) as Pick<ShiftAssignment, "date" | "shift_code">[] };
+    addHoliday(body: { date: string; name: string; is_national: boolean }) {
+        return api.post<PublicHoliday>("/schedules/public-holidays", body);
+    },
+    updateHoliday(
+        id: string,
+        body: Partial<{ date: string; name: string; is_national: boolean }>,
+    ) {
+        return api.patch<PublicHoliday>(`/schedules/public-holidays/${id}`, body);
+    },
+    removeHoliday(id: string) {
+        return api.delete(`/schedules/public-holidays/${id}`);
     },
 
-    async publish(id: string): Promise<{ data: WorkSchedule }> {
-        return { data: await rpc<WorkSchedule>("publish_schedule", { p_schedule_id: id }) };
+    publish(id: string): Promise<{ data: WorkSchedule }> {
+        return api.put(`/schedules/${id}/publish`);
     },
 
-    async unpublish(id: string): Promise<{ data: WorkSchedule }> {
-        return { data: await rpc<WorkSchedule>("unpublish_schedule", { p_schedule_id: id }) };
+    unpublish(id: string): Promise<{ data: WorkSchedule }> {
+        return api.put(`/schedules/${id}/unpublish`);
     },
 
-    async delete(id: string): Promise<void> {
-        await rpc<null>("delete_schedule", { p_schedule_id: id });
+    delete(id: string): Promise<void> {
+        return api.delete(`/schedules/${id}`);
     },
 };

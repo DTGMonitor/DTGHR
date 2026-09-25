@@ -30,6 +30,12 @@ interface AuthContextValue {
     loginWithMicrosoft: () => Promise<void>;
     /** Whether Entra SSO is offered in this build */
     isSsoAvailable: boolean;
+    /**
+     * Re-read the session. Capabilities live on the employee record, so
+     * switching one on for yourself in Settings has to reach the sidebar
+     * without a fresh sign-in.
+     */
+    refreshUser: () => Promise<void>;
     /** Change password (first-time users on a temporary password) */
     changePassword: (newPassword: string) => Promise<void>;
     logout: () => void;
@@ -222,6 +228,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 loginWithEmail,
                 loginWithMicrosoft,
                 isSsoAvailable: isAzureSsoConfigured,
+                refreshUser: loadProfile,
                 changePassword,
                 logout,
             }}

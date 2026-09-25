@@ -1,3 +1,5 @@
+import type { WorkPattern } from "@/types/employee";
+
 export enum ScheduleStatus {
     DRAFT = "draft",
     PUBLISHED = "published",
@@ -94,13 +96,6 @@ export interface PublicHoliday {
 export interface WorkingDaysSummary {
     employee_id: string;
     employee_name: string | null;
-    /**
-     * "roster" or "office_day". Optional because the column does not exist yet
-     * — it arrives with the employee-profile migration, and the roster grid
-     * groups by it only once it does. Until then every row ranks alike and the
-     * grid falls back to alphabetical order.
-     */
-    work_pattern?: string;
     /** Days worked: DS, NS, C and D only. */
     working_days: number;
     by_code: Record<string, number>;
@@ -110,10 +105,14 @@ export interface WorkingDaysSummary {
     annual_leave_taken: number;
     /** National public holidays this employee was rostered to work. */
     public_holiday_loading: number;
-    /** The same count from 1 January to the end of this period. */
-    public_holiday_loading_ytd: number;
-    /** The holidays behind `public_holiday_loading`, as ISO dates. */
-    public_holiday_dates: string[];
+    /**
+     * "office_day" or "roster".
+     *
+     * The workbook keeps both crews on one sheet; this is what lets the grid
+     * group them, and what tells the page which rows the viewer is entitled to
+     * see at all.
+     */
+    work_pattern: WorkPattern | null;
 }
 
 export interface WorkSchedule {
@@ -195,3 +194,15 @@ export const SHIFT_CODE_ORDER: ShiftCode[] = [
     ShiftCode.ST,
     ShiftCode.T,
 ];
+
+
+/** A name for a roster row. Deliberately not the full employee record. */
+export interface ScheduleEmployee {
+    id: string;
+    employee_id: string;
+    first_name: string;
+    last_name: string;
+    position: string;
+    work_pattern: string;
+    is_backup_engineer: boolean;
+}
