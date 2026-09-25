@@ -275,6 +275,16 @@ export default async ({ db, step, tx, people }) => {
         never(rows, PETER_MAIL);
     });
 
+    await step("notifications: the executive sending a request back to the director reaches the director", async () => {
+        await call(HIMAWAN, "finance_submit", [requestId]);
+        await call(DIRECTOR, "finance_review", [requestId]);
+        await clear();
+        await call(PETER, "finance_send_back", [requestId, "Check the vendor", "director"]);
+        const rows = await expectSent(requestId, "finance_sent_back_director", await roleMails("director"), "/finance-requests");
+        never(rows, PETER_MAIL, HIMAWAN_MAIL);
+        if (!rows[0].body_text.includes("Check the vendor")) throw new Error(rows[0].body_text);
+    });
+
     // --- leave ---------------------------------------------------------------
 
     const leave = (uid, start, end = start, days = 1, reason = "Family") =>
@@ -368,7 +378,7 @@ export default async ({ db, step, tx, people }) => {
         eq(await count(), 1, "only the approver");
     });
 
-    await step("notifications: a scorecard whose approver has opted out emails nobody", async () => {
+    await step("notifications: a scorecard whose approver has opted out goes to the executives who take email", async () => {
         await db.exec(`delete from public.kpi_reviews where employee_id = '${E.LONER}'`);
         const id = "0e0e0000-0000-0000-0000-0000000000a1";
         await db.exec(`insert into public.kpi_reviews (id, employee_id, period_label, period_start, period_end,
@@ -377,7 +387,8 @@ export default async ({ db, step, tx, people }) => {
                                '${DIRECTOR}', '${U.MARK}')`);
         await clear();
         await db.exec(`update public.kpi_reviews set status = 'submitted' where id = '${id}'`);
-        eq(await count(), 0, "outbox rows");
+        const rows = await expectSent(id, "kpi_submitted", await roleMails("executive"), `/kpi?employee=${E.LONER}`);
+        never(rows, MAIL.MARK);
         await db.exec(`delete from public.kpi_reviews where id = '${id}'`);
     });
 

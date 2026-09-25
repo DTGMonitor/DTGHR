@@ -406,6 +406,15 @@ begin
                           || 'Total: ' || v_total
                           || coalesce(E'\nDue: ' || public.notifications_date(new.due_date), '')],
                 '/finance-requests', 'Open finance requests', 'finance_requests', new.id);
+        elsif new.status = 'submitted' and old.status in ('endorsed', 'approved') then
+            -- The executive sent it back to the director to look at again.
+            perform public.notifications_enqueue(
+                public.notifications_role_users('director'), v_actor, 'finance_sent_back_director',
+                v_what || ' has been sent back for your review',
+                array[v_what || ' (' || new.title || ') has been sent back to you for another look.',
+                      case when new.revision_note is not null
+                           then 'The reason given: ' || new.revision_note end],
+                '/finance-requests', 'Open finance requests', 'finance_requests', new.id);
         elsif new.status = 'changes_requested' then
             perform public.notifications_enqueue(
                 public.notifications_role_users('finance'), v_actor, 'finance_sent_back',
@@ -521,7 +530,13 @@ begin
             select * into e from public.employees where id = new.employee_id;
             v_name := btrim(coalesce(e.first_name, '') || ' ' || coalesce(e.last_name, ''));
             perform public.notifications_enqueue(
-                case when new.approver_id is not null then array[new.approver_id]
+                -- The named approver, unless they do not take email (Mark):
+                -- then the executives who do, so the card is never silent.
+                case when new.approver_id is not null
+                          and exists (select 1 from public.notifications_recipients(
+                                          array[new.approver_id],
+                                          array_remove(array[e.user_id, auth.uid()], null)))
+                     then array[new.approver_id]
                      else public.notifications_role_users('executive') end,
                 array_remove(array[e.user_id, auth.uid()], null),
                 'kpi_submitted',

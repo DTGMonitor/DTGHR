@@ -53,5 +53,9 @@ jobs:
         run: |
           for dir in supabase/functions/*/; do
             name=$(basename "$dir")
-            supabase functions deploy "$name" --project-ref "$SUPABASE_PROJECT_ID"
+            flags=""
+            # Called by pg_cron, not a signed-in user: it checks its own
+            # CRON_SECRET bearer instead of a Supabase JWT.
+            [ "$name" = "send-notifications" ] && flags="--no-verify-jwt"
+            supabase functions deploy "$name" --project-ref "$SUPABASE_PROJECT_ID" $flags
           done
