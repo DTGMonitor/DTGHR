@@ -163,10 +163,8 @@ begin
 end;
 $$;
 
--- A scorecard's total and band, as app/services/kpi_service.py score_review:
--- N/A lines are dropped and the rest renormalised to 100; each rated line
--- earns weight x factor; the band is withheld until every applicable line is
--- rated. Kept here so the salary area does not depend on the KPI port.
+-- A scorecard's total and band, from the KPI area's own scoring
+-- (public.kpi_score), so the Salary page and the scorecard can never disagree.
 create or replace function public.salary_kpi_score(p_review_id uuid)
 returns table (total_score double precision, is_complete boolean,
                band_code text, band_label text)
@@ -176,43 +174,21 @@ security definer
 set search_path = public, pg_temp
 as $$
 declare
-    v_weight   double precision;
-    v_count    int;
-    v_rated    int;
-    v_total    double precision;
+    v jsonb;
 begin
-    select coalesce(sum(i.weight), 0)::double precision, count(*)::int
-      into v_weight, v_count
+    select public.kpi_score(coalesce(jsonb_agg(jsonb_build_object(
+               'weight', i.weight,
+               'rating', i.rating,
+               'is_not_applicable', i.is_not_applicable)
+             order by i.sort_order, i.number), '[]'::jsonb))
+      into v
       from public.kpi_review_items i
-     where i.review_id = p_review_id and not i.is_not_applicable;
+     where i.review_id = p_review_id;
 
-    if v_count = 0 or v_weight <= 0 then
-        return query select 0.0::double precision, false, null::text, null::text;
-        return;
-    end if;
-
-    select count(*)::int,
-           coalesce(sum(i.weight::double precision * (100.0 / v_weight) *
-               case i.rating when 5 then 1.30 when 4 then 1.15 when 3 then 1.00
-                             when 2 then 0.75 when 1 then 0.50 else 0.00 end), 0)
-      into v_rated, v_total
-      from public.kpi_review_items i
-     where i.review_id = p_review_id and not i.is_not_applicable and i.rating is not null;
-
-    v_total := round(v_total::numeric, 2)::double precision;
-
-    if v_rated <> v_count then
-        return query select v_total, false, null::text, null::text;
-        return;
-    end if;
-
-    return query select v_total, true,
-        case when v_total >= 115 then '3' when v_total >= 105 then '2H'
-             when v_total >= 85 then '2M' when v_total >= 70 then '2L' else '1' end,
-        case when v_total >= 115 then 'Outstanding / Key Talent'
-             when v_total >= 105 then 'Exceeds Expectations'
-             when v_total >= 85 then 'Meets Expectations'
-             when v_total >= 70 then 'Developing' else 'Below Expectations' end;
+    return query select (v->>'total')::double precision,
+                        coalesce((v->>'is_complete')::boolean, false),
+                        v->>'band_code',
+                        v->>'band_label';
 end;
 $$;
 
@@ -265,7 +241,6 @@ set search_path = public, pg_temp
 as $$
 declare
     v_author boolean := public.is_director();
-    v_me_emp uuid := public.current_employee_id();
     v_bands  jsonb;
     v_items  jsonb;
 begin
@@ -319,8 +294,7 @@ begin
                    -- The scorecard's assessor or approver, never on their own card.
                    'can_edit_gate', coalesce(k.id is not null
                         and st.user_id is distinct from auth.uid()
-                        and v_me_emp is not null
-                        and v_me_emp in (k.assessor_id, k.approver_id), false),
+                        and auth.uid() in (k.assessor_id, k.approver_id), false),
                    'recommended_increase_pct',
                         case when k.id is not null
                               and k.status::text in ('approved', 'published')

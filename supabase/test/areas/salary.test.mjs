@@ -177,7 +177,7 @@ export default async ({ db, step, tx, people }) => {
     await db.exec(`
         insert into public.kpi_reviews (id, employee_id, period_label, period_start, period_end, status,
                                         assessor_id, current_basic_salary)
-        values ('${KPI}', '${OMAR}', '2026', '2026-01-01', '2026-12-31', 'draft', '${PETER_EMP}', 12000000);
+        values ('${KPI}', '${OMAR}', '2026', '2026-01-01', '2026-12-31', 'draft', '${PETER}', 12000000);
         insert into public.kpi_review_items (review_id, number, name, weight, rating, sort_order)
         select '${KPI}', n::text, 'KPI ' || n, 10, 3, n from generate_series(1, 10) n;
     `);
