@@ -224,12 +224,22 @@ class Source:
     def rows(self, table: str, order: str = "id") -> list[dict]:
         if not self.exists(table):
             return []
-        return [dict(r) for r in self.db.execute(f'select * from "{table}" order by {order}')]
+        where = SKIP.get(table, "true")
+        return [dict(r) for r in self.db.execute(f'select * from "{table}" where {where} order by {order}')]
 
     def count(self, table: str) -> int:
         if not self.exists(table):
             return 0
-        return self.db.execute(f'select count(*) from "{table}"').fetchone()[0]
+        where = SKIP.get(table, "true")
+        return self.db.execute(f'select count(*) from "{table}" where {where}').fetchone()[0]
+
+
+# Local rows left behind on purpose, as a WHERE clause keeping the rest.
+# A schedule dated 0027-02-01 is a mistyped year with no cells; left out at
+# the owner's request (2026-09-26).
+SKIP = {
+    "work_schedules": "start_date >= '1900-01-01'",
+}
 
 
 def as_uuid(v):
