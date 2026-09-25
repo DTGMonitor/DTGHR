@@ -726,9 +726,9 @@ as $$
     select coalesce(
         (select max(i.month) from public.economic_indicators i
           where i.kind = 'cpi_yoy'
-            and i.month between (date_trunc('month', current_date) - interval '4 months')::date
-                            and (date_trunc('month', current_date) - interval '1 month')::date),
-        (date_trunc('month', current_date) - interval '1 month')::date);
+            and i.month between (date_trunc('month', public.local_today()) - interval '4 months')::date
+                            and (date_trunc('month', public.local_today()) - interval '1 month')::date),
+        (date_trunc('month', public.local_today()) - interval '1 month')::date);
 $$;
 
 -- What the Edge Function should fetch before the average is read: every
@@ -743,7 +743,7 @@ security definer
 set search_path = public, pg_temp
 as $$
 declare
-    v_now  date := date_trunc('month', current_date)::date;
+    v_now  date := date_trunc('month', public.local_today())::date;
     v_end  date;
     v_cand jsonb := '[]'::jsonb;
 begin

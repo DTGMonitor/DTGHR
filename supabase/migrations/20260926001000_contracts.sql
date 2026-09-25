@@ -155,7 +155,7 @@ $$;
 -- ---------------------------------------------------------------------------
 -- 3. Serialisation (contracts.py _serialise) -- ContractResponse
 -- ---------------------------------------------------------------------------
-create or replace function public._contracts_serialise(p_id uuid, p_today date default current_date)
+create or replace function public._contracts_serialise(p_id uuid, p_today date default public.local_today())
 returns jsonb
 language plpgsql
 stable
@@ -292,7 +292,7 @@ begin
     end if;
 
     -- Soonest to end first.
-    select coalesce(jsonb_agg(public._contracts_serialise(c.id, current_date)
+    select coalesce(jsonb_agg(public._contracts_serialise(c.id, public.local_today())
                               order by c.end_date, c.created_at), '[]'::jsonb)
       into v_items
       from public.contracts c
@@ -392,7 +392,7 @@ begin
     perform public.log_activity('CONTRACT_CREATED',
         format('Added a %s contract for %s', v_kind, v_title), v_id, null);
 
-    return public._contracts_serialise(v_id, current_date);
+    return public._contracts_serialise(v_id, public.local_today());
 end;
 $$;
 
@@ -481,7 +481,7 @@ begin
                             where r.contract_id = p_id and r.days_before = w.x);
     end if;
 
-    return public._contracts_serialise(p_id, current_date);
+    return public._contracts_serialise(p_id, public.local_today());
 end;
 $$;
 
@@ -522,7 +522,7 @@ begin
     perform public.log_activity('CONTRACT_REMINDER_ACKNOWLEDGED',
         format('Acknowledged the %s-day warning for %s', r.days_before, c.title), c.id, null);
 
-    return public._contracts_serialise(p_id, current_date);
+    return public._contracts_serialise(p_id, public.local_today());
 end;
 $$;
 
@@ -628,7 +628,7 @@ begin
     perform public.log_activity('CONTRACT_DOCUMENT_ADDED',
         format('Attached %s to %s', p_filename, v_title), p_id, null);
 
-    return public._contracts_serialise(p_id, current_date);
+    return public._contracts_serialise(p_id, public.local_today());
 end;
 $$;
 
@@ -682,7 +682,7 @@ begin
         raise exception 'Not found' using errcode = 'PT404';
     end if;
     return jsonb_build_object(
-        'contract', public._contracts_serialise(p_id, current_date),
+        'contract', public._contracts_serialise(p_id, public.local_today()),
         'storage_path', v_path
     );
 end;

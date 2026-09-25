@@ -1218,7 +1218,7 @@ security definer
 set search_path = public, pg_temp
 as $$
 declare
-    yr int := coalesce(p_year, extract(year from current_date)::int);
+    yr int := coalesce(p_year, extract(year from public.local_today())::int);
 begin
     perform public.payroll_require_access();
     if yr < 2000 or yr > 2100 then
@@ -1436,7 +1436,7 @@ security definer
 set search_path = public, pg_temp
 as $$
 declare
-    yr int := coalesce(p_year, extract(year from current_date)::int + 1);
+    yr int := coalesce(p_year, extract(year from public.local_today())::int + 1);
     items jsonb;
     rate jsonb;
     fx public.compensation_fx_rates;
@@ -1495,7 +1495,7 @@ security definer
 set search_path = public, pg_temp
 as $$
 declare
-    yr int := coalesce(p_year, extract(year from current_date)::int + 1);
+    yr int := coalesce(p_year, extract(year from public.local_today())::int + 1);
     p jsonb := coalesce(p_changes, '{}'::jsonb);
     e public.employees;
     c public.compensation_plans;

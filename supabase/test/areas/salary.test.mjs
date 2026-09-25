@@ -278,9 +278,9 @@ export default async ({ db, step, tx, people }) => {
     // ── The twelve-month average ────────────────────────────────────────
     await db.exec(`delete from public.economic_indicators`);
     const month = async (sql) => (await db.query(`select to_char((${sql})::date, 'YYYY-MM-DD') m`)).rows[0].m;
-    const lastMonth = await month(`date_trunc('month', current_date) - interval '1 month'`);
-    const twoBack = await month(`date_trunc('month', current_date) - interval '2 months'`);
-    const thisMonth = await month(`date_trunc('month', current_date)`);
+    const lastMonth = await month(`date_trunc('month', public.local_today()) - interval '1 month'`);
+    const twoBack = await month(`date_trunc('month', public.local_today()) - interval '2 months'`);
+    const thisMonth = await month(`date_trunc('month', public.local_today())`);
 
     await step("with nothing stored, the default year ends last month and asks for four candidates", async () => {
         const m = await j(DIRECTOR, `select public.salary_guidance_missing(null) j`);

@@ -3,9 +3,9 @@
 export default async ({ db, step, tx, people }) => {
     const { DIRECTOR, PETER, HIMAWAN, RINA } = people;
 
-    const today = (await db.query(`select current_date::text d`)).rows[0].d;
+    const today = (await db.query(`select public.local_today()::text d`)).rows[0].d;
     const plus = async (n) =>
-        (await db.query(`select (current_date + $1::int)::text d`, [n])).rows[0].d;
+        (await db.query(`select (public.local_today() + $1::int)::text d`, [n])).rows[0].d;
 
     const expectRaise = async (fn, code, pattern) => {
         try {

@@ -94,7 +94,7 @@ export default async ({ db, step, tx, people }) => {
         if (b.total_days !== 24 || b.used_days !== 0 || b.remaining_days !== 24) throw new Error(JSON.stringify(b));
         const exp = (await db.query(`
             select to_char(m, 'YYYY-MM-DD') as_at, round(public.accrued_annual_leave('2025-01-01', m), 2)::float a
-              from (select least((date_trunc('month', current_date) + interval '1 month - 1 day')::date,
+              from (select least((date_trunc('month', public.local_today()) + interval '1 month - 1 day')::date,
                                  '2026-12-31'::date) m) x`)).rows[0];
         if (b.as_at !== exp.as_at || b.accrued_now !== exp.a || b.remaining_now !== exp.a || b.used_now !== 0)
             throw new Error(`${JSON.stringify(b)} vs ${JSON.stringify(exp)}`);

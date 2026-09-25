@@ -161,6 +161,21 @@ as $$
         false);
 $$;
 
+-- Today's date in Indonesia (WIB). The database runs in UTC, where it is
+-- still yesterday until 07:00 WIB -- a reminder due today, a leave starting
+-- today or "this year" on 1 January would read a day late. Every "today" in
+-- the port goes through this.
+create or replace function public.local_today()
+returns date
+language sql
+stable
+set search_path = public, pg_temp
+as $$
+    select (now() at time zone 'Asia/Jakarta')::date;
+$$;
+
+grant execute on function public.local_today() to authenticated;
+
 -- ---------------------------------------------------------------------------
 -- 4. The session, in the shape the screens read.
 --

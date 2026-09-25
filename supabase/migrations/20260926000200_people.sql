@@ -385,8 +385,8 @@ begin
         select distinct lr.employee_id
           from public.leave_requests lr
          where lr.status = 'approved'
-           and lr.start_date <= current_date
-           and lr.end_date >= current_date
+           and lr.start_date <= public.local_today()
+           and lr.end_date >= public.local_today()
     ),
     page as (
         select m.*
@@ -622,7 +622,7 @@ begin
             previous_department, new_department,
             recorded_by
         ) values (
-            v_employee.id, current_date,
+            v_employee.id, public.local_today(),
             case when v_pos then v_employee.position end,  case when v_pos then v_new.position end,
             case when v_lvl then v_employee.job_level end, case when v_lvl then v_new.job_level end,
             case when v_dep then v_employee.department end, case when v_dep then v_new.department end,

@@ -379,7 +379,7 @@ as $$
 declare
     v_me public.employees%rowtype := public.leaves_require_employee();
     v_target public.employees%rowtype;
-    v_year int := coalesce(p_year, extract(year from current_date)::int);
+    v_year int := coalesce(p_year, extract(year from public.local_today())::int);
     v_year_end date;
     v_month_end date;
     v_now record;
@@ -406,7 +406,7 @@ begin
 
     v_year_end := make_date(v_year, 12, 31);
     v_month_end := least(
-        (date_trunc('month', current_date) + interval '1 month - 1 day')::date,
+        (date_trunc('month', public.local_today()) + interval '1 month - 1 day')::date,
         v_year_end);
 
     select * into v_now from public.leaves_annual_position(v_target.id, v_month_end);
