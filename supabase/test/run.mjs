@@ -357,12 +357,19 @@ await step("offset_days staggers a second crew", async () => {
     if (b.rows[0].shift_code !== "NS") throw new Error(`crew 2 ${b.rows[0].shift_code}`);
 });
 
-await step("leave balances seed on first read", async () => {
+// 20260926000300 (FastAPI line): annual only, computed from accrual and the
+// dates away, rather than four flat stored entitlements.
+await step("leave balances: annual only, computed on read", async () => {
     const r = await tx(RINA, `select public.get_leave_balances(null, 2026) j`);
     const j = r.rows[0].j;
-    if (j.length !== 4) throw new Error(`got ${j.length} balances`);
-    const annual = j.find((b) => b.leave_type === "annual");
-    if (annual.total_days !== 12 || annual.remaining_days !== 12) throw new Error(JSON.stringify(annual));
+    if (j.length !== 1) throw new Error(`got ${j.length} balances`);
+    const annual = j[0];
+    if (annual.leave_type !== "annual") throw new Error(JSON.stringify(annual));
+    // opening 2.5 + accrual 2024-03-02 -> 2026-12-31, less the two AL cells.
+    const total = Math.round((2.5 + 30 / 31 + 33) * 100) / 100;
+    if (annual.total_days !== total) throw new Error(`total ${annual.total_days}, expected ${total}`);
+    if (annual.used_days !== 2) throw new Error(`used ${annual.used_days}`);
+    if (annual.year_end !== "2026-12-31") throw new Error(`year_end ${annual.year_end}`);
 });
 
 await step("submitting leave checks the balance", async () => {
@@ -395,15 +402,16 @@ await step("over-drawing the balance is refused", async () => {
 await step("approving deducts, cancelling restores", async () => {
     const pend = await tx(ADMIN, `select id from public.leave_requests_view where status='pending' limit 1`);
     const id = pend.rows[0].id;
+    // Annual is computed from the dates away: two roster AL cells already.
     await tx(ADMIN, `select public.approve_leave_request($1::uuid, 'ok')`, [id]);
     let bal = await tx(RINA, `select public.get_leave_balances(null, 2026) j`);
     let annual = bal.rows[0].j.find((b) => b.leave_type === "annual");
-    if (annual.used_days !== 3) throw new Error(`used after approve ${annual.used_days}`);
+    if (annual.used_days !== 5) throw new Error(`used after approve ${annual.used_days}`);
 
     await tx(RINA, `select public.cancel_leave_request($1::uuid)`, [id]);
     bal = await tx(RINA, `select public.get_leave_balances(null, 2026) j`);
     annual = bal.rows[0].j.find((b) => b.leave_type === "annual");
-    if (annual.used_days !== 0) throw new Error(`used after cancel ${annual.used_days}`);
+    if (annual.used_days !== 2) throw new Error(`used after cancel ${annual.used_days}`);
 });
 
 await step("leave_requests_view scopes rows to the viewer", async () => {
@@ -664,7 +672,9 @@ await step("bootstrap_session carries the role and its capabilities", async () =
     if (p.rows[0].j.can_overturn_leave !== true) throw new Error("executive must overturn");
 });
 
-// --- leave: one signature, executive may overturn --------------------------
+// --- leave: one signature, and a decision stands ---------------------------
+// The FastAPI line (20260926000300) retired the executive's overturn: approve
+// and reject act on pending requests only, for everyone.
 
 const leaveId = "dddddddd-0000-0000-0000-0000000000a1";
 
@@ -682,10 +692,11 @@ async function freshRequest() {
     `);
 }
 
+// Annual is computed from the dates away, not a stored counter.
 const usedDays = async () => Number((await db.query(
-    `select used_days from public.leave_balances
-      where employee_id='aaaaaaaa-0000-0000-0000-000000000001'
-        and leave_type='annual' and year=2026`)).rows[0].used_days);
+    `select count(*)::int n from public.leave_requests lr,
+            generate_series(lr.start_date, lr.end_date, interval '1 day') g
+      where lr.id = 'dddddddd-0000-0000-0000-0000000000a1' and lr.status = 'approved'`)).rows[0].n);
 
 await step("finance cannot approve leave", async () => {
     await freshRequest();
@@ -693,7 +704,7 @@ await step("finance cannot approve leave", async () => {
         await tx(HIMAWAN, `select public.approve_leave_request($1::uuid, null)`, [leaveId]);
         throw new Error("expected a raise");
     } catch (e) {
-        if (!/Not authorised|No employee profile/.test(e.message)) {
+        if (!/not set up to approve|No employee profile/.test(e.message)) {
             throw new Error(`wrong error: ${e.message}`);
         }
     }
@@ -717,29 +728,17 @@ await step("the admin cannot revisit a settled request", async () => {
     }
 });
 
-await step("the executive overturns the approval, and the days come back", async () => {
-    await tx(PETER, `select public.reject_leave_request($1::uuid, 'cover needed')`, [leaveId]);
+await step("a settled request stays settled, even for the executive", async () => {
+    try {
+        await tx(PETER, `select public.reject_leave_request($1::uuid, 'cover needed')`, [leaveId]);
+        throw new Error("expected a raise");
+    } catch (e) {
+        if (!/already 'approved'/.test(e.message)) throw new Error(`wrong error: ${e.message}`);
+    }
     const r = await db.query(`select status from public.leave_requests where id=$1`, [leaveId]);
-    if (r.rows[0].status !== "rejected") throw new Error(`status ${r.rows[0].status}`);
+    if (r.rows[0].status !== "approved") throw new Error(`status ${r.rows[0].status}`);
     const used = await usedDays();
-    if (used !== 0) throw new Error(`used ${used}, expected the 3 days returned`);
-});
-
-await step("overturning the other way spends them again, exactly once", async () => {
-    await tx(PETER, `select public.approve_leave_request($1::uuid, null)`, [leaveId]);
-    let used = await usedDays();
     if (used !== 3) throw new Error(`used ${used}, expected 3`);
-    // Re-approving an already-approved request must not double-count.
-    await tx(PETER, `select public.approve_leave_request($1::uuid, null)`, [leaveId]);
-    used = await usedDays();
-    if (used !== 3) throw new Error(`double counted: used ${used}`);
-});
-
-await step("the reversal is recorded in the activity trail", async () => {
-    const r = await db.query(
-        `select description from public.activity_logs
-          where description ilike '%Overturned%' order by created_at desc limit 1`);
-    if (!r.rows.length) throw new Error("no overturn logged");
 });
 
 
