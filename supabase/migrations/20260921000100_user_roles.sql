@@ -29,6 +29,14 @@ begin
     if not exists (select 1 from pg_type where typname = 'user_role') then
         create type public.user_role as enum ('director', 'executive', 'finance', 'employee');
     end if;
+    -- Live ran the first version of this file, which called the role
+    -- 'admin'. Nurhuda's title is Director; the value is renamed in place, so
+    -- every user keeps their role, and the functions below are re-created
+    -- with the new name in the same transaction.
+    if exists (select 1 from pg_enum e join pg_type t on t.oid = e.enumtypid
+                where t.typname = 'user_role' and e.enumlabel = 'admin') then
+        alter type public.user_role rename value 'admin' to 'director';
+    end if;
 end
 $$;
 
