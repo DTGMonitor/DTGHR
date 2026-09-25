@@ -56,6 +56,13 @@
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+// A secret pasted into the dashboard often carries a trailing newline;
+// it would break a URL, a bearer comparison or a client secret.
+function env(name: string): string | undefined {
+    const v = Deno.env.get(name)?.trim();
+    return v ? v : undefined;
+}
+
 type OutboxRow = {
     id: string;
     to_email: string;
@@ -83,7 +90,7 @@ function authorised(req: Request): boolean {
     const header = req.headers.get("Authorization") ?? "";
     const token = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
     if (!token) return false;
-    const accepted = [Deno.env.get("CRON_SECRET"), Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")]
+    const accepted = [env("CRON_SECRET"), env("SUPABASE_SERVICE_ROLE_KEY")]
         .filter((s): s is string => !!s && s.length >= 16);
     return accepted.some((s) => sameSecret(token, s));
 }
@@ -132,8 +139,8 @@ Deno.serve(async (req) => {
     if (req.method !== "POST") return json({ detail: "Method not allowed" }, 405);
     if (!authorised(req)) return json({ detail: "Unauthorized" }, 401);
 
-    const url = Deno.env.get("SUPABASE_URL");
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const url = env("SUPABASE_URL");
+    const serviceKey = env("SUPABASE_SERVICE_ROLE_KEY");
     if (!url || !serviceKey) return json({ detail: "SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY missing" }, 500);
     const admin = createClient(url, serviceKey, { auth: { persistSession: false } });
 
@@ -144,10 +151,10 @@ Deno.serve(async (req) => {
 
     const mark = (id: string, err: string | null) => admin.rpc("notifications_mark", { p_id: id, p_error: err });
 
-    const tenant = Deno.env.get("MS_TENANT_ID");
-    const clientId = Deno.env.get("MS_CLIENT_ID");
-    const clientSecret = Deno.env.get("MS_CLIENT_SECRET");
-    const sender = Deno.env.get("MAIL_SENDER") || "noreply@dtgeotech.com";
+    const tenant = env("MS_TENANT_ID");
+    const clientId = env("MS_CLIENT_ID");
+    const clientSecret = env("MS_CLIENT_SECRET");
+    const sender = env("MAIL_SENDER") || "noreply@dtgeotech.com";
 
     let token: string;
     try {

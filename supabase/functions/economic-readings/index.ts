@@ -22,6 +22,13 @@
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+// A secret pasted into the dashboard often carries a trailing newline;
+// it would break a URL, a bearer comparison or a client secret.
+function env(name: string): string | undefined {
+    const v = Deno.env.get(name)?.trim();
+    return v ? v : undefined;
+}
+
 const CORS = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -62,7 +69,7 @@ const BPS_NATIONAL = 9999;
 const BPS_HEADERS = { "User-Agent": "Mozilla/5.0 (compatible; DTG-HR-Hub/1.0)" };
 
 async function fetchCpiYoy(months: string[]): Promise<Reading[]> {
-    const key = Deno.env.get("BPS_API_KEY");
+    const key = env("BPS_API_KEY");
     if (!months.length || !key) return [];
     // BPS numbers its years from 1900 (2025 is 125).
     const years = [...new Set(months.map((m) => Number(m.slice(0, 4)) - 1900))].sort();
@@ -132,9 +139,9 @@ Deno.serve(async (req) => {
     if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
     if (req.method !== "POST") return json({ detail: "Method not allowed" }, 405);
 
-    const url = Deno.env.get("SUPABASE_URL")!;
-    const anon = Deno.env.get("SUPABASE_ANON_KEY")!;
-    const service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const url = env("SUPABASE_URL")!;
+    const anon = env("SUPABASE_ANON_KEY")!;
+    const service = env("SUPABASE_SERVICE_ROLE_KEY")!;
 
     // Same audience as the page: ask the database, as the caller.
     const asCaller = createClient(url, anon, {
