@@ -27,7 +27,7 @@ begin;
 do $$
 begin
     if not exists (select 1 from pg_type where typname = 'user_role') then
-        create type public.user_role as enum ('admin', 'executive', 'finance', 'employee');
+        create type public.user_role as enum ('director', 'executive', 'finance', 'employee');
     end if;
 end
 $$;
@@ -39,7 +39,7 @@ alter table public.users
 -- executive by hand afterwards -- there is nothing in the data that
 -- distinguishes him, and guessing from a name would be worse than asking.
 update public.users
-   set role = 'admin'
+   set role = 'director'
  where is_superuser
    and role = 'employee';
 
@@ -55,18 +55,18 @@ language plpgsql
 as $$
 begin
     if tg_op = 'INSERT' then
-        new.is_superuser := new.role in ('admin', 'executive');
+        new.is_superuser := new.role in ('director', 'executive');
         return new;
     end if;
 
     if new.role is distinct from old.role then
-        new.is_superuser := new.role in ('admin', 'executive');
+        new.is_superuser := new.role in ('director', 'executive');
     elsif new.is_superuser is distinct from old.is_superuser then
         -- Only demote/promote between admin and employee here. Executive and
         -- finance are deliberate choices and are never inferred.
         if new.is_superuser and new.role = 'employee' then
-            new.role := 'admin';
-        elsif not new.is_superuser and new.role = 'admin' then
+            new.role := 'director';
+        elsif not new.is_superuser and new.role = 'director' then
             new.role := 'employee';
         end if;
     end if;
@@ -81,8 +81,8 @@ create trigger users_sync_superuser
     for each row execute function public.sync_superuser_with_role();
 
 update public.users
-   set is_superuser = (role in ('admin', 'executive'))
- where is_superuser is distinct from (role in ('admin', 'executive'));
+   set is_superuser = (role in ('director', 'executive'))
+ where is_superuser is distinct from (role in ('director', 'executive'));
 
 -- ---------------------------------------------------------------------------
 -- 3. Helpers.
@@ -111,7 +111,7 @@ stable
 security definer
 set search_path = public, pg_temp
 as $$
-    select coalesce(public.current_user_role() in ('admin', 'executive'), false);
+    select coalesce(public.current_user_role() in ('director', 'executive'), false);
 $$;
 
 -- The strict first signature: the administrator alone, not the executive.
@@ -122,7 +122,7 @@ stable
 security definer
 set search_path = public, pg_temp
 as $$
-    select coalesce(public.current_user_role() = 'admin', false);
+    select coalesce(public.current_user_role() = 'director', false);
 $$;
 
 create or replace function public.is_executive()
@@ -357,7 +357,7 @@ as $$
         'can_approve_leave', public.is_admin(),
         'can_overturn_leave', public.is_executive(),
         'can_read_compensation', coalesce(
-            public.current_user_role() in ('admin', 'executive', 'finance'), false)
+            public.current_user_role() in ('director', 'executive', 'finance'), false)
     );
 $$;
 

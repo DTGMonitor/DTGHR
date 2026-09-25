@@ -629,9 +629,9 @@ await db.exec(`
       ('aaaaaaaa-0000-0000-0000-00000000000f','DTG-901','Himawan','F','himawan@dtgeotech.com','Finance','Finance Assistant','2024-01-02', 0, '55555555-5555-5555-5555-555555555555');
 `);
 
-await step("existing superusers were backfilled to admin", async () => {
+await step("existing superusers were backfilled to director", async () => {
     const r = await db.query(`select role::text as role from public.users where id = $1`, [ADMIN]);
-    if (r.rows[0].role !== "admin") throw new Error(`got ${r.rows[0].role}`);
+    if (r.rows[0].role !== "director") throw new Error(`got ${r.rows[0].role}`);
 });
 
 await step("is_superuser is mirrored from the role", async () => {
@@ -811,7 +811,10 @@ await step("salary lives on the review, never on the employee", async () => {
     const r = await db.query(`
         select column_name from information_schema.columns
          where table_schema='public' and table_name='employees'
-           and column_name ~ 'salary|bonus'`);
+           and column_name ~ 'salary|bonus'
+           -- An eligibility flag says whether a bonus exists for the role;
+           -- it is not an amount, and amounts are what this guards against.
+           and column_name !~ '_eligible$'`);
     if (r.rows.length) throw new Error("found on employees: " + r.rows.map((x) => x.column_name).join(", "));
     const onReview = await db.query(`
         select column_name from information_schema.columns
@@ -848,6 +851,30 @@ await step("one review per employee per period", async () => {
     }
 });
 
+
+// --- area suites ----------------------------------------------------------
+// Each area of the port keeps its checks in supabase/test/areas/<area>.test.mjs,
+// exporting `default async (t)`. They run after everything above, against the
+// same database, so they may build on the seed and the people defined here,
+// but should create their own rows under their own ids rather than lean on
+// what another suite left behind. `FILTER=payroll npm run test:db` runs one.
+const AREAS = join(import.meta.dirname, "areas");
+let areaFiles = [];
+try {
+    areaFiles = readdirSync(AREAS).filter((f) => f.endsWith(".test.mjs")).sort();
+} catch {
+    // No area suites yet.
+}
+const only = process.env.FILTER;
+for (const f of areaFiles) {
+    if (only && !f.includes(only)) continue;
+    console.log(`\n--- ${f.replace(/\.test\.mjs$/, "")} ---`);
+    const suite = await import(new URL(`areas/${f}`, import.meta.url));
+    await suite.default({
+        db, step, asUser, tx,
+        people: { ADMIN, DIRECTOR: ADMIN, RINA, PETER, HIMAWAN },
+    });
+}
 
 console.log("\n=====================================");
 if (fail.length) {
