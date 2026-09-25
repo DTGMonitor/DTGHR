@@ -412,7 +412,7 @@ security definer
 set search_path = public, pg_temp
 as $$
 begin
-    return public.overview_at(current_date);
+    return public.overview_at(public.local_today());
 end;
 $$;
 
@@ -492,8 +492,8 @@ security definer
 set search_path = public, pg_temp
 as $$
 declare
-    v_today date := current_date;
-    v_year int := extract(year from current_date)::int;
+    v_today date := public.local_today();
+    v_year int := extract(year from public.local_today())::int;
     v_employee_id uuid;
     v_total numeric;
     v_remaining numeric;
