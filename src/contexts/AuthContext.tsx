@@ -8,6 +8,7 @@ import {
     type ReactNode,
 } from "react";
 import {
+    ApiError,
     isAzureSsoConfigured,
     rpc,
     setSessionFacts,
@@ -192,6 +193,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Change password
     // -----------------------------------------------------------------------
     const changePassword = useCallback(async (newPassword: string) => {
+        // The old endpoint's rule; GoTrue's own minimum is shorter.
+        if (newPassword.length < 8) {
+            throw new ApiError("Password must be at least 8 characters long", 400);
+        }
         const { error } = await supabase.auth.updateUser({ password: newPassword });
         if (error) throw toApiError(error);
 

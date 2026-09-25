@@ -414,33 +414,38 @@ await step("leave_requests_view scopes rows to the viewer", async () => {
 });
 
 await step("employees_view exposes has_account and on_leave_today", async () => {
-    const r = await tx(RINA, `select employee_id, has_account, on_leave_today
+    // The directory is management's (people area): read it as the director.
+    const r = await tx(ADMIN, `select employee_id, has_account, on_leave_today
                                 from public.employees_view order by employee_id`);
     if (r.rows.length !== 2) throw new Error(`rows ${r.rows.length}`);
     if (r.rows[0].has_account !== true) throw new Error("DTG-001 should have an account");
 });
 
 await step("create_employee generates the next DTG code", async () => {
-    const r = await tx(ADMIN, `select public.create_employee(
+    // Adding employees is the people-admin flag alone, and numbers are
+    // DTG-YY-NNN by joining year (people area, 20260926000200).
+    await db.query(`update public.employees set can_manage_people = true where user_id = $1`, [RINA]);
+    const r = await tx(RINA, `select public.create_employee(
         '{"first_name":"Sari","last_name":"Dewi","email":"sari@dtgeotech.com","department":"Ops",
           "position":"Analyst","date_of_joining":"2026-09-01"}'::jsonb) j`);
-    if (r.rows[0].j.employee_id !== "DTG-003") throw new Error(`got ${r.rows[0].j.employee_id}`);
+    await db.query(`update public.employees set can_manage_people = false where user_id = $1`, [RINA]);
+    if (r.rows[0].j.employee_id !== "DTG-26-001") throw new Error(`got ${r.rows[0].j.employee_id}`);
     if (r.rows[0].j.has_account !== false) throw new Error("should have no account");
 });
 
 await step("a non-admin cannot create an employee", async () => {
     try {
-        await tx(RINA, `select public.create_employee(
+        await tx(ADMIN, `select public.create_employee(
             '{"first_name":"X","last_name":"Y","email":"x@dtgeotech.com","department":"Ops",
               "position":"A","date_of_joining":"2026-09-01"}'::jsonb)`);
         throw new Error("expected a raise");
     } catch (e) {
-        if (!/Only admin\/HR/.test(e.message)) throw new Error(`wrong error: ${e.message}`);
+        if (!/not set up to add or edit/.test(e.message)) throw new Error(`wrong error: ${e.message}`);
     }
 });
 
 await step("create_employee_account provisions an auth user", async () => {
-    const emp = await db.query(`select id from public.employees where employee_id='DTG-003'`);
+    const emp = await db.query(`select id from public.employees where email='sari@dtgeotech.com'`);
     const r = await tx(ADMIN, `select public.create_employee_account($1::uuid) j`, [emp.rows[0].id]);
     const j = r.rows[0].j;
     if (!j.temp_password || j.temp_password.length < 8) throw new Error("no temp password");
@@ -448,7 +453,7 @@ await step("create_employee_account provisions an auth user", async () => {
     const prof = await db.query(`select password_change_required, full_name from public.users where id=$1`, [j.user_id]);
     if (prof.rows[0].password_change_required !== true) throw new Error("flag not set");
     if (prof.rows[0].full_name !== "Sari Dewi") throw new Error(`full_name ${prof.rows[0].full_name}`);
-    const linked = await db.query(`select user_id from public.employees where employee_id='DTG-003'`);
+    const linked = await db.query(`select user_id from public.employees where email='sari@dtgeotech.com'`);
     if (linked.rows[0].user_id !== j.user_id) throw new Error("employee not linked");
 });
 
@@ -516,7 +521,7 @@ await step("publish / unpublish round-trips", async () => {
 });
 
 await step("complete_password_change clears the flag", async () => {
-    const emp = await db.query(`select user_id from public.employees where employee_id='DTG-003'`);
+    const emp = await db.query(`select user_id from public.employees where email='sari@dtgeotech.com'`);
     const uid = emp.rows[0].user_id;
     const r = await tx(uid, `select public.complete_password_change() j`);
     if (r.rows[0].j.password_change_required !== false) throw new Error("flag still set");
@@ -552,13 +557,13 @@ await step("leave_activity_view joins the request and scopes it", async () => {
     const a = await tx(ADMIN, `select action, employee_id, leave_type, status from public.leave_activity_view`);
     if (!a.rows.some((x) => x.action === "LEAVE_APPROVED")) throw new Error("approval missing");
     if (!a.rows.every((x) => x.leave_type)) throw new Error("request not joined");
-    const sari = await db.query(`select user_id from public.employees where employee_id='DTG-003'`);
+    const sari = await db.query(`select user_id from public.employees where email='sari@dtgeotech.com'`);
     const s = await tx(sari.rows[0].user_id, `select count(*)::int n from public.leave_activity_view`);
     if (s.rows[0].n !== 0) throw new Error(`Sari sees ${s.rows[0].n} rows of Rina's leave`);
 });
 
 await step("deactivating an employee revokes their sign-in; reactivating restores it", async () => {
-    const emp = await db.query(`select id, user_id from public.employees where employee_id='DTG-003'`);
+    const emp = await db.query(`select id, user_id from public.employees where email='sari@dtgeotech.com'`);
     const { id, user_id } = emp.rows[0];
     await tx(ADMIN, `select public.deactivate_employee($1::uuid)`, [id]);
     let u = await db.query(`select p.is_active, a.banned_until from public.users p join auth.users a using (id) where id=$1`, [user_id]);
@@ -576,7 +581,7 @@ await step("deactivating an employee revokes their sign-in; reactivating restore
 });
 
 await step("an employee cannot reactivate, and HR cannot deactivate themselves", async () => {
-    const emp = await db.query(`select id from public.employees where employee_id='DTG-003'`);
+    const emp = await db.query(`select id from public.employees where email='sari@dtgeotech.com'`);
     try {
         await tx(RINA, `select public.reactivate_employee($1::uuid)`, [emp.rows[0].id]);
         throw new Error("expected a raise");

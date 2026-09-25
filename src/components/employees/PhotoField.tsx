@@ -3,6 +3,7 @@ import { employeeService } from "@/services/employeeService";
 import type { EmployeeDetail } from "@/types/employee";
 import Icon from "@/components/ui/icons";
 import Spinner from "@/components/ui/Spinner";
+import AuthImage from "@/components/articles/AuthImage";
 
 const MAX_BYTES = 2 * 1024 * 1024;
 const ACCEPT = "image/jpeg,image/png,image/webp";
@@ -61,6 +62,11 @@ export default function PhotoField({
 
     const initials = `${employee.first_name[0] ?? ""}${employee.last_name[0] ?? ""}`.toUpperCase();
     const showImage = employee.has_photo && !broken;
+    const initialsBadge = (
+        <span className="font-mono text-2xl font-semibold tracking-wider text-teal-500">
+            {initials || "?"}
+        </span>
+    );
 
     const handleFile = async (file: File | undefined) => {
         if (!file) return;
@@ -103,16 +109,17 @@ export default function PhotoField({
             <div className="relative">
                 <div className="flex h-28 w-28 items-center justify-center overflow-hidden rounded-2xl border border-white/12 bg-deep">
                     {showImage ? (
-                        <img
+                        // The photo sits in a private Storage bucket, so it is
+                        // fetched through the API client rather than by the
+                        // browser from a bare URL.
+                        <AuthImage
                             src={employeeService.photoUrl(employee.id, employee.updated_at)}
                             alt={`${employee.first_name} ${employee.last_name}`}
                             className="h-full w-full object-cover"
-                            onError={() => setBroken(true)}
+                            fallback={initialsBadge}
                         />
                     ) : (
-                        <span className="font-mono text-2xl font-semibold tracking-wider text-teal-500">
-                            {initials || "?"}
-                        </span>
+                        initialsBadge
                     )}
                 </div>
 
