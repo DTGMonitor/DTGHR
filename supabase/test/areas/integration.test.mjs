@@ -51,6 +51,16 @@ export default async ({ db, step, tx }) => {
         if ((await visible(U.OTHER)) !== 0) throw new Error("unrelated colleague sees the request");
     });
 
+    await step("integration: payroll_r2 rounds exactly as Python's round(x, 2)", async () => {
+        // Expected values printed by Python 3 for the same floats.
+        const cases = [[2.675, 2.67], [0.125, 0.12], [0.375, 0.38], [1.005, 1.0],
+                       [-2.675, -2.67], [12345678.905, 12345678.9], [3.14159, 3.14], [0, 0]];
+        for (const [x, want] of cases) {
+            const got = (await db.query(`select public.payroll_r2($1::float8) v`, [x])).rows[0].v;
+            if (got !== want) throw new Error(`payroll_r2(${x}) = ${got}, expected ${want}`);
+        }
+    });
+
     await step("integration: local_today() is the Jakarta date", async () => {
         const r = (await db.query(
             `select public.local_today() = (now() at time zone 'Asia/Jakarta')::date ok`)).rows[0];

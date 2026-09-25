@@ -139,13 +139,51 @@ alter table public.compensation_fx_rates enable row level security;
 -- ---------------------------------------------------------------------------
 
 -- Python's round(x, 2) on a float.
+-- Python's round(x, 2) on a float, exactly: it rounds the double's exact
+-- binary value, half to even. `round(p::numeric, 2)` does not -- the cast
+-- keeps 15 significant digits, so 2.675 (really 2.67499999...) would become
+-- 2.68 where the backend and the workbook figures say 2.67. The double is
+-- taken apart into mantissa / 2^k and the cents decided in integers.
 create or replace function public.payroll_r2(p double precision)
 returns double precision
-language sql
+language plpgsql
 immutable
 set search_path = public, pg_temp
 as $$
-    select round(p::numeric, 2)::double precision;
+declare
+    bits  bigint;
+    e     int;
+    m     numeric;
+    k     int;
+    den   numeric;
+    num   numeric;
+    q     numeric;
+    r     numeric;
+begin
+    if p is null or p = 0 or p in ('Infinity'::float8, '-Infinity'::float8) or p <> p then
+        return p;
+    end if;
+    bits := ('x' || encode(float8send(abs(p)), 'hex'))::bit(64)::bigint;
+    e := ((bits >> 52) & 2047)::int;
+    m := (bits & 4503599627370495)::numeric;          -- 2^52 - 1
+    if e = 0 then
+        k := 1074;                                     -- subnormal
+    else
+        m := m + 4503599627370496;                     -- implicit leading 1
+        k := 1075 - e;
+    end if;
+    if k <= 0 then
+        return p;                                      -- already a whole number
+    end if;
+    den := power(2::numeric, k);
+    num := m * 100;
+    q := div(num, den);
+    r := num - q * den;
+    if 2 * r > den or (2 * r = den and mod(q, 2) = 1) then
+        q := q + 1;
+    end if;
+    return (sign(p)::numeric * q / 100)::double precision;
+end;
 $$;
 
 -- The sheet's ROUNDUP(x, -4): up to the next ten thousand rupiah.
