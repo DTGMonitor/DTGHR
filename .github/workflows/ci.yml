@@ -2,11 +2,9 @@ name: CI
 
 # DTG Focus baseline CI — Node/TypeScript.
 # Split, single-concern jobs. START with only `build` registered as a REQUIRED
-# status check (see `dtg-devkit register-ci-gate`); lint/test/types run and are
+# status check (see `dtg-devkit register-ci-gate`); tests and types run and are
 # VISIBLE but advisory. Promote each to required as its debt clears — mirror the
-# main ruleset with `dtg-devkit register-ci-gate <owner/repo> --checks=build,lint,...`.
-#
-# Delete any job below that this repo does not have a script for.
+# main ruleset with `dtg-devkit register-ci-gate <owner/repo> --checks=build,...`.
 
 on:
   pull_request:
@@ -21,41 +19,31 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
       - run: npm ci
       - run: npm run build
 
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-      - run: npm ci
-      - run: npm run lint
-
+  # Every migration applied in order to an in-memory Postgres (PGlite), then
+  # the permission, workflow and arithmetic checks of each area.
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
       - run: npm ci
-      - run: npm test
+      - run: npm run test:db
 
-  # Optional — keep only if the repo has a type/contract check script.
   types:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
       - run: npm ci
-      - run: npm run typecheck
+      - run: npx tsc -b --noEmit

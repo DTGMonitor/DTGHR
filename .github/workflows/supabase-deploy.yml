@@ -1,0 +1,57 @@
+name: Deploy database
+
+# Vercel deploys the site on every push to main. This deploys what the site
+# talks to: new migrations are applied to the Supabase database and the Edge
+# Functions are redeployed -- after the same database checks CI runs, so a
+# migration that fails them never reaches live.
+#
+# Repository secrets (Settings -> Secrets and variables -> Actions):
+#   SUPABASE_ACCESS_TOKEN  a personal access token (supabase.com/dashboard/account/tokens)
+#   SUPABASE_DB_PASSWORD   the database password (Project Settings -> Database)
+#   SUPABASE_PROJECT_ID    the project ref, e.g. mapacifoqcybetzglhow
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/**'
+      - 'supabase/functions/**'
+  workflow_dispatch:
+
+concurrency:
+  group: supabase-deploy
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run test:db
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - run: supabase link --project-ref "$SUPABASE_PROJECT_ID"
+      - name: Apply new migrations
+        run: supabase db push --password "$SUPABASE_DB_PASSWORD"
+      - name: Deploy Edge Functions
+        run: |
+          for dir in supabase/functions/*/; do
+            name=$(basename "$dir")
+            supabase functions deploy "$name" --project-ref "$SUPABASE_PROJECT_ID"
+          done
