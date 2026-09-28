@@ -630,6 +630,15 @@ export default function LeavesPage() {
                                             </td>
                                             <td className="px-4 py-3">
                                                 <StatusBadge status={req.status} />
+                                                {/* The approver's note -- why it was rejected, or
+                                                    anything said with an approval. It was stored
+                                                    but never shown to the person who asked. */}
+                                                {req.reviewer_note && (
+                                                    <p className="mt-1.5 max-w-[260px] whitespace-pre-line text-xs leading-snug text-paper-soft">
+                                                        <span className="text-muted">Note{req.reviewed_at ? ` · ${formatDate(req.reviewed_at.slice(0, 10))}` : ""}: </span>
+                                                        {req.reviewer_note}
+                                                    </p>
+                                                )}
                                             </td>
                                             <td className="px-4 py-3 text-right">
                                                 {req.status === LeaveStatus.PENDING && (
