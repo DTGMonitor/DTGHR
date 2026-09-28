@@ -707,10 +707,7 @@ export default function PayrollPage() {
                             key={run.id}
                             monthId={run.id}
                             label={run.label}
-                            lines={run.lines}
                             canIssue={user?.role === "director"}
-                            // Finance; the director too, for now (temporary).
-                            canOpen={user?.role === "finance" || user?.role === "director"}
                             onError={setError}
                         />
                     )}

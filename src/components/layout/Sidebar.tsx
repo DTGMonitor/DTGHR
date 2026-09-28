@@ -17,6 +17,7 @@ import {
     CalendarClock,
     CalendarDays,
     FileSignature,
+    FileText,
     History,
     LayoutDashboard,
     Newspaper,
@@ -54,6 +55,8 @@ interface NavItem {
     directoryOnly?: boolean;
     /** Management, plus anybody delegated the contracts. */
     contractsOnly?: boolean;
+    /** Everyone's payslips: finance (and the director, for now). */
+    payslipsOnly?: boolean;
 }
 
 const navItems: NavItem[] = [
@@ -114,6 +117,16 @@ const navItems: NavItem[] = [
         to: "/payroll-tax",
         salaryChainOnly: true,
         Icon: Percent,
+    },
+    {
+        // Everyone's payslips, one month at a time. Finance prepares the
+        // payroll and knows everyone's pay; the director has it for now,
+        // while she reviews the screens (temporary). Everyone else reads
+        // their own on My Profile.
+        label: "Payslips",
+        to: "/payslips",
+        payslipsOnly: true,
+        Icon: FileText,
     },
     {
         // Petty cash, tax, BPJS and the rest: what Himawan asks to pay out
@@ -206,6 +219,7 @@ export default function Sidebar({ open, onClose }: { open: boolean; onClose: () 
         .filter((item) => !item.authorOnly || canWrite)
         .filter((item) => !item.assessedOnly || isAssessed)
         .filter((item) => !item.salaryChainOnly || inSalaryChain)
+        .filter((item) => !item.payslipsOnly || user?.role === "finance" || user?.role === "director")
         .filter((item) => !item.foundersOnly || inReviewChain)
         .filter(
             (item) =>

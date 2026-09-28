@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { FileText, Send } from "lucide-react";
 
-import DocumentViewer from "@/components/contracts/DocumentViewer";
 import { useDialog } from "@/components/ui/Dialog";
 import {
     formatIssueDate,
@@ -13,31 +12,24 @@ import {
 /*
  * An approved month's payslips, under its approval.
  *
- * One line saying when they go out (or when they went out), each person's slip
- * one click away for the people who read payroll -- built from the current
- * figures, so finance can open it before the release moment too -- and, for the
- * director, a way to issue them now rather than waiting.
+ * One line saying when they go out (or when they went out) and, for the
+ * director, a way to issue them now rather than waiting. The slips themselves
+ * are on the Payslips page.
  */
 export default function MonthPayslips({
     monthId,
     label,
-    lines,
     canIssue,
-    canOpen,
     onError,
 }: {
     monthId: string;
     label: string;
-    lines: { id: string; person_name: string }[];
     canIssue: boolean;
-    /** A payslip is personal: only finance opens other people's. */
-    canOpen: boolean;
     onError: (msg: string) => void;
 }) {
     const dialog = useDialog();
     const [info, setInfo] = useState<MonthSlips | null>(null);
     const [busy, setBusy] = useState(false);
-    const [viewing, setViewing] = useState<{ id: string; person_name: string } | null>(null);
 
     const load = useCallback(async () => {
         try {
@@ -104,36 +96,7 @@ export default function MonthPayslips({
                 )}
             </div>
 
-            {canOpen && lines.length > 0 && (
-                <div className="mt-3 flex flex-wrap gap-2 border-t border-white/[0.08] pt-3">
-                    {lines.map((s) => (
-                        <button
-                            key={s.id}
-                            type="button"
-                            onClick={() => setViewing(s)}
-                            className="dtg-chip border-white/12 bg-white/[0.04] text-paper-soft transition-colors hover:border-teal-300/40 hover:text-paper"
-                            title={`Open ${s.person_name}'s payslip`}
-                        >
-                            {s.person_name}
-                        </button>
-                    ))}
-                </div>
-            )}
 
-            {viewing && (
-                <DocumentViewer
-                    src={payslipService.previewPath(monthId, viewing.id)}
-                    filename={`Payslip ${label} - ${firstName(viewing.person_name)}.pdf`}
-                    contentType="application/pdf"
-                    onClose={() => setViewing(null)}
-                />
-            )}
         </section>
     );
-}
-
-/* "RINA SARI" -> "Rina", as the slip's own file name has it. */
-function firstName(name: string): string {
-    const first = name.trim().split(/\s+/)[0] ?? "";
-    return first.charAt(0).toUpperCase() + first.slice(1).toLowerCase();
 }

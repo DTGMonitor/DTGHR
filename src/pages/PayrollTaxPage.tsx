@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
-import { Download, FileArchive } from "lucide-react";
 
 import { useAuth } from "@/contexts/AuthContext";
 import Alert from "@/components/ui/Alert";
@@ -40,9 +39,6 @@ export default function PayrollTaxPage() {
     const { user } = useAuth();
     const mayBeHere =
         user?.role === "finance" || user?.role === "director" || user?.role === "executive";
-    // A payslip is personal: only finance opens other people's -- and, for
-    // now, the director, while she reviews these screens (temporary).
-    const canDownload = user?.role === "finance" || user?.role === "director";
     const thisYear = new Date().getFullYear();
 
     const [year, setYear] = useState(thisYear);
@@ -159,7 +155,6 @@ export default function PayrollTaxPage() {
                             key={m.month_id}
                             month={m}
                             canEdit={data.can_edit}
-                            canDownload={canDownload}
                             onLine={replaceLine}
                             onError={setError}
                         />
@@ -172,33 +167,15 @@ export default function PayrollTaxPage() {
 function MonthTable({
     month,
     canEdit,
-    canDownload,
     onLine,
     onError,
 }: {
     month: TaxMonth;
     canEdit: boolean;
-    canDownload: boolean;
     onLine: (line: TaxLine) => void;
     onError: (msg: string) => void;
 }) {
-    const [zipping, setZipping] = useState(false);
     const missing = month.lines.filter((l) => l.actual === null && l.estimate !== 0).length;
-
-    const zip = async () => {
-        setZipping(true);
-        try {
-            await payslipService.downloadMonthZip(
-                month.month_id,
-                month.label,
-                month.lines.map((l) => l.line_id),
-            );
-        } catch (e) {
-            onError(detailOf(e, "The payslips could not be downloaded."));
-        } finally {
-            setZipping(false);
-        }
-    };
 
     return (
         <section className="dtg-panel overflow-hidden">
@@ -211,17 +188,6 @@ function MonthTable({
                     </p>
                     <h2 className="mt-0.5 text-sm font-semibold text-paper">{month.label}</h2>
                 </div>
-                {canDownload && (
-                    <button
-                        type="button"
-                        disabled={zipping}
-                        onClick={() => void zip()}
-                        className="dtg-btn-secondary px-3 py-1.5 text-xs"
-                    >
-                        {zipping ? <Spinner className="h-3.5 w-3.5" /> : <FileArchive className="h-3.5 w-3.5" />}
-                        Download all (ZIP)
-                    </button>
-                )}
             </header>
             <div className="overflow-x-auto">
                 <table className="w-full min-w-[46rem]">
@@ -232,7 +198,6 @@ function MonthTable({
                             <th className="dtg-th text-right">Actual</th>
                             <th className="dtg-th text-right">Difference</th>
                             <th className="dtg-th">Payslip</th>
-                            {canDownload && <th className="dtg-th" />}
                         </tr>
                     </thead>
                     <tbody>
@@ -242,7 +207,6 @@ function MonthTable({
                                 line={l}
                                 striped={i % 2 === 1}
                                 canEdit={canEdit}
-                                canDownload={canDownload}
                                 onLine={onLine}
                                 onError={onError}
                             />
@@ -258,20 +222,17 @@ function Row({
     line,
     striped,
     canEdit,
-    canDownload,
     onLine,
     onError,
 }: {
     line: TaxLine;
     striped: boolean;
     canEdit: boolean;
-    canDownload: boolean;
     onLine: (line: TaxLine) => void;
     onError: (msg: string) => void;
 }) {
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
-    const [downloading, setDownloading] = useState(false);
     const status = STATUS[line.slip_status];
 
     /* Saved when the field is left (or Enter is pressed); empty clears it. */
@@ -292,17 +253,6 @@ function Row({
             onError(detailOf(e, "That did not save."));
         } finally {
             setSaving(false);
-        }
-    };
-
-    const download = async () => {
-        setDownloading(true);
-        try {
-            await payslipService.downloadPreview(line.month_id, line.line_id);
-        } catch (e) {
-            onError(detailOf(e, "That payslip could not be downloaded."));
-        } finally {
-            setDownloading(false);
         }
     };
 
@@ -345,19 +295,6 @@ function Row({
             <td className="dtg-td">
                 <span className={`dtg-chip ${status.className}`}>{status.label}</span>
             </td>
-            {canDownload && (
-                <td className="dtg-td text-right">
-                    <button
-                        type="button"
-                        disabled={downloading}
-                        onClick={() => void download()}
-                        className="dtg-btn-secondary px-3 py-1.5 text-xs"
-                    >
-                        {downloading ? <Spinner className="h-3.5 w-3.5" /> : <Download className="h-3.5 w-3.5" />}
-                        Download slip
-                    </button>
-                </td>
-            )}
         </tr>
     );
 }
