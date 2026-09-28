@@ -31,7 +31,7 @@ import {
     Wallet,
     type LucideIcon,
 } from "lucide-react";
-import { PixelMark } from "@/components/brand/Logo";
+import { PeopleMark } from "@/components/brand/Logo";
 import { useAuth } from "@/contexts/AuthContext";
 
 interface NavItem {
@@ -324,7 +324,7 @@ export default function Sidebar({ open, onClose }: { open: boolean; onClose: () 
                 {/* Footer: the mark plus the strapline, so the brand closes the frame. */}
                 <div className="border-t border-white/[0.08] px-4 py-4">
                     <div className="flex items-center gap-2.5 text-paper-warm/70">
-                        <PixelMark className="h-4 w-4 flex-shrink-0" />
+                        <PeopleMark className="h-5 w-5 flex-shrink-0" />
                         <p className="text-micro font-semibold uppercase tracking-label">
                             Integrated Data.
                             <br />

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Wordmark, PixelMark } from "@/components/brand/Logo";
+import { Wordmark, PeopleMark } from "@/components/brand/Logo";
 
 /**
  * Framing for the unauthenticated screens (sign in, first-run password).
@@ -71,7 +71,7 @@ export default function AuthShell({
                     </p>
 
                     <div className="mt-10 flex items-center gap-2.5 border-t border-white/10 pt-5 text-paper-warm/50">
-                        <PixelMark className="h-3.5 w-3.5" />
+                        <PeopleMark className="h-5 w-5" />
                         <p className="text-micro font-semibold uppercase tracking-label">DTG People</p>
                     </div>
                 </div>

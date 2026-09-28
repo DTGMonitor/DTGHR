@@ -1,3 +1,5 @@
+import { useId } from "react";
+
 /*
  * DTG brand lockups.
  *
@@ -22,6 +24,54 @@ export function PixelMark({ className = "h-5 w-5" }: { className?: string }) {
             <rect x="2" y="13" width="3" height="3" opacity="0.42" />
             <rect x="2" y="18" width="3" height="3" opacity="0.3" />
             <rect x="0" y="15" width="2" height="2" opacity="0.22" />
+        </svg>
+    );
+}
+
+/**
+ * The DTG People mark: a D whose stem dissolves into pixels, as the D of the
+ * DTG wordmark does, and a green P whose edge drifts off in pixels -- DTG and
+ * its people. Carries its own teal tile; the favicon (public/favicon.svg) is
+ * the same drawing.
+ */
+export function PeopleMark({ className = "h-5 w-5" }: { className?: string }) {
+    const id = useId().replace(/:/g, "");
+    return (
+        <svg viewBox="0 0 32 32" className={className} aria-hidden="true">
+            <defs>
+                <linearGradient id={`pm-bg-${id}`} x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0" stopColor="#0d5163" />
+                    <stop offset="1" stopColor="#062f3a" />
+                </linearGradient>
+                <linearGradient id={`pm-gr-${id}`} gradientUnits="userSpaceOnUse" x1="0" y1="7" x2="0" y2="25">
+                    <stop offset="0" stopColor="#8fd98a" />
+                    <stop offset="1" stopColor="#63B75D" />
+                </linearGradient>
+            </defs>
+            <rect width="32" height="32" rx="8" fill={`url(#pm-bg-${id})`} />
+            <path d="M6.6 9.3h3.6a6.7 6.7 0 0 1 0 13.4H6.6" fill="none" stroke="#F4F0E7" strokeWidth="3" />
+            <g fill="#F4F0E7">
+                <rect x="5" y="7.8" width="2.9" height="2.9" />
+                <rect x="5" y="10.9" width="2.9" height="2.9" opacity=".92" />
+                <rect x="5" y="14" width="2.9" height="2.9" />
+                <rect x="5" y="17.1" width="2.9" height="2.9" opacity=".88" />
+                <rect x="5" y="20.2" width="2.9" height="2.9" />
+                <rect x="5" y="21.3" width="2.9" height="2.9" />
+                <rect x="2.4" y="9.6" width="2" height="2" opacity=".6" />
+                <rect x="2.4" y="15" width="2" height="2" opacity=".5" />
+                <rect x="2.4" y="19.4" width="2" height="2" opacity=".55" />
+                <rect x=".6" y="12.6" width="1.3" height="1.3" opacity=".3" />
+                <rect x=".6" y="17.6" width="1.3" height="1.3" opacity=".25" />
+            </g>
+            <path d="M21 8v16" stroke={`url(#pm-gr-${id})`} strokeWidth="3" strokeLinecap="square" />
+            <path d="M21 9.5h2.9a3.8 3.8 0 0 1 0 7.6H21" fill="none" stroke={`url(#pm-gr-${id})`} strokeWidth="3" />
+            <g fill="#63B75D">
+                <rect x="28.4" y="9.6" width="2" height="2" opacity=".6" />
+                <rect x="28.4" y="12.3" width="2" height="2" opacity=".5" />
+                <rect x="28.4" y="15" width="2" height="2" opacity=".55" />
+                <rect x="30.6" y="11" width="1.2" height="1.2" opacity=".3" />
+                <rect x="30.6" y="13.9" width="1.2" height="1.2" opacity=".25" />
+            </g>
         </svg>
     );
 }
