@@ -4,7 +4,6 @@ import { Download, Eye } from "lucide-react";
 import DocumentViewer from "@/components/contracts/DocumentViewer";
 import Spinner from "@/components/ui/Spinner";
 import {
-    formatIdr,
     formatIssueDate,
     payslipService,
     type MyPayslip,
@@ -64,12 +63,11 @@ export default function MyPayslips() {
                 </p>
             ) : slips ? (
                 <div className="overflow-x-auto">
-                    <table className="w-full min-w-[32rem]">
+                    <table className="w-full min-w-[26rem]">
                         <thead>
                             <tr className="border-b border-white/[0.08]">
                                 <th className="dtg-th">Period</th>
                                 <th className="dtg-th">Issued</th>
-                                <th className="dtg-th text-right">Net pay</th>
                                 <th className="dtg-th" />
                             </tr>
                         </thead>
@@ -84,9 +82,6 @@ export default function MyPayslips() {
                                     <td className="dtg-td font-medium text-paper">{s.label}</td>
                                     <td className="dtg-td text-paper-soft">
                                         {formatIssueDate(s.issue_date)}
-                                    </td>
-                                    <td className="dtg-td text-right font-mono text-paper">
-                                        {formatIdr(s.net_pay)}
                                     </td>
                                     <td className="dtg-td">
                                         <div className="flex justify-end gap-2">
