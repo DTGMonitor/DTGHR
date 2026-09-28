@@ -173,6 +173,14 @@ function bandLines(o: Overview): { today: ReactNode[]; waiting: ReactNode[] } {
                 } left in the month.`,
             );
         }
+        // Payslips go out with the estimated PPh 21 until the actual is in.
+        for (const due of o.payroll_desk.tax_actuals_due ?? []) {
+            waiting.push(
+                `Enter actual PPh 21 for ${due.label} — ${due.people} ${
+                    due.people === 1 ? "person" : "people"
+                }.`,
+            );
+        }
     }
 
     if (o.is_management && o.approvals) {

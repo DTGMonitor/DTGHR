@@ -21,6 +21,7 @@ import {
     LayoutDashboard,
     Newspaper,
     ReceiptText,
+    Percent,
     Settings2,
     LifeBuoy,
     UserRound,
@@ -105,6 +106,14 @@ const navItems: NavItem[] = [
         to: "/payroll",
         salaryChainOnly: true,
         Icon: ReceiptText,
+    },
+    {
+        // The actual PPh 21 beside the estimate the payroll was approved
+        // with; what the payslips and the A1 form show. Finance enters it.
+        label: "Tax (PPh 21)",
+        to: "/payroll-tax",
+        salaryChainOnly: true,
+        Icon: Percent,
     },
     {
         // Petty cash, tax, BPJS and the rest: what Himawan asks to pay out

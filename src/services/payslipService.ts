@@ -1,5 +1,5 @@
 import api from "@/lib/api";
-import { payslipPdf } from "@/lib/routes/payslips";
+import { payslipPdf, previewPdf } from "@/lib/routes/payslips";
 
 /*
  * Payslips: issued from the approved payroll at the month's release moment
@@ -38,6 +38,47 @@ export interface PayslipSettings {
     next_release: { year: number; month: number; label: string; release_at: string };
 }
 
+export type TaxSlipStatus = "not_issued" | "estimate" | "actual";
+
+export interface TaxLine {
+    line_id: string;
+    month_id: string;
+    person_name: string;
+    employee_id: string | null;
+    estimate: number;
+    actual: number | null;
+    difference: number | null;
+    note: string | null;
+    updated_at: string | null;
+    slip_status: TaxSlipStatus;
+}
+
+export interface TaxMonth {
+    month_id: string;
+    year: number;
+    month: number;
+    label: string;
+    release_at: string;
+    lines: TaxLine[];
+}
+
+export interface TaxYear {
+    year: number;
+    can_edit: boolean;
+    months: TaxMonth[];
+}
+
+function saveBlob(blob: Blob, filename: string) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
 export const payslipService = {
     mine: () => api.get<MyPayslip[]>("/payslips/mine"),
     forMonth: (monthId: string) => api.get<MonthPayslips>(`/payroll/months/${monthId}/payslips`),
@@ -54,15 +95,40 @@ export const payslipService = {
     /** Save a slip as `Payslip August 2026 - Nurhuda.pdf`. */
     async download(id: string): Promise<void> {
         const { blob, filename } = await payslipPdf(id);
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 10_000);
+        saveBlob(blob, filename);
     },
+
+    /** The viewer's source for any person's slip, built from the current figures. */
+    previewPath: (monthId: string, lineId: string) =>
+        `/payroll/months/${monthId}/lines/${lineId}/payslip.pdf`,
+
+    /** Save any person's slip for an approved month (payroll viewers). */
+    async downloadPreview(monthId: string, lineId: string): Promise<void> {
+        const { blob, filename } = await previewPdf(monthId, lineId);
+        saveBlob(blob, filename);
+    },
+
+    /** Every slip of a month in one ZIP, `Payslips September 2026.zip`. */
+    async downloadMonthZip(monthId: string, label: string, lineIds: string[]): Promise<void> {
+        const { zipSync } = await import("fflate");
+        const files: Record<string, Uint8Array> = {};
+        // One at a time: the template is cached after the first, and a run of
+        // fifteen parallel requests gains nothing but load.
+        for (const lineId of lineIds) {
+            const { blob, filename } = await previewPdf(monthId, lineId);
+            let name = filename;
+            for (let n = 2; files[name]; n++) name = filename.replace(/\.pdf$/, ` (${n}).pdf`);
+            files[name] = new Uint8Array(await blob.arrayBuffer());
+        }
+        // PDFs are already compressed; storing them is as small and far quicker.
+        const zip = zipSync(files, { level: 0 });
+        saveBlob(new Blob([zip as BlobPart], { type: "application/zip" }), `Payslips ${label}.zip`);
+    },
+
+    taxList: (year: number) => api.get<TaxYear>("/payroll-tax", { params: { year } }),
+    taxSet: (lineId: string, actual: number, note?: string | null) =>
+        api.put<TaxLine>(`/payroll-tax/lines/${lineId}`, { actual, note: note ?? null }),
+    taxClear: (lineId: string) => api.delete<TaxLine>(`/payroll-tax/lines/${lineId}`),
 };
 
 const WIB = "Asia/Jakarta";

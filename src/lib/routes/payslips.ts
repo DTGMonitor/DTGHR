@@ -46,18 +46,31 @@ function loadTemplate(): Promise<Uint8Array> {
     return template;
 }
 
-/** A slip as a PDF Blob, with the file name it downloads under. */
-export async function payslipPdf(id: string): Promise<{ blob: Blob; filename: string }> {
-    const [slip, bytes, { fillPayslip }] = await Promise.all([
-        rpc<Slip>("payslips_get", { p_id: id }),
-        loadTemplate(),
-        import("@/lib/payslipPdf"),
-    ]);
-    const pdf = await fillPayslip(bytes, slip.data);
+async function render(data: PayslipData): Promise<{ blob: Blob; filename: string }> {
+    const [bytes, { fillPayslip }] = await Promise.all([loadTemplate(), import("@/lib/payslipPdf")]);
+    const pdf = await fillPayslip(bytes, data);
     return {
         blob: new Blob([pdf as BlobPart], { type: "application/pdf" }),
-        filename: slip.data.file_name,
+        filename: data.file_name,
     };
+}
+
+/** An issued slip as a PDF Blob, with the file name it downloads under. */
+export async function payslipPdf(id: string): Promise<{ blob: Blob; filename: string }> {
+    const slip = await rpc<Slip>("payslips_get", { p_id: id });
+    return render(slip.data);
+}
+
+/**
+ * Any person's slip for an approved month, built now from the current
+ * figures: payroll viewers only, and before its release moment too.
+ */
+export async function previewPdf(
+    monthId: string,
+    lineId: string,
+): Promise<{ blob: Blob; filename: string }> {
+    const data = await rpc<PayslipData>("payslips_preview", { p_month_id: monthId, p_line_id: lineId });
+    return render(data);
 }
 
 function object(body: unknown): Record<string, unknown> {
@@ -90,4 +103,30 @@ route("POST", "/payroll/months/:id/payslips/issue", ({ path, body }) =>
         p_month_id: path.id,
         p_employee_id: object(body).employee_id ?? null,
     }),
+);
+
+route("GET", "/payroll/months/:id/lines/:lineId/payslip.pdf", async ({ path, responseType }) => {
+    if (responseType !== "blob") throw new ApiError("Ask for the payslip as a file.", 406);
+    return (await previewPdf(path.id ?? "", path.lineId ?? "")).blob;
+});
+
+// ── The actual PPh 21 ────────────────────────────────────────────────────
+
+route("GET", "/payroll-tax", ({ query }) => {
+    const year = Number(query.year);
+    if (!Number.isInteger(year)) throw new ApiError("year must be a whole number", 422);
+    return rpc("payroll_tax_list", { p_year: year });
+});
+
+route("PUT", "/payroll-tax/lines/:id", ({ path, body }) => {
+    const b = object(body);
+    return rpc("payroll_tax_set", {
+        p_line_id: path.id,
+        p_actual: b.actual,
+        p_note: typeof b.note === "string" ? b.note : null,
+    });
+});
+
+route("DELETE", "/payroll-tax/lines/:id", ({ path }) =>
+    rpc("payroll_tax_clear", { p_line_id: path.id }),
 );

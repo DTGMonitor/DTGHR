@@ -65,6 +65,12 @@ export interface PayslipData {
     total_earnings: number;
     total_deductions: number;
     net_pay: number;
+    /**
+     * True while the PPh 21 on the slip is the estimate the payroll was
+     * approved with, not yet the actual. Absent on slips issued before
+     * actuals existed, which carried the estimate.
+     */
+    tax_is_estimate?: boolean;
 }
 
 const PAGE_HEIGHT = 841.92;
@@ -92,6 +98,24 @@ const X = {
     netPay: 533.33,
     date: 473.7,
 };
+
+/*
+ * The two tax labels the template already prints, and the cells they sit in.
+ * While the tax is an estimate " (estimate)" is set straight after each; the
+ * earnings cell ends where the Rate column's rule is, so the suffix shrinks
+ * there until it fits. The rules are at x 162.12 and 408.12 in the template.
+ */
+const TAX_LABELS = {
+    earnings: { text: "Income Tax Art 21 Allowance", x: 52.32, cellEnd: 162.12, row: 7 },
+    deductions: { text: "Income Tax Art 21", x: 298.33, cellEnd: 408.12, row: 2 },
+};
+const ESTIMATE_SUFFIX = " (estimate)";
+const CELL_PADDING = 1;
+const NOTE_SIZE = 6.5;
+const NOTE_X = 52.3;
+/* Under the Net Pay row, whose bottom rule is at 320.5. */
+const NOTE_Y = 328.8;
+export const ESTIMATE_NOTE = "PPh 21 shown is an estimate and will be revised to the actual amount.";
 
 /* Baselines, measured from the top of the page. */
 const Y = {
@@ -211,6 +235,7 @@ export async function fillPayslip(
         regular: await doc.embedFont(StandardFonts.TimesRoman),
         bold: await doc.embedFont(StandardFonts.TimesRomanBold),
     };
+    const italic = data.tax_is_estimate ? await doc.embedFont(StandardFonts.TimesRomanItalic) : null;
     const page = doc.getPage(0);
     const { regular, bold } = fonts;
 
@@ -268,6 +293,17 @@ export async function fillPayslip(
         );
     }
     right(page, formatAmount(data.net_pay), X.netPay, Y.netPay, bold, NET_SIZE, black, SPACING.netPay);
+
+    // An estimated PPh 21 says so, on both labels and under the net pay.
+    if (data.tax_is_estimate && italic) {
+        for (const label of [TAX_LABELS.earnings, TAX_LABELS.deductions]) {
+            const x = label.x + regular.widthOfTextAtSize(label.text, SIZE);
+            const room = label.cellEnd - CELL_PADDING - x;
+            const size = Math.min(SIZE, room / regular.widthOfTextAtSize(ESTIMATE_SUFFIX, 1));
+            left(page, ESTIMATE_SUFFIX, x, Y.rows[label.row]!, regular, size);
+        }
+        left(page, ESTIMATE_NOTE, NOTE_X, NOTE_Y, italic, NOTE_SIZE);
+    }
 
     // "August 31st, 2026", the ordinal set as a superscript.
     const [head, sup, tail] = issueDateParts(data.issue_date);
