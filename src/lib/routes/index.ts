@@ -15,3 +15,4 @@ import "./contracts";
 import "./articles";
 import "./overview";
 import "./payslips";
+import "./investigations";

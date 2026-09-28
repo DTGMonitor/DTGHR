@@ -15,8 +15,9 @@ import RoleHistory from "@/components/employees/RoleHistory";
 import ProfileRequests from "@/components/employees/ProfileRequests";
 import Alert from "@/components/ui/Alert";
 import MyPayslips from "@/components/payslips/MyPayslips";
+import MyConduct from "@/components/investigations/MyConduct";
 
-type TabKey = "personal" | "employment" | "statutory" | "payslips";
+type TabKey = "personal" | "employment" | "statutory" | "payslips" | "conduct";
 
 /*
  * Scorecards deliberately do not appear here.
@@ -32,6 +33,10 @@ const TABS: { key: TabKey; label: string; adminOnly?: boolean; ownOnly?: boolean
     /* Your own slips, on your own profile only. Somebody else's are read on
        the Payroll page, by the people who may read payroll. */
     { key: "payslips", label: "Payslips", ownOnly: true },
+    /* Decisions from monitoring investigations about you, and your response.
+       Your own profile only: the investigators read everyone's on the
+       Investigations page, and nobody else reads them at all. */
+    { key: "conduct", label: "Conduct", ownOnly: true },
 ];
 
 const GENDERS = [
@@ -429,6 +434,8 @@ export default function EmployeeProfilePage() {
             )}
 
             {tab === "payslips" && isOwn && <MyPayslips />}
+
+            {tab === "conduct" && isOwn && <MyConduct />}
 
             {tab === "statutory" && (
                 <div className="space-y-4">

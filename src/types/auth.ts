@@ -44,6 +44,8 @@ export interface UserResponse {
     can_manage_people: boolean;
     /** Whether this person may add, edit and acknowledge contracts. */
     can_manage_contracts: boolean;
+    /** Whether this person investigates monitoring incidents (the Investigations page). */
+    can_investigate?: boolean;
     /**
      * A founder: management, and exempt from review. Peter and Mark.
      *

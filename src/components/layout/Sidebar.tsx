@@ -17,6 +17,7 @@ import {
     CalendarClock,
     CalendarDays,
     FileSignature,
+    FileSearch,
     FileText,
     History,
     LayoutDashboard,
@@ -57,6 +58,8 @@ interface NavItem {
     contractsOnly?: boolean;
     /** Everyone's payslips: finance (and the director, for now). */
     payslipsOnly?: boolean;
+    /** The investigator flag alone -- not management, not rank. */
+    investigatorsOnly?: boolean;
 }
 
 const navItems: NavItem[] = [
@@ -172,6 +175,15 @@ const navItems: NavItem[] = [
         Icon: Newspaper,
     },
     {
+        // Monitoring incidents and the decisions taken on them. The two
+        // investigators only (Nurhuda and Peter), by their flag; each engineer
+        // reads their own decision on My Profile instead.
+        label: "Investigations",
+        to: "/investigations",
+        investigatorsOnly: true,
+        Icon: FileSearch,
+    },
+    {
         // Everybody. Something being broken is not a rank, and a support queue
         // only half the company can reach is one half the company works around
         // by messaging somebody directly.
@@ -221,6 +233,7 @@ export default function Sidebar({ open, onClose }: { open: boolean; onClose: () 
         .filter((item) => !item.salaryChainOnly || inSalaryChain)
         .filter((item) => !item.payslipsOnly || user?.role === "finance" || user?.role === "director")
         .filter((item) => !item.foundersOnly || inReviewChain)
+        .filter((item) => !item.investigatorsOnly || Boolean(user?.can_investigate))
         .filter(
             (item) =>
                 !item.contractsOnly ||

@@ -10,7 +10,16 @@ const int = (v: string | undefined, fallback: number): number => {
     return Number.isFinite(n) ? Math.trunc(n) : fallback;
 };
 
-route("GET", "/overview", () => rpc("overview_get"));
+// The dashboard, plus what investigations have waiting on this person
+// (supabase/migrations/20260928001100_investigations.sql). The second call
+// never breaks the dashboard: if it fails, the band simply leaves it out.
+route("GET", "/overview", async () => {
+    const [overview, investigations] = await Promise.all([
+        rpc<Record<string, unknown>>("overview_get"),
+        rpc<unknown>("investigations_waiting").catch(() => null),
+    ]);
+    return { ...overview, investigations };
+});
 
 route("GET", "/dashboard/stats", () => rpc("dashboard_stats"));
 
