@@ -707,6 +707,7 @@ export default function PayrollPage() {
                             key={run.id}
                             monthId={run.id}
                             label={run.label}
+                            lines={run.lines}
                             canIssue={user?.role === "director"}
                             onError={setError}
                         />

@@ -14,24 +14,27 @@ import {
  * An approved month's payslips, under its approval.
  *
  * One line saying when they go out (or when they went out), each person's slip
- * one click away for the people who read payroll, and -- for the director --
- * a way to issue them now rather than waiting for the release moment.
+ * one click away for the people who read payroll -- built from the current
+ * figures, so it can be opened before the release moment too -- and, for the
+ * director, a way to issue them now rather than waiting.
  */
 export default function MonthPayslips({
     monthId,
     label,
+    lines,
     canIssue,
     onError,
 }: {
     monthId: string;
     label: string;
+    lines: { id: string; person_name: string }[];
     canIssue: boolean;
     onError: (msg: string) => void;
 }) {
     const dialog = useDialog();
     const [info, setInfo] = useState<MonthSlips | null>(null);
     const [busy, setBusy] = useState(false);
-    const [viewing, setViewing] = useState<MonthSlips["slips"][number] | null>(null);
+    const [viewing, setViewing] = useState<{ id: string; person_name: string } | null>(null);
 
     const load = useCallback(async () => {
         try {
@@ -98,15 +101,15 @@ export default function MonthPayslips({
                 )}
             </div>
 
-            {info.slips.length > 0 && (
+            {lines.length > 0 && (
                 <div className="mt-3 flex flex-wrap gap-2 border-t border-white/[0.08] pt-3">
-                    {info.slips.map((s) => (
+                    {lines.map((s) => (
                         <button
                             key={s.id}
                             type="button"
                             onClick={() => setViewing(s)}
                             className="dtg-chip border-white/12 bg-white/[0.04] text-paper-soft transition-colors hover:border-teal-300/40 hover:text-paper"
-                            title={`Open ${s.file_name}`}
+                            title={`Open ${s.person_name}'s payslip`}
                         >
                             {s.person_name}
                         </button>
@@ -116,12 +119,18 @@ export default function MonthPayslips({
 
             {viewing && (
                 <DocumentViewer
-                    src={payslipService.pdfPath(viewing.id)}
-                    filename={viewing.file_name}
+                    src={payslipService.previewPath(monthId, viewing.id)}
+                    filename={`Payslip ${label} - ${firstName(viewing.person_name)}.pdf`}
                     contentType="application/pdf"
                     onClose={() => setViewing(null)}
                 />
             )}
         </section>
     );
+}
+
+/* "RINA SARI" -> "Rina", as the slip's own file name has it. */
+function firstName(name: string): string {
+    const first = name.trim().split(/\s+/)[0] ?? "";
+    return first.charAt(0).toUpperCase() + first.slice(1).toLowerCase();
 }

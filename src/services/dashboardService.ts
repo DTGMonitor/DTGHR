@@ -52,6 +52,8 @@ export interface Overview {
         days_left: number;
         due_soon: boolean;
         not_started: boolean;
+        /** Approved months whose payslips still carry an estimated PPh 21. */
+        tax_actuals_due?: { month_id: string; label: string; people: number }[];
     } | null;
     /** Scorecards waiting on this person's signature. Management only. */
     kpi_awaiting: number | null;

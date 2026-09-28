@@ -12,6 +12,7 @@ import KpiPage from "@/pages/KpiPage";
 import LeavesPage from "@/pages/LeavesPage";
 import SalaryPage from "@/pages/SalaryPage";
 import PayrollPage from "@/pages/PayrollPage";
+import PayrollTaxPage from "@/pages/PayrollTaxPage";
 import FinanceRequestsPage from "@/pages/FinanceRequestsPage";
 import TicketsPage from "@/pages/TicketsPage";
 import ContractsPage from "@/pages/ContractsPage";
@@ -56,6 +57,7 @@ export default function App() {
                             <Route path="/leaves" element={<LeavesPage />} />
                             <Route path="/salary" element={<SalaryPage />} />
                             <Route path="/payroll" element={<PayrollPage />} />
+                            <Route path="/payroll-tax" element={<PayrollTaxPage />} />
                             <Route path="/finance-requests" element={<FinanceRequestsPage />} />
                             <Route path="/support" element={<TicketsPage />} />
                             <Route path="/contracts" element={<ContractsPage />} />
