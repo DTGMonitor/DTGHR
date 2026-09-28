@@ -136,6 +136,20 @@ export default async ({ db, step, tx, people }) => {
         eq(d.net_pay, 33000000, "net pay unchanged");
     });
 
+    await step("tax: an actual for someone without a slip issues nothing, even if others have one", async () => {
+        // December: only Rina's slip issued early (as Nurhuda's August was on live).
+        const DEC = await month(12, "approved");
+        await call(DIRECTOR, "payslips_issue_now", [DEC.id, RINA_EMP], ["uuid", "uuid"]);
+        const guest = (await db.query(
+            `select id from public.payroll_lines where month_id = $1 and employee_id is null`, [DEC.id])).rows[0].id;
+        await set(FINANCE, guest, 100000);
+        eq(await slip(guest), undefined, "setting did not issue the guest a slip");
+        await clear(FINANCE, guest);
+        eq(await slip(guest), undefined, "clearing did not either");
+        eq((await slip(DEC.rina))?.data.person_name, "RINA SARI", "Rina's slip is untouched");
+        await db.query(`delete from public.payroll_months where id = $1`, [DEC.id]);
+    });
+
     await step("tax: an actual set before release is used when the slips go out", async () => {
         eq(await slip(OCT.rina), undefined, "October not issued");
         await call(DIRECTOR, "payslips_issue_now", [OCT.id, null], ["uuid", "uuid"]);
