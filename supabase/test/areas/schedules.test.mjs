@@ -100,14 +100,34 @@ export default async ({ db, step, tx, people }) => {
         if (!n.has("Lintang Test")) throw new Error("lost their own schedule");
     });
 
-    await step("the back-up engineer sees both, until the flag is cleared", async () => {
-        const n = await names(U.BACKUP);
-        if (!n.has("Lintang Test") || !n.has("Nessy Test")) throw new Error([...n].join(","));
-        await db.exec(`update public.employees set is_backup_engineer = false where id = '${E.BACKUP}'`);
-        const after = await names(U.BACKUP);
-        await db.exec(`update public.employees set is_backup_engineer = true where id = '${E.BACKUP}'`);
-        if (after.has("Lintang Test")) throw new Error("clearing back-up kept the roster");
-        if (!after.has("Nessy Test")) throw new Error("lost their own schedule");
+    await step("the back-up engineer sees the roster only in a month she works it", async () => {
+        // February: Nessy is on office days (D), flag or no flag -- no roster.
+        const off = await names(U.BACKUP);
+        if (off.has("Lintang Test")) throw new Error("the flag alone opened the roster");
+        if (!off.has("Nessy Test")) throw new Error("lost their own schedule");
+
+        // Put her on a roster shift this month: now she reads the crew too.
+        await db.exec(`update public.shift_assignments set shift_code = 'NS'
+                        where schedule_id = '${FEB}' and employee_id = '${E.BACKUP}'`);
+        try {
+            const on = await names(U.BACKUP);
+            if (!on.has("Lintang Test") || !on.has("Nessy Test")) throw new Error([...on].join(","));
+            const rows = await tx(U.BACKUP, `select count(*)::int n from public.shift_assignments
+                                              where schedule_id = $1 and employee_id = $2`, [FEB, E.CREW]);
+            if (rows.rows[0].n === 0) throw new Error("the table read disagrees with the detail");
+
+            // Without the back-up flag a roster shift does not open the crew's rows.
+            await db.exec(`update public.employees set is_backup_engineer = false where id = '${E.BACKUP}'`);
+            const after = await names(U.BACKUP);
+            await db.exec(`update public.employees set is_backup_engineer = true where id = '${E.BACKUP}'`);
+            if (after.has("Lintang Test")) throw new Error("clearing back-up kept the roster");
+        } finally {
+            await db.exec(`update public.shift_assignments set shift_code = 'D'
+                            where schedule_id = '${FEB}' and employee_id = '${E.BACKUP}'`);
+        }
+        const rows = await tx(U.BACKUP, `select count(*)::int n from public.shift_assignments
+                                          where schedule_id = $1 and employee_id = $2`, [FEB, E.CREW]);
+        if (rows.rows[0].n !== 0) throw new Error("a plain table read showed the crew in an office month");
     });
 
     await step("administrators see everyone, former staff included; colleagues do not", async () => {
