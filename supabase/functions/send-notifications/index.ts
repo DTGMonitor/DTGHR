@@ -1,6 +1,6 @@
 /*
  * send-notifications -- deliver the queued emails in public.email_outbox
- * through Microsoft Graph, from noreply@dtgeotech.com.
+ * through Microsoft Graph, from no-reply@dtgeotech.com.
  *
  * The rows are written by the triggers in
  * supabase/migrations/20260926001300_notifications.sql; pg_cron calls this
@@ -24,7 +24,7 @@
  *        MS_CLIENT_SECRET=<client secret value> \
  *        CRON_SECRET=<a long random string, e.g. `openssl rand -hex 32`>
  *
- *    Optional: MAIL_SENDER (default noreply@dtgeotech.com).
+ *    Optional: MAIL_SENDER (default no-reply@dtgeotech.com).
  *    SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are provided by the platform.
  *
  * 3. Vault entries the cron job reads (SQL editor, as postgres):
@@ -154,7 +154,7 @@ Deno.serve(async (req) => {
     const tenant = env("MS_TENANT_ID");
     const clientId = env("MS_CLIENT_ID");
     const clientSecret = env("MS_CLIENT_SECRET");
-    const sender = env("MAIL_SENDER") || "noreply@dtgeotech.com";
+    const sender = env("MAIL_SENDER") || "no-reply@dtgeotech.com";
 
     let token: string;
     try {
