@@ -52,7 +52,7 @@ export default function LoginPage() {
 
     return (
         <AuthShell
-            eyebrow="HR Hub"
+            eyebrow="DTG People"
             title="Sign in"
             subtitle="Use your DTG account to continue."
         >

@@ -54,7 +54,7 @@ export default function SetPasswordPage() {
         <AuthShell
             eyebrow="First sign-in"
             title="Set your password"
-            subtitle="Choose a new password before continuing to HR Hub."
+            subtitle="Choose a new password before continuing to DTG People."
         >
             <form onSubmit={handleSubmit} className="space-y-5">
                 {error && <Alert tone="danger">{error}</Alert>}

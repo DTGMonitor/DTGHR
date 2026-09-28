@@ -449,7 +449,7 @@ export default function EmployeeProfilePage() {
                         onSave={save}
                     >
                         <p className="mt-4 border-t border-white/[0.08] pt-3 text-micro leading-relaxed text-muted">
-                            Salary and bonus figures are deliberately not held in HR Hub yet.
+                            Salary and bonus figures are deliberately not held in DTG People yet.
                         </p>
                     </ProfileSection>
                 </div>

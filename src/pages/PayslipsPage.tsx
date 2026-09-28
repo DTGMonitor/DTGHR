@@ -259,7 +259,7 @@ function Row({
             <td className="dtg-td font-medium text-paper">
                 {line.person_name}
                 {!line.employee_id && (
-                    <span className="ml-2 text-[11px] font-normal text-muted">no HR Hub account</span>
+                    <span className="ml-2 text-[11px] font-normal text-muted">no DTG People account</span>
                 )}
             </td>
             <td className="dtg-td">

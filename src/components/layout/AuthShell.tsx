@@ -52,20 +52,18 @@ export default function AuthShell({
                 {/* Pitch and footer travel together at the foot of the band, so
                     the panel reads as a hero rather than three stranded blocks. */}
                 <div className="relative hidden lg:block">
-                    <p className="dtg-eyebrow">Integrated Data</p>
-                    <p className="mt-3 max-w-sm text-2xl font-semibold leading-tight tracking-tight text-paper">
-                        Informed decisions,
+                    <p className="max-w-sm text-2xl font-semibold leading-tight tracking-tight text-paper">
+                        Your work life at DTG,
                         <br />
-                        from the field to the board.
+                        in one place.
                     </p>
-                    <p className="mt-4 max-w-sm text-sm leading-relaxed text-teal-100/70">
-                        Independent geotechnical monitoring, analytics, governance and
-                        decision support.
+                    <p className="mt-4 max-w-sm font-mono text-xs uppercase tracking-label text-teal-100/70">
+                        Roster · Leave · Pay · Support
                     </p>
 
                     <div className="mt-10 flex items-center gap-2.5 border-t border-white/10 pt-5 text-paper-warm/50">
                         <PixelMark className="h-3.5 w-3.5" />
-                        <p className="text-micro font-semibold uppercase tracking-label">HR Hub</p>
+                        <p className="text-micro font-semibold uppercase tracking-label">DTG People</p>
                     </div>
                 </div>
             </aside>

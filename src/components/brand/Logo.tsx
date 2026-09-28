@@ -53,7 +53,8 @@ export function Wordmark({
 /**
  * Product lockup: the corporate wordmark, a hairline, then the product name.
  * This is the pattern the marketing site uses for sub-brands, and it keeps
- * "HR Hub" clearly subordinate to DTG itself.
+ * "People" clearly subordinate to DTG itself -- it reads "DTG People", as the
+ * address does (people.digitaltwingeotechnical.com).
  */
 export function ProductLockup({ className = "" }: { className?: string }) {
     return (
@@ -61,7 +62,7 @@ export function ProductLockup({ className = "" }: { className?: string }) {
             <Wordmark className="h-[1.375rem]" />
             <span aria-hidden="true" className="h-5 w-px bg-white/20" />
             <span className="text-label font-bold uppercase tracking-label text-paper-soft">
-                HR Hub
+                People
             </span>
         </span>
     );

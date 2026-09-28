@@ -318,7 +318,6 @@ export default function Sidebar({ open, onClose }: { open: boolean; onClose: () 
                             Informed Decisions.
                         </p>
                     </div>
-                    <p className="mt-2.5 font-mono text-micro text-muted">HR Hub v0.1.0</p>
                 </div>
             </aside>
         </>
