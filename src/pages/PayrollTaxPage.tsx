@@ -46,6 +46,8 @@ export default function PayrollTaxPage() {
 
     const [year, setYear] = useState(thisYear);
     const [data, setData] = useState<TaxYear | null>(null);
+    // One month at a time: a year of tables was too long to find anyone in.
+    const [monthId, setMonthId] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -55,6 +57,10 @@ export default function PayrollTaxPage() {
         try {
             const res = await payslipService.taxList(y);
             setData(res.data);
+            // Keep the chosen month if the year still has it; else the latest.
+            setMonthId((cur) =>
+                res.data.months.some((m) => m.month_id === cur) ? cur : (res.data.months[0]?.month_id ?? null),
+            );
         } catch (e) {
             setError(detailOf(e, "Could not load the tax figures."));
         } finally {
@@ -96,20 +102,41 @@ export default function PayrollTaxPage() {
                         borne by the company.
                     </p>
                 </div>
-                <label className="block">
-                    <span className="dtg-eyebrow">Year</span>
-                    <select
-                        value={year}
-                        onChange={(e) => setYear(Number(e.target.value))}
-                        className="dtg-input mt-1 w-32"
-                    >
-                        {Array.from({ length: 5 }, (_, i) => thisYear + 1 - i).map((y) => (
-                            <option key={y} value={y}>
-                                {y}
-                            </option>
-                        ))}
-                    </select>
-                </label>
+                <div className="flex flex-wrap items-end gap-3">
+                    <label className="block">
+                        <span className="dtg-eyebrow">Month</span>
+                        <select
+                            value={monthId ?? ""}
+                            onChange={(e) => setMonthId(e.target.value)}
+                            disabled={!data || data.months.length === 0}
+                            className="dtg-input mt-1 w-56"
+                        >
+                            {(data?.months ?? []).map((m) => {
+                                const open = m.lines.filter((l) => l.actual === null && l.estimate !== 0).length;
+                                return (
+                                    <option key={m.month_id} value={m.month_id}>
+                                        {m.label}
+                                        {open > 0 ? ` · ${open} on estimate` : " · done"}
+                                    </option>
+                                );
+                            })}
+                        </select>
+                    </label>
+                    <label className="block">
+                        <span className="dtg-eyebrow">Year</span>
+                        <select
+                            value={year}
+                            onChange={(e) => setYear(Number(e.target.value))}
+                            className="dtg-input mt-1 w-28"
+                        >
+                            {Array.from({ length: 5 }, (_, i) => thisYear + 1 - i).map((y) => (
+                                <option key={y} value={y}>
+                                    {y}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
+                </div>
             </header>
 
             {error && <Alert tone="danger">{error}</Alert>}
@@ -124,16 +151,18 @@ export default function PayrollTaxPage() {
                     No approved payroll for {year} yet.
                 </div>
             ) : (
-                data.months.map((m) => (
-                    <MonthTable
-                        key={m.month_id}
-                        month={m}
-                        canEdit={data.can_edit}
-                        canDownload={canDownload}
-                        onLine={replaceLine}
-                        onError={setError}
-                    />
-                ))
+                data.months
+                    .filter((m) => m.month_id === monthId)
+                    .map((m) => (
+                        <MonthTable
+                            key={m.month_id}
+                            month={m}
+                            canEdit={data.can_edit}
+                            canDownload={canDownload}
+                            onLine={replaceLine}
+                            onError={setError}
+                        />
+                    ))
             )}
         </div>
     );
@@ -240,6 +269,7 @@ function Row({
     onError: (msg: string) => void;
 }) {
     const [saving, setSaving] = useState(false);
+    const [saved, setSaved] = useState(false);
     const [downloading, setDownloading] = useState(false);
     const status = STATUS[line.slip_status];
 
@@ -254,6 +284,9 @@ function Row({
                     ? await payslipService.taxClear(line.line_id)
                     : await payslipService.taxSet(line.line_id, Number(raw));
             onLine(res.data);
+            // Say so: the payslip is rebuilt with it straight away.
+            setSaved(true);
+            window.setTimeout(() => setSaved(false), 3000);
         } catch (e) {
             onError(detailOf(e, "That did not save."));
         } finally {
@@ -293,6 +326,7 @@ function Row({
                             disabled={saving}
                             className="dtg-input w-full text-right text-sm"
                         />
+                        {saved && <p className="mt-1 text-[11px] text-signal">Saved</p>}
                     </div>
                 ) : (
                     <span className="font-mono text-paper">
