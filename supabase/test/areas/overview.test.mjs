@@ -110,7 +110,9 @@ export default async ({ db, step, tx, people }) => {
 
         insert into public.public_holidays (id, date, name, is_national) values
           (gen_random_uuid(),'2090-06-28','Overview Holiday', true),
-          (gen_random_uuid(),'2090-07-03','Overview Next Month', false)
+          (gen_random_uuid(),'2090-06-30','Overview Collective Leave', false),
+          (gen_random_uuid(),'2090-07-03','Overview Next Month', false),
+          (gen_random_uuid(),'2090-07-10','Overview National Later', true)
         on conflict (date) do nothing;
 
         insert into public.leave_requests (id, employee_id, leave_type, start_date, end_date, days_requested, status) values
@@ -178,14 +180,17 @@ export default async ({ db, step, tx, people }) => {
         // A draft roster's cell is not shown.
         eq(o.week[3].code, null, "draft cell");
         eq(o.week[3].label, null, "draft label");
+        // Collective leave is not national: no holiday label on the strip.
+        eq(o.week[4].holiday, null, "collective leave day");
     });
 
-    await step("overview: holidays left this month, and the next of any month", async () => {
+    await step("overview: holidays left this month, and the next of any month -- national only", async () => {
         const o = await at(U.STAFF);
         eq(o.holidays, [{ date: "2090-06-28", name: "Overview Holiday", is_national: true }], "holidays");
         eq(o.next_holiday, { date: "2090-06-28", name: "Overview Holiday" }, "next_holiday");
-        eq((await at(U.STAFF, "2090-06-29")).next_holiday, { date: "2090-07-03", name: "Overview Next Month" }, "next month's");
-        eq((await at(U.STAFF, "2090-06-29")).holidays, [], "none left in June");
+        // 30 Jun and 3 Jul are not national, so the next one is 10 Jul.
+        eq((await at(U.STAFF, "2090-06-29")).next_holiday, { date: "2090-07-10", name: "Overview National Later" }, "next national");
+        eq((await at(U.STAFF, "2090-06-29")).holidays, [], "no national holiday left in June");
     });
 
     await step("overview: the leave figure is the Leave page's figure", async () => {

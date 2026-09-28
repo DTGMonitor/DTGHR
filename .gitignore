@@ -37,3 +37,4 @@ coverage/
 
 # TypeScript incremental build cache
 *.tsbuildinfo
+supabase/.temp/
