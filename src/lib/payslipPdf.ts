@@ -231,8 +231,9 @@ export async function fillPayslip(
         centre(page, line.unit, X.unit, y, regular);
         money(page, line.amount, X.amount, y, regular);
     });
+    // Amount-only rows stay blank at zero, as the sample leaves "Others".
     [e.bpjs_employment, e.bpjs_health, e.income_tax, e.others].forEach((amount, i) => {
-        money(page, amount, X.amount, Y.rows[5 + i]!, regular);
+        if (amount) money(page, amount, X.amount, Y.rows[5 + i]!, regular);
     });
 
     const d = data.deductions;
