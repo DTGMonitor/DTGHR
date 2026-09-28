@@ -11,6 +11,7 @@ import Spinner from "@/components/ui/Spinner";
 import HolidayCalendar from "@/components/settings/HolidayCalendar";
 import ProfileRequests from "@/components/employees/ProfileRequests";
 import Alert from "@/components/ui/Alert";
+import PayslipSettingsCard from "@/components/payslips/PayslipSettingsCard";
 
 /*
  * Permissions in one place.
@@ -226,6 +227,8 @@ export default function SettingsPage() {
             )}
 
             <FinanceApprovalSetting onError={setError} />
+
+            <PayslipSettingsCard onError={setError} />
 
             <section className="dtg-panel overflow-hidden">
                 <header className="border-b border-white/[0.08] px-5 py-3.5">

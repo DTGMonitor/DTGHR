@@ -14,3 +14,4 @@ import "./tickets";
 import "./contracts";
 import "./articles";
 import "./overview";
+import "./payslips";
