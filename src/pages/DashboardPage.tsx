@@ -144,6 +144,20 @@ function bandLines(o: Overview): { today: ReactNode[]; waiting: ReactNode[] } {
             </Link>,
         );
     }
+    for (const r of o.investigations?.reviews ?? []) {
+        waiting.push(
+            <Link key={`review-${r.reference}`} to={`/investigations?open=${r.investigation_id}`} className="underline">
+                Review investigation {r.reference}.
+            </Link>,
+        );
+    }
+    for (const r of o.investigations?.sent_back ?? []) {
+        waiting.push(
+            <Link key={`back-${r.reference}`} to={`/investigations?open=${r.investigation_id}`} className="underline">
+                {r.reference} was sent back.
+            </Link>,
+        );
+    }
     for (const d of o.investigations?.disputes ?? []) {
         waiting.push(
             <Link key={`dispute-${d.reference}-${d.name}`} to={`/investigations?open=${d.investigation_id}`} className="underline">

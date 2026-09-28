@@ -172,7 +172,7 @@ function OutcomeItem({ o, onChanged }: { o: MyOutcome; onChanged: (o: MyOutcome)
                             </label>
                             <div className="flex gap-2">
                                 <button type="button" disabled={busy} onClick={() => void send("disputed")} className="dtg-btn-primary">
-                                    Send dispute
+                                    Send appeal
                                 </button>
                                 <button type="button" onClick={() => setMode("idle")} className="text-sm text-paper-soft hover:text-paper">
                                     Cancel
@@ -188,10 +188,10 @@ function OutcomeItem({ o, onChanged }: { o: MyOutcome; onChanged: (o: MyOutcome)
                                 Accept
                             </button>
                             <button type="button" disabled={busy} onClick={() => setMode("dispute")} className="dtg-btn-secondary">
-                                Dispute
+                                Appeal (dispute)
                             </button>
                             <span className="text-micro text-muted">
-                                Acknowledge: I have read it. Accept: I accept the decision. Dispute: I disagree, and say why.
+                                Acknowledge: I have read it. Accept: I accept the decision. Appeal: I dispute it, and say why.
                             </span>
                         </div>
                     )}

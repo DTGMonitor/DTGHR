@@ -1,5 +1,6 @@
 // Monitoring investigations and disciplinary outcomes
-// (supabase/migrations/20260928001400_investigations.sql).
+// (supabase/migrations/20260928001400_investigations.sql, and the review flow and
+// DS/NS shifts of 20260928001500_investigation_review.sql).
 export default async ({ db, step, tx, people }) => {
     const { DIRECTOR, PETER, HIMAWAN, RINA } = people;
 
@@ -89,8 +90,8 @@ export default async ({ db, step, tx, people }) => {
             site_id: HV,
             radar: "SSR-XT-001",
             title: "Missed amber alarm",
-            on_duty_employee_id: E.LINTANG,
-            handover_employee_id: E.ARIS,
+            ds_employee_id: E.LINTANG,
+            ns_employee_id: E.ARIS,
             handover_note: "Handover from Aris at 18:00",
             findings: "Alarm acknowledged 40 minutes late.",
             technical_summary: "Data shows the alarm at 02:15.",
@@ -105,7 +106,16 @@ export default async ({ db, step, tx, people }) => {
     const reviseOutcome = (uid, invId, outcomeId, payload) =>
         j(uid, `public.investigations_save_outcome($1::uuid, $2::uuid, $3::jsonb)`,
             [invId, outcomeId, JSON.stringify(payload)]);
-    const issue = (uid, id) => j(uid, `public.investigations_issue($1::uuid)`, [id]);
+    const submit = (uid, id) => j(uid, `public.investigations_submit($1::uuid)`, [id]);
+    const approve = (uid, id) => j(uid, `public.investigations_approve($1::uuid)`, [id]);
+    const sendBack = (uid, id, note) => j(uid, `public.investigations_send_back($1::uuid, $2)`, [id, note]);
+    const comment = (uid, id, body) => j(uid, `public.investigations_comment($1::uuid, $2)`, [id, body]);
+    // Released the only way there is now: submitted by one investigator,
+    // approved by the other.
+    const issue = async (uid, id) => {
+        await submit(uid, id);
+        return approve(uid === DIRECTOR ? PETER : DIRECTOR, id);
+    };
     const mine = (uid) => j(uid, `public.investigations_my_outcomes()`);
     const respond = (uid, outcomeId, response, text = null) =>
         j(uid, `public.investigations_respond($1::uuid, $2, $3)`, [outcomeId, response, text]);
@@ -161,7 +171,7 @@ export default async ({ db, step, tx, people }) => {
         const c = await draft(DIRECTOR);
         eq(c.reference, "INV-0042", "after the highest");
         eq(a.status, "draft", "status");
-        eq([a.site_name, a.site_client, a.on_duty_name, a.handover_name],
+        eq([a.site_name, a.site_client, a.ds_name, a.ns_name],
             ["Hidden Valley", "Harmony", "Lintang Inv", "Aris Inv"], "names");
     });
 
@@ -169,15 +179,20 @@ export default async ({ db, step, tx, people }) => {
         await reset();
         for (const who of [E.MARK, E.GONE, (await db.query(
             `select id from public.employees where user_id = $1`, [RINA])).rows[0].id]) {
-            await fails(() => draft(DIRECTOR, { on_duty_employee_id: who }), "PT422", /monitoring team/);
-            await fails(() => draft(DIRECTOR, { handover_employee_id: who }), "PT422", /monitoring team/);
+            await fails(() => draft(DIRECTOR, { ds_employee_id: who }), "PT422", /monitoring team/);
+            await fails(() => draft(DIRECTOR, { ns_employee_id: who }), "PT422", /monitoring team/);
         }
         const inv = await draft(DIRECTOR);
         await fails(() => addOutcome(DIRECTOR, inv.id, { employee_id: E.MARK, decision: "no_action" }),
             "PT422", /monitoring team/);
         await fails(() => addOutcome(DIRECTOR, inv.id, { employee_id: E.GONE, decision: "no_action" }),
             "PT422", /monitoring team/);
-        await fails(() => draft(DIRECTOR, { handover_employee_id: E.LINTANG }), "PT422", /someone other/);
+        await fails(() => draft(DIRECTOR, { ns_employee_id: E.LINTANG }), "PT422", /different people/);
+        // Either shift alone is fine while drafting.
+        const dsOnly = await draft(DIRECTOR, { ns_employee_id: null });
+        const nsOnly = await draft(DIRECTOR, { ds_employee_id: null });
+        eq([dsOnly.ds_name, dsOnly.ns_name, nsOnly.ds_name, nsOnly.ns_name],
+            ["Lintang Inv", null, null, "Aris Inv"], "one shift");
         await fails(() => draft(DIRECTOR, { title: "  " }), "PT422", /short title/);
         await fails(() => draft(DIRECTOR, { site_id: null }), "PT422", /choose the site/);
         await fails(() => draft(DIRECTOR, { event_at: "" }), "PT422", /date and time/);
@@ -267,19 +282,73 @@ export default async ({ db, step, tx, people }) => {
         eq((await outbox("investigation_issued")).length, 0, "emails before issue");
     });
 
-    await step("investigations: issuing needs an on-duty engineer, a result and a decision", async () => {
-        const bare = await draft(DIRECTOR, { on_duty_employee_id: null, investigation_result: "" });
-        await fails(() => issue(DIRECTOR, bare.id), "PT422", /engineer on duty/);
-        await edit(DIRECTOR, bare.id, { ...bare, on_duty_employee_id: E.LINTANG });
-        await fails(() => issue(DIRECTOR, bare.id), "PT422", /investigation result/);
-        await edit(DIRECTOR, bare.id, { ...bare, on_duty_employee_id: E.LINTANG, investigation_result: "Result" });
-        await fails(() => issue(DIRECTOR, bare.id), "PT422", /at least one decision/);
+    await step("investigations: submitting needs a shift engineer, a result and a decision", async () => {
+        const bare = await draft(DIRECTOR, { ds_employee_id: null, ns_employee_id: null, investigation_result: "" });
+        await fails(() => submit(DIRECTOR, bare.id), "PT422", /at least one/);
+        await edit(DIRECTOR, bare.id, { ...bare, ns_employee_id: E.NESSY });
+        await fails(() => submit(DIRECTOR, bare.id), "PT422", /investigation result/);
+        await edit(DIRECTOR, bare.id, { ...bare, ns_employee_id: E.NESSY, investigation_result: "Result" });
+        await fails(() => submit(DIRECTOR, bare.id), "PT422", /at least one decision/);
         await j(DIRECTOR, `public.investigations_delete($1::uuid)`, [bare.id]);
+        await fails(() => j(DIRECTOR, `public.investigations_issue($1::uuid)`, [invId]), "PT409", /Submit/);
     });
 
-    await step("investigations: issuing dates the outcomes and emails each subject", async () => {
-        const d = await issue(PETER, invId);
+    await step("investigations: submitting puts the case in review and emails the other investigators", async () => {
+        const d = await submit(DIRECTOR, invId);
+        eq([d.status, d.submitted_by_id], ["in_review", DIRECTOR], "in review");
+        eq((await outbox("investigation_review")).map((m) => m.to_email), [MAIL.PETER], "review email");
+        await fails(() => submit(DIRECTOR, invId), "PT409");
+        // Read-only while in review, bar the discussion.
+        await fails(() => edit(PETER, invId, d), "PT409", /in review/);
+        await fails(() => reviseOutcome(PETER, invId, lintangOutcome, { decision: "no_action" }), "PT409", /in review/);
+        await fails(() => j(PETER, `public.investigations_remove_outcome($1::uuid)`, [arisOutcome]), "PT409");
+        await comment(DIRECTOR, invId, "Peter, the console logs are attached to the ticket.");
+        eq(await mine(LINTANG), [], "in review, invisible");
+        eq((await j(PETER, `public.investigations_waiting()`)).reviews.map((x) => x.reference), ["INV-0001"], "Peter to review");
+        eq((await j(DIRECTOR, `public.investigations_waiting()`)).reviews, [], "not her own");
+    });
+
+    await step("investigations: nobody approves or sends back their own submission", async () => {
+        await fails(() => approve(DIRECTOR, invId), "PT403", /another investigator/);
+        await fails(() => sendBack(DIRECTOR, invId, "Needs work"), "PT403", /another investigator/);
+        await fails(() => approve(MARK, invId), "PT404");
+    });
+
+    await step("investigations: sending back needs a note, posts it and emails the submitter", async () => {
+        await fails(() => sendBack(PETER, invId, "  "), "PT422", /what needs to change/);
+        const d = await sendBack(PETER, invId, "Add the radar's alarm log.");
+        eq(d.status, "changes_requested", "sent back");
+        eq(d.comments.map((c) => c.body),
+            ["Peter, the console logs are attached to the ticket.", "Sent back for changes: Add the radar's alarm log."],
+            "thread");
+        eq(d.comments[1].author_name, "Peter Saunders", "author");
+        eq((await outbox("investigation_sent_back")).map((m) => m.to_email), [MAIL.DIRECTOR], "sent-back email");
+        eq((await j(DIRECTOR, `public.investigations_waiting()`)).sent_back.map((x) => x.reference), ["INV-0001"], "sent back");
+        eq(await mine(LINTANG), [], "sent back, invisible");
+        // Editable again, then resubmitted.
+        await edit(DIRECTOR, invId, { ...d, findings: "Alarm log added." });
+        await reviseOutcome(DIRECTOR, invId, lintangOutcome,
+            { employee_id: E.LINTANG, decision: "verbal_warning", reason: "Late alarm" });
+        eq((await submit(DIRECTOR, invId)).status, "in_review", "resubmitted");
+        eq((await outbox("investigation_issued")).length, 0, "no subject email before approval");
+    });
+
+    await step("investigations: the discussion is the investigators' only", async () => {
+        for (const uid of [MARK, HIMAWAN, RINA, LINTANG]) {
+            await fails(() => comment(uid, invId, "hello"), "PT404");
+            await fails(() => j(uid, `public.investigations_get($1::uuid)`, [invId]), "PT404");
+        }
+        await fails(() => comment(PETER, invId, " "), "PT422");
+        await fails(() => comment(PETER, invId, "x".repeat(4001)), "PT422");
+        const d = await comment(PETER, invId, "Looks right now.");
+        eq(d.comments.length, 3, "thread length");
+    });
+
+    await step("investigations: approval by the other investigator issues and emails each subject", async () => {
+        const d = await approve(PETER, invId);
         eq(d.status, "issued", "status");
+        eq([d.approved_by_id, d.approved_by_name], [PETER, "Peter Saunders"], "approved by");
+        if (!d.approved_at || !d.issued_at) throw new Error("approval not dated");
         const today = (await db.query(`select public.local_today()::text t`)).rows[0].t;
         const l = d.outcomes.find((o) => o.id === lintangOutcome);
         eq([l.effective_from, l.response_status], [today, "pending"], "effective from");
@@ -288,7 +357,8 @@ export default async ({ db, step, tx, people }) => {
         const mails = await outbox("investigation_issued");
         eq(mails.map((m) => m.to_email), [MAIL.ARIS, MAIL.LINTANG], "recipients");
         eq(mails.find((m) => m.to_email === MAIL.LINTANG).link_path, `/employees/${E.LINTANG}?tab=conduct`, "link");
-        await fails(() => issue(PETER, invId), "PT409", /already been issued/);
+        await fails(() => submit(PETER, invId), "PT409", /cannot be submitted/);
+        await fails(() => approve(PETER, invId), "PT409", /not waiting for review/);
         await fails(() => j(PETER, `public.investigations_delete($1::uuid)`, [invId]), "PT409", /Only a draft/);
         await fails(() => j(PETER, `public.investigations_remove_outcome($1::uuid)`, [arisOutcome]), "PT409");
     });
@@ -436,12 +506,35 @@ export default async ({ db, step, tx, people }) => {
         await j(DIRECTOR, `public.investigations_set_flag($1::uuid, 'can_investigate', false)`, [E.MARK]);
         await fails(() => j(MARK, `public.investigations_list()`), "PT404");
         await j(DIRECTOR, `public.investigations_set_flag($1::uuid, 'is_monitoring_team', false)`, [E.NESSY]);
-        await fails(() => draft(DIRECTOR, { on_duty_employee_id: E.NESSY }), "PT422", /monitoring team/);
+        await fails(() => draft(DIRECTOR, { ds_employee_id: E.NESSY }), "PT422", /monitoring team/);
         await j(DIRECTOR, `public.investigations_set_flag($1::uuid, 'is_monitoring_team', true)`, [E.NESSY]);
     });
 
+    await step("investigations: the backfill moves on-duty and handover into DS and NS by the WIB hour", async () => {
+        await reset();
+        const mk = (ref, at, onDuty, handover) => db.query(
+            `insert into public.investigations (reference, event_at, site_id, title, on_duty_employee_id,
+                                                handover_employee_id, status)
+             values ($1, $2::timestamptz, $3, 'Old case', $4, $5, 'draft') returning id`,
+            [ref, at, HV, onDuty, handover]);
+        const day = (await mk("INV-0901", "2026-09-10T10:00:00+07:00", E.LINTANG, E.ARIS)).rows[0].id;
+        const night = (await mk("INV-0902", "2026-09-10T20:30:00+07:00", E.LINTANG, E.ARIS)).rows[0].id;
+        const early = (await mk("INV-0903", "2026-09-10T05:59:00+07:00", E.LINTANG, null)).rows[0].id;
+        const six = (await mk("INV-0904", "2026-09-10T06:00:00+07:00", E.LINTANG, null)).rows[0].id;
+        const hoOnly = (await mk("INV-0905", "2026-09-10T22:00:00+07:00", null, E.ARIS)).rows[0].id;
+        await db.query(`select public.investigations_backfill_shifts()`);
+        const r = await db.query(`select id, ds_employee_id ds, ns_employee_id ns from public.investigations`);
+        const by = Object.fromEntries(r.rows.map((x) => [x.id, [x.ds, x.ns]]));
+        eq(by[day], [E.LINTANG, E.ARIS], "day: on duty to DS, handover to NS");
+        eq(by[night], [E.ARIS, E.LINTANG], "night: on duty to NS, handover to DS");
+        eq(by[early], [null, E.LINTANG], "05:59 is night");
+        eq(by[six], [E.LINTANG, null], "06:00 is day");
+        eq(by[hoOnly], [E.ARIS, null], "handover alone takes the free slot");
+        await fails(() => tx(DIRECTOR, `select public.investigations_backfill_shifts()`), null, /permission denied/);
+    });
+
     await step("investigations: clients cannot read or write the tables directly", async () => {
-        for (const t of ["investigations", "investigation_outcomes", "monitoring_sites"]) {
+        for (const t of ["investigations", "investigation_outcomes", "monitoring_sites", "investigation_comments"]) {
             await fails(() => tx(LINTANG, `select * from public.${t}`), null, /permission denied/);
             await fails(() => tx(DIRECTOR, `delete from public.${t}`), null, /permission denied/);
         }

@@ -44,6 +44,8 @@ import {
 
 type View = { mode: "list" } | { mode: "view"; id: string } | { mode: "edit"; id: string | null };
 
+const STATUSES: InvestigationStatus[] = ["draft", "in_review", "changes_requested", "issued", "closed"];
+
 const siteLabel = (name: string, client: string | null) => (client ? `${name} — ${client}` : name);
 
 const outcomeSummary = (inv: Investigation) =>
@@ -117,8 +119,8 @@ export default function InvestigationsPage() {
             if (to && day > to) return false;
             if (needle) {
                 const hay = [
-                    i.reference, i.title, i.radar, i.site_name, i.site_client, i.on_duty_name,
-                    i.handover_name, i.findings, i.investigation_result, i.recommendation,
+                    i.reference, i.title, i.radar, i.site_name, i.site_client, i.ds_name,
+                    i.ns_name, i.findings, i.investigation_result, i.recommendation,
                     ...i.outcomes.map((o) => `${o.employee_name} ${o.decision_label}`),
                 ]
                     .filter(Boolean)
@@ -251,6 +253,28 @@ export default function InvestigationsPage() {
                 )}
             </div>
 
+            {/* The same by stage: what is being written, waiting for review, sent back, out. */}
+            <div className="flex flex-wrap gap-1.5">
+                {[{ key: "" as const, label: "Any status", n: items.length }, ...STATUSES.map((s) => ({
+                    key: s,
+                    label: STATUS_CHIP[s].label,
+                    n: items.filter((i) => i.status === s).length,
+                }))].map((chip) => (
+                    <button
+                        key={chip.key || "any"}
+                        type="button"
+                        onClick={() => setStatusFilter(chip.key)}
+                        className={`rounded-full border px-3 py-1 text-micro font-semibold transition-colors ${
+                            statusFilter === chip.key
+                                ? "border-signal/50 bg-signal/15 text-signal"
+                                : "border-white/15 text-paper-soft hover:text-paper"
+                        }`}
+                    >
+                        {chip.label} <span className="font-mono text-muted">{chip.n}</span>
+                    </button>
+                ))}
+            </div>
+
             <div className="dtg-panel flex flex-wrap items-end gap-3 p-4">
                 <label className="block min-w-[14rem] flex-1">
                     <span className="dtg-label">Search</span>
@@ -272,9 +296,11 @@ export default function InvestigationsPage() {
                         className="dtg-input w-36 text-sm"
                     >
                         <option value="">Any</option>
-                        <option value="draft">Draft</option>
-                        <option value="issued">Issued</option>
-                        <option value="closed">Closed</option>
+                        {STATUSES.map((s) => (
+                            <option key={s} value={s}>
+                                {STATUS_CHIP[s].label}
+                            </option>
+                        ))}
                     </select>
                 </label>
                 <label className="block">
@@ -317,7 +343,7 @@ export default function InvestigationsPage() {
                                     <th className="dtg-th">Site</th>
                                     <th className="dtg-th">Radar</th>
                                     <th className="dtg-th">Title</th>
-                                    <th className="dtg-th">On duty</th>
+                                    <th className="dtg-th">DS / NS</th>
                                     <th className="dtg-th">Outcome</th>
                                     <th className="dtg-th">Status</th>
                                 </tr>
@@ -341,7 +367,9 @@ export default function InvestigationsPage() {
                                         </td>
                                         <td className="dtg-td font-mono text-xs text-paper-soft">{i.radar ?? "—"}</td>
                                         <td className="dtg-td text-sm font-medium text-paper">{i.title}</td>
-                                        <td className="dtg-td text-xs text-paper-soft">{i.on_duty_name ?? "—"}</td>
+                                        <td className="dtg-td text-xs text-paper-soft">
+                                            {i.ds_name ?? "—"} / {i.ns_name ?? "—"}
+                                        </td>
                                         <td className="dtg-td text-xs text-paper-soft">{outcomeSummary(i)}</td>
                                         <td className="dtg-td">
                                             <StatusChip status={i.status} />
@@ -367,12 +395,20 @@ function StatusChip({ status }: { status: InvestigationStatus }) {
     );
 }
 
+/* The number and the title on one line, "2 · People", as the report reads. */
 function Section({ eyebrow, title, children }: { eyebrow?: string; title: string; children: ReactNode }) {
     return (
         <section className="dtg-panel overflow-hidden">
             <header className="border-b border-white/[0.08] px-5 py-3.5">
-                {eyebrow && <p className="dtg-eyebrow">{eyebrow}</p>}
-                <h2 className="mt-0.5 text-sm font-semibold text-paper">{title}</h2>
+                <h2 className="text-sm font-semibold text-paper">
+                    {eyebrow && (
+                        <span className="font-mono text-muted">
+                            {eyebrow}
+                            <span className="px-1.5">·</span>
+                        </span>
+                    )}
+                    {title}
+                </h2>
             </header>
             <div className="px-5 py-4">{children}</div>
         </section>
@@ -412,8 +448,10 @@ function CaseView({
     onBack: () => void;
 }) {
     const dialog = useDialog();
+    const { user } = useAuth();
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [note, setNote] = useState("");
 
     const act = async (fn: () => Promise<{ data: Investigation }>) => {
         setBusy(true);
@@ -421,20 +459,48 @@ function CaseView({
         try {
             const res = await fn();
             onChanged(res.data);
+            return true;
         } catch (e) {
             setError(errorDetail(e, "That did not work."));
+            return false;
         } finally {
             setBusy(false);
         }
     };
 
-    const issue = async () => {
+    const writing = inv.status === "draft" || inv.status === "changes_requested";
+    const released = inv.status === "issued" || inv.status === "closed";
+    const mySubmission = inv.submitted_by_id !== null && inv.submitted_by_id === user?.id;
+
+    const submit = async () => {
         const ok = await dialog.confirm({
-            title: `Issue ${inv.reference}?`,
-            body: "Each engineer named in a decision will see their own decision on their profile and be emailed to respond.",
-            confirmLabel: "Issue",
+            title: `Submit ${inv.reference} for review?`,
+            body: "The other investigators are emailed. One of them approves it, which releases each decision to the engineer it is about, or sends it back with a note. It is read-only while in review.",
+            confirmLabel: "Submit for review",
         });
-        if (ok) await act(() => investigationService.issue(inv.id));
+        if (ok) await act(() => investigationService.submit(inv.id));
+    };
+    const approve = async () => {
+        const ok = await dialog.confirm({
+            title: `Approve ${inv.reference}?`,
+            body: "The case is issued: each engineer named in a decision sees their own decision on their profile and is emailed to respond.",
+            confirmLabel: "Approve and issue",
+        });
+        if (ok) await act(() => investigationService.approve(inv.id));
+    };
+    const sendBack = async () => {
+        const text = await dialog.prompt({
+            title: `Send ${inv.reference} back`,
+            body: "Say what needs to change. The note is posted in the discussion and emailed to the investigator who submitted it.",
+            multiline: true,
+            required: true,
+            confirmLabel: "Send back",
+        });
+        if (text) await act(() => investigationService.sendBack(inv.id, text));
+    };
+    const postComment = async () => {
+        if (!note.trim()) return;
+        if (await act(() => investigationService.comment(inv.id, note.trim()))) setNote("");
     };
     const close = async () => {
         const pending = inv.outcomes.filter((o) => o.response_status === "pending").length;
@@ -498,24 +564,48 @@ function CaseView({
                     <h1 className="mt-1.5 text-2xl font-bold tracking-tight text-paper">{inv.title}</h1>
                     <p className="mt-1 text-xs text-muted">
                         Recorded by {inv.created_by_name ?? "—"}
-                        {inv.issued_at ? ` · issued ${formatEventAt(inv.issued_at)}` : ""}
+                        {inv.submitted_by_name && inv.submitted_at
+                            ? ` · submitted by ${inv.submitted_by_name}, ${formatDay(wibDate(inv.submitted_at))}`
+                            : ""}
                         {inv.closed_at ? ` · closed ${formatEventAt(inv.closed_at)}` : ""}
                     </p>
+                    {inv.approved_by_name && inv.approved_at && (
+                        <p className="mt-1 text-xs font-semibold text-signal">
+                            Approved by {inv.approved_by_name}, {formatDay(wibDate(inv.approved_at))}
+                        </p>
+                    )}
+                    {inv.status === "in_review" && (
+                        <p className="mt-1 text-xs text-teal-200">
+                            {mySubmission
+                                ? "Waiting for another investigator to review it."
+                                : "Waiting for your review: approve it, or send it back with a note."}
+                        </p>
+                    )}
                 </div>
                 <div className="flex flex-wrap gap-2">
-                    {inv.status !== "closed" && (
+                    {inv.status !== "closed" && inv.status !== "in_review" && (
                         <button type="button" disabled={busy} onClick={onEdit} className="dtg-btn-secondary">
                             <Pencil className="h-4 w-4" />
                             Edit
                         </button>
                     )}
                     {inv.status === "draft" && (
+                        <button type="button" disabled={busy} onClick={() => void remove()} className="dtg-btn-danger">
+                            Delete draft
+                        </button>
+                    )}
+                    {writing && (
+                        <button type="button" disabled={busy} onClick={() => void submit()} className="dtg-btn-primary">
+                            Submit for review
+                        </button>
+                    )}
+                    {inv.status === "in_review" && !mySubmission && (
                         <>
-                            <button type="button" disabled={busy} onClick={() => void remove()} className="dtg-btn-danger">
-                                Delete draft
+                            <button type="button" disabled={busy} onClick={() => void sendBack()} className="dtg-btn-secondary">
+                                Send back
                             </button>
-                            <button type="button" disabled={busy} onClick={() => void issue()} className="dtg-btn-primary">
-                                Issue
+                            <button type="button" disabled={busy} onClick={() => void approve()} className="dtg-btn-primary">
+                                Approve and issue
                             </button>
                         </>
                     )}
@@ -546,9 +636,9 @@ function CaseView({
 
             <Section eyebrow="2" title="People">
                 <div className="grid gap-4 sm:grid-cols-3">
-                    <Fact label="Engineer on duty">{inv.on_duty_name ?? "—"}</Fact>
-                    <Fact label="Handover engineer">{inv.handover_name ?? "—"}</Fact>
-                    <Fact label="Handover note">{inv.handover_note ?? "—"}</Fact>
+                    <Fact label="Day shift (DS) engineer">{inv.ds_name ?? "—"}</Fact>
+                    <Fact label="Night shift (NS) engineer">{inv.ns_name ?? "—"}</Fact>
+                    <Fact label="Handover notes">{inv.handover_note ?? "—"}</Fact>
                 </div>
             </Section>
 
@@ -582,7 +672,7 @@ function CaseView({
                                             {o.decision === "suspension" ? ` · ${suspensionText(o)}` : ""}
                                         </p>
                                     </div>
-                                    {inv.status !== "draft" && (
+                                    {released && (
                                         <span
                                             className={`rounded-full border px-2 py-0.5 text-micro font-semibold uppercase tracking-label ${RESPONSE_CHIP[o.response_status].cls}`}
                                         >
@@ -603,7 +693,7 @@ function CaseView({
                                     <p className="mt-2 text-micro text-muted">Revised {formatEventAt(o.revised_at)}</p>
                                 )}
 
-                                {inv.status !== "draft" && (
+                                {released && (
                                     <div className="mt-3 space-y-2 border-t border-white/[0.08] pt-3">
                                         <p className="dtg-label">Response</p>
                                         {o.response_status === "pending" ? (
@@ -642,6 +732,47 @@ function CaseView({
                     </div>
                 )}
             </Section>
+
+            {/* The investigators' own thread. The engineers never see it. */}
+            <Section title="Discussion">
+                <p className="mb-3 text-micro text-muted">
+                    Visible to the investigators only. Comments are not emailed.
+                </p>
+                {inv.comments.length === 0 ? (
+                    <p className="text-sm italic text-muted">No comments yet.</p>
+                ) : (
+                    <ol className="space-y-3 border-l border-white/[0.08] pl-4">
+                        {inv.comments.map((c) => (
+                            <li key={c.id}>
+                                <p className="text-micro text-muted">
+                                    <span className="font-semibold text-paper-soft">{c.author_name}</span>
+                                    {" · "}
+                                    {formatEventAt(c.created_at)}
+                                </p>
+                                <p className="whitespace-pre-wrap text-sm leading-relaxed text-paper-soft">{c.body}</p>
+                            </li>
+                        ))}
+                    </ol>
+                )}
+                <div className="mt-4 space-y-2">
+                    <textarea
+                        value={note}
+                        onChange={(e) => setNote(e.target.value)}
+                        rows={3}
+                        maxLength={4000}
+                        placeholder="Add a comment for the other investigators…"
+                        className="dtg-input w-full text-sm"
+                    />
+                    <button
+                        type="button"
+                        disabled={busy || !note.trim()}
+                        onClick={() => void postComment()}
+                        className="dtg-btn-secondary px-3 py-1.5 text-xs"
+                    >
+                        Post comment
+                    </button>
+                </div>
+            </Section>
         </div>
     );
 }
@@ -657,8 +788,8 @@ function blankCase(sites: MonitoringSite[]): InvestigationPayload {
         site_id: sites.find((s) => s.is_active)?.id ?? "",
         radar: "",
         title: "",
-        on_duty_employee_id: null,
-        handover_employee_id: null,
+        ds_employee_id: null,
+        ns_employee_id: null,
         handover_note: "",
         findings: "",
         technical_summary: "",
@@ -673,8 +804,8 @@ function fromCase(inv: Investigation): InvestigationPayload {
         site_id: inv.site_id,
         radar: inv.radar ?? "",
         title: inv.title,
-        on_duty_employee_id: inv.on_duty_employee_id,
-        handover_employee_id: inv.handover_employee_id,
+        ds_employee_id: inv.ds_employee_id,
+        ns_employee_id: inv.ns_employee_id,
         handover_note: inv.handover_note ?? "",
         findings: inv.findings ?? "",
         technical_summary: inv.technical_summary ?? "",
@@ -739,29 +870,29 @@ function CaseEditor({
         const inv = await save();
         if (inv) onSaved(inv, false);
     };
-    const saveAndIssue = async () => {
+    const saveAndSubmit = async () => {
         const ok = await dialog.confirm({
-            title: "Issue this investigation?",
-            body: "Each engineer named in a decision will see their own decision on their profile and be emailed to respond.",
-            confirmLabel: "Issue",
+            title: "Submit this investigation for review?",
+            body: "The other investigators are emailed. One of them approves it, which releases each decision to the engineer it is about, or sends it back with a note. It is read-only while in review.",
+            confirmLabel: "Submit for review",
         });
         if (!ok) return;
         const inv = await save();
         if (!inv) return;
         setSaving(true);
         try {
-            const res = await investigationService.issue(inv.id);
+            const res = await investigationService.submit(inv.id);
             onSaved(res.data, false);
         } catch (e) {
-            setError(errorDetail(e, "Could not issue the investigation."));
+            setError(errorDetail(e, "Could not submit the investigation."));
             setSaving(false);
         }
     };
 
     const siteOptions = sites.filter((s) => s.is_active || s.id === form.site_id);
     const options = personOptions(people, [
-        { id: initial?.on_duty_employee_id ?? null, name: initial?.on_duty_name ?? null },
-        { id: initial?.handover_employee_id ?? null, name: initial?.handover_name ?? null },
+        { id: initial?.ds_employee_id ?? null, name: initial?.ds_name ?? null },
+        { id: initial?.ns_employee_id ?? null, name: initial?.ns_name ?? null },
     ]);
     const status = current?.status ?? "draft";
 
@@ -786,7 +917,8 @@ function CaseEditor({
                 </h1>
                 <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-paper-soft">
                     Laid out as the report reads. Save a draft at any point; decisions are added once the draft
-                    is saved. Nothing is visible to the engineers until the case is issued.
+                    is saved. When it is ready, submit it for review: another investigator approves it before the
+                    engineers see anything.
                 </p>
             </header>
 
@@ -842,44 +974,34 @@ function CaseEditor({
 
             <Section eyebrow="2" title="People">
                 <div className="grid gap-4 sm:grid-cols-2">
-                    <label className="block">
-                        <span className="dtg-label">Engineer on duty</span>
-                        <select
-                            value={form.on_duty_employee_id ?? ""}
-                            onChange={(e) => set("on_duty_employee_id", e.target.value || null)}
-                            className={input}
-                        >
-                            <option value="" className="bg-surface">
-                                Choose…
-                            </option>
-                            {options.map((p) => (
-                                <option key={p.id} value={p.id!} className="bg-surface">
-                                    {p.name}
+                    {(
+                        [
+                            ["ds_employee_id", "ns_employee_id", "Day shift (DS) engineer"],
+                            ["ns_employee_id", "ds_employee_id", "Night shift (NS) engineer"],
+                        ] as const
+                    ).map(([key, other, label]) => (
+                        <label key={key} className="block">
+                            <span className="dtg-label">{label}</span>
+                            <select
+                                value={form[key] ?? ""}
+                                onChange={(e) => set(key, e.target.value || null)}
+                                className={input}
+                            >
+                                <option value="" className="bg-surface">
+                                    None
                                 </option>
-                            ))}
-                        </select>
-                    </label>
-                    <label className="block">
-                        <span className="dtg-label">Handover engineer (optional)</span>
-                        <select
-                            value={form.handover_employee_id ?? ""}
-                            onChange={(e) => set("handover_employee_id", e.target.value || null)}
-                            className={input}
-                        >
-                            <option value="" className="bg-surface">
-                                None
-                            </option>
-                            {options
-                                .filter((p) => p.id !== form.on_duty_employee_id)
-                                .map((p) => (
-                                    <option key={p.id} value={p.id!} className="bg-surface">
-                                        {p.name}
-                                    </option>
-                                ))}
-                        </select>
-                    </label>
+                                {options
+                                    .filter((p) => p.id !== form[other])
+                                    .map((p) => (
+                                        <option key={p.id} value={p.id!} className="bg-surface">
+                                            {p.name}
+                                        </option>
+                                    ))}
+                            </select>
+                        </label>
+                    ))}
                     <label className="block sm:col-span-2">
-                        <span className="dtg-label">Handover note</span>
+                        <span className="dtg-label">Handover notes</span>
                         <input
                             value={form.handover_note}
                             onChange={(e) => set("handover_note", e.target.value)}
@@ -890,7 +1012,8 @@ function CaseEditor({
                     </label>
                 </div>
                 <p className="mt-3 text-micro text-muted">
-                    Only active members of the monitoring team can be named. The team is set in Settings.
+                    Only active members of the monitoring team can be named, and the two must be different people. Either
+                    may be left empty, but at least one is needed to submit. The team is set in Settings.
                 </p>
             </Section>
 
@@ -953,7 +1076,7 @@ function CaseEditor({
                                 onCancel={() => setAdding(false)}
                             />
                         ) : (
-                            current.status !== "closed" && (
+                            current.status !== "closed" && current.status !== "in_review" && (
                                 <button type="button" onClick={() => setAdding(true)} className="dtg-btn-secondary">
                                     <Plus className="h-4 w-4" />
                                     Add a decision
@@ -967,14 +1090,14 @@ function CaseEditor({
             <div className="flex flex-wrap items-center gap-3">
                 <button type="button" disabled={saving} onClick={() => void saveAndStay()} className="dtg-btn-secondary">
                     {saving && <Spinner className="h-4 w-4" />}
-                    {status === "draft" ? "Save draft" : "Save"}
+                    {status === "issued" ? "Save" : "Save draft"}
                 </button>
                 <button type="button" disabled={saving} onClick={() => void saveAndView()} className="dtg-btn-secondary">
                     Save and view
                 </button>
-                {status === "draft" && current && (
-                    <button type="button" disabled={saving} onClick={() => void saveAndIssue()} className="dtg-btn-primary">
-                        Save and issue
+                {(status === "draft" || status === "changes_requested") && current && (
+                    <button type="button" disabled={saving} onClick={() => void saveAndSubmit()} className="dtg-btn-primary">
+                        Save and submit for review
                     </button>
                 )}
                 <button type="button" onClick={onCancel} className="text-sm text-paper-soft transition hover:text-paper">
@@ -1031,8 +1154,8 @@ function OutcomeCard({
     }));
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const locked = inv.status === "closed";
-    const issued = inv.status !== "draft";
+    const locked = inv.status === "closed" || inv.status === "in_review";
+    const issued = inv.status === "issued" || inv.status === "closed";
 
     const set = <K extends keyof OutcomePayload>(k: K, v: OutcomePayload[K]) => setForm((f) => ({ ...f, [k]: v }));
 

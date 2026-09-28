@@ -87,6 +87,14 @@ route("PUT", "/investigations/:id/outcomes/:outcomeId", ({ path, body }) =>
     }),
 );
 
-route("POST", "/investigations/:id/issue", ({ path }) => rpc("investigations_issue", { p_id: path.id }));
+// Released by review: one investigator submits, another approves or sends back.
+route("POST", "/investigations/:id/submit", ({ path }) => rpc("investigations_submit", { p_id: path.id }));
+route("POST", "/investigations/:id/approve", ({ path }) => rpc("investigations_approve", { p_id: path.id }));
+route("POST", "/investigations/:id/send-back", ({ path, body }) =>
+    rpc("investigations_send_back", { p_id: path.id, p_note: text(asBody(body).note) }),
+);
+route("POST", "/investigations/:id/comments", ({ path, body }) =>
+    rpc("investigations_comment", { p_id: path.id, p_body: text(asBody(body).body) }),
+);
 route("POST", "/investigations/:id/close", ({ path }) => rpc("investigations_close", { p_id: path.id }));
 route("POST", "/investigations/:id/reopen", ({ path }) => rpc("investigations_reopen", { p_id: path.id }));

@@ -8,7 +8,7 @@ import api from "@/lib/api";
  * "Conduct", and responds there.
  */
 
-export type InvestigationStatus = "draft" | "issued" | "closed";
+export type InvestigationStatus = "draft" | "in_review" | "changes_requested" | "issued" | "closed";
 export type Decision = "no_action" | "verbal_warning" | "written_warning" | "suspension" | "further_action";
 export type ResponseStatus = "pending" | "acknowledged" | "accepted" | "disputed";
 
@@ -60,10 +60,10 @@ export interface Investigation {
     site_client: string | null;
     radar: string | null;
     title: string;
-    on_duty_employee_id: string | null;
-    on_duty_name: string | null;
-    handover_employee_id: string | null;
-    handover_name: string | null;
+    ds_employee_id: string | null;
+    ds_name: string | null;
+    ns_employee_id: string | null;
+    ns_name: string | null;
     handover_note: string | null;
     findings: string | null;
     technical_summary: string | null;
@@ -72,11 +72,27 @@ export interface Investigation {
     status: InvestigationStatus;
     created_by_name: string | null;
     updated_by_name: string | null;
+    submitted_by_id: string | null;
+    submitted_by_name: string | null;
+    submitted_at: string | null;
+    approved_by_id: string | null;
+    approved_by_name: string | null;
+    approved_at: string | null;
     created_at: string;
     updated_at: string;
     issued_at: string | null;
     closed_at: string | null;
     outcomes: Outcome[];
+    /** The investigators' discussion, oldest first. */
+    comments: InvestigationComment[];
+}
+
+export interface InvestigationComment {
+    id: string;
+    author_id: string | null;
+    author_name: string;
+    body: string;
+    created_at: string;
 }
 
 export interface InvestigationPayload {
@@ -84,8 +100,8 @@ export interface InvestigationPayload {
     site_id: string;
     radar: string;
     title: string;
-    on_duty_employee_id: string | null;
-    handover_employee_id: string | null;
+    ds_employee_id: string | null;
+    ns_employee_id: string | null;
     handover_note: string;
     findings: string;
     technical_summary: string;
@@ -146,6 +162,10 @@ export interface TeamSetting {
 export interface InvestigationsWaiting {
     respond: { reference: string; employee_id: string }[];
     disputes: { reference: string; investigation_id: string; name: string }[];
+    /** Cases in review that somebody else submitted (investigators). */
+    reviews?: { reference: string; investigation_id: string }[];
+    /** Your own submissions sent back for changes (investigators). */
+    sent_back?: { reference: string; investigation_id: string }[];
 }
 
 export const investigationService = {
@@ -163,7 +183,10 @@ export const investigationService = {
     removeOutcome: (outcomeId: string) => api.delete<Investigation>(`/investigations/outcomes/${outcomeId}`),
     resolve: (outcomeId: string, note: string) =>
         api.post<Investigation>(`/investigations/outcomes/${outcomeId}/resolve`, { note }),
-    issue: (id: string) => api.post<Investigation>(`/investigations/${id}/issue`),
+    submit: (id: string) => api.post<Investigation>(`/investigations/${id}/submit`),
+    approve: (id: string) => api.post<Investigation>(`/investigations/${id}/approve`),
+    sendBack: (id: string, note: string) => api.post<Investigation>(`/investigations/${id}/send-back`, { note }),
+    comment: (id: string, body: string) => api.post<Investigation>(`/investigations/${id}/comments`, { body }),
     close: (id: string) => api.post<Investigation>(`/investigations/${id}/close`),
     reopen: (id: string) => api.post<Investigation>(`/investigations/${id}/reopen`),
 
@@ -216,6 +239,8 @@ export const RESPONSE_CHIP: Record<ResponseStatus, { label: string; cls: string 
 
 export const STATUS_CHIP: Record<InvestigationStatus, { label: string; cls: string }> = {
     draft: { label: "Draft", cls: "border-white/15 bg-white/[0.04] text-paper-soft" },
+    in_review: { label: "In review", cls: "border-teal-300/30 bg-teal-300/10 text-teal-200" },
+    changes_requested: { label: "Changes requested", cls: "border-danger/40 bg-danger/10 text-danger" },
     issued: { label: "Issued", cls: "border-gold/30 bg-gold/10 text-gold" },
     closed: { label: "Closed", cls: "border-signal/30 bg-signal/10 text-signal" },
 };
