@@ -40,14 +40,19 @@ export default function AuthShell({
                 {/* The wordmark's own strapline is baked in at ~7px and is
                     unreadable at any size that fits here, so the plain "mark"
                     file is used and the strapline set as real text. */}
-                <div className="relative">
-                    <Wordmark className="h-8 lg:h-11" />
-                    {/* Tracking is eased off on narrow screens: at 0.22em this
-                        line is ~400px, which wraps awkwardly on a phone. */}
-                    <p className="mt-3 text-[0.625rem] font-semibold uppercase tracking-label text-teal-100/60 sm:text-micro sm:tracking-eyebrow lg:mt-4">
-                        Digital Twin Geotechnical Monitoring
+                {/* The company's name beside its mark, as on the office wall:
+                    the wordmark, a hairline, then the name over two lines. */}
+                <div className="relative flex items-center gap-4 lg:gap-5">
+                    <Wordmark className="h-9 lg:h-14" />
+                    <span aria-hidden="true" className="h-9 w-px bg-white/25 lg:h-12" />
+                    <p className="text-[0.6875rem] font-semibold uppercase leading-snug tracking-eyebrow text-teal-100/80 lg:text-sm">
+                        Digital Twin
+                        <br />
+                        Geotechnical
                     </p>
                 </div>
+
+                <PhotoCollage />
 
                 {/* Pitch and footer travel together at the foot of the band, so
                     the panel reads as a hero rather than three stranded blocks. */}
@@ -57,8 +62,12 @@ export default function AuthShell({
                         <br />
                         in one place.
                     </p>
+                    {/* "People" means the staff and the families behind them. */}
+                    <p className="mt-2 max-w-sm text-sm text-teal-100/80">
+                        For our people — and the families behind them.
+                    </p>
                     <p className="mt-4 max-w-sm font-mono text-xs uppercase tracking-label text-teal-100/70">
-                        Roster · Leave · Pay · Support
+                        Work · Wellbeing · Rewards · Growth
                     </p>
 
                     <div className="mt-10 flex items-center gap-2.5 border-t border-white/10 pt-5 text-paper-warm/50">
@@ -80,6 +89,81 @@ export default function AuthShell({
                     <div className="dtg-panel mt-7 p-6 shadow-panel sm:p-8">{children}</div>
                 </div>
             </main>
+        </div>
+    );
+}
+
+
+/*
+ * The people behind DTG, as a small gallery: the team at the monitors across
+ * the top, the monitoring room and the families side by side beneath --
+ * "people" here is the staff and the families behind them. Nothing is
+ * cropped: each photograph keeps its own shape, the lower two share a height
+ * with widths in proportion to their shapes, and the gallery's width follows
+ * the screen's height so a short laptop screen never runs it into the
+ * wordmark or the pitch. Wide screens only; the band is a compact header on
+ * a phone.
+ */
+const TOP = { src: "/brand/photos/team-desk.jpg", alt: "The DTG team at the monitoring wall", ratio: 403 / 300 };
+const ROW = [
+    { src: "/brand/photos/control-room.jpg", alt: "Engineers reviewing slope monitoring", ratio: 777 / 512 },
+    { src: "/brand/photos/team-outlook-full.jpg", alt: "DTG colleagues and family looking out over the hills", ratio: 452 / 377 },
+];
+
+function Photo({ src, alt, ratio }: { src: string; alt: string; ratio: number }) {
+    return (
+        <figure className="relative overflow-hidden" style={{ aspectRatio: String(ratio) }}>
+            <img src={src} alt={alt} decoding="async" className="h-full w-full" />
+        </figure>
+    );
+}
+
+// The gallery's outer edge fades into the band on every side, so the
+// photographs sit in it rather than on it.
+const FEATHER =
+    "linear-gradient(to right, transparent 0%, #000 11%, #000 89%, transparent 100%), " +
+    "linear-gradient(to bottom, transparent 0%, #000 9%, #000 91%, transparent 100%)";
+
+// Where two photographs meet they overlap, and the one on top fades in over
+// the other -- no hard seam anywhere, one montage rather than three prints.
+const FADE_IN_FROM_TOP = "linear-gradient(to bottom, transparent 0%, #000 26%)";
+const FADE_IN_FROM_LEFT = "linear-gradient(to right, transparent 0%, #000 24%)";
+
+function PhotoCollage() {
+    const rowRatio = ROW.reduce((sum, p) => sum + p.ratio, 0);
+    return (
+        <div
+            className="relative my-4 hidden lg:block"
+            style={{
+                // Height is about 1.1 x width; leave room for the wordmark
+                // above and the pitch below.
+                width: "min(100%, 31rem, calc((100vh - 420px) / 1.1))",
+                maskImage: FEATHER,
+                WebkitMaskImage: FEATHER,
+                maskComposite: "intersect",
+                WebkitMaskComposite: "source-in",
+            }}
+        >
+            <Photo {...TOP} />
+            <div
+                className="relative flex"
+                style={{ marginTop: "-11%", maskImage: FADE_IN_FROM_TOP, WebkitMaskImage: FADE_IN_FROM_TOP }}
+            >
+                {ROW.map((p, i) => (
+                    <div
+                        key={p.src}
+                        className="relative"
+                        style={{
+                            flex: `${p.ratio / rowRatio} 1 0`,
+                            ...(i > 0
+                                ? { marginLeft: "-9%", maskImage: FADE_IN_FROM_LEFT, WebkitMaskImage: FADE_IN_FROM_LEFT }
+                                : {}),
+                        }}
+                    >
+                        <Photo {...p} />
+                    </div>
+                ))}
+            </div>
         </div>
     );
 }

@@ -61,7 +61,9 @@ export function ProductLockup({ className = "" }: { className?: string }) {
         <span className={`flex items-center gap-3 ${className}`}>
             <Wordmark className="h-[1.375rem]" />
             <span aria-hidden="true" className="h-5 w-px bg-white/20" />
-            <span className="text-label font-bold uppercase tracking-label text-paper-soft">
+            {/* The product's name, in the signal green and a size up from a
+                caption: it names the app, it does not annotate the logo. */}
+            <span className="text-[0.9375rem] font-bold uppercase tracking-[0.14em] text-signal">
                 People
             </span>
         </span>
