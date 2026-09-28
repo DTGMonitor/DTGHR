@@ -40,6 +40,8 @@ export default function PayrollTaxPage() {
     const { user } = useAuth();
     const mayBeHere =
         user?.role === "finance" || user?.role === "director" || user?.role === "executive";
+    // A payslip is personal: only finance opens other people's.
+    const canDownload = user?.role === "finance";
     const thisYear = new Date().getFullYear();
 
     const [year, setYear] = useState(thisYear);
@@ -127,6 +129,7 @@ export default function PayrollTaxPage() {
                         key={m.month_id}
                         month={m}
                         canEdit={data.can_edit}
+                        canDownload={canDownload}
                         onLine={replaceLine}
                         onError={setError}
                     />
@@ -139,11 +142,13 @@ export default function PayrollTaxPage() {
 function MonthTable({
     month,
     canEdit,
+    canDownload,
     onLine,
     onError,
 }: {
     month: TaxMonth;
     canEdit: boolean;
+    canDownload: boolean;
     onLine: (line: TaxLine) => void;
     onError: (msg: string) => void;
 }) {
@@ -176,15 +181,17 @@ function MonthTable({
                     </p>
                     <h2 className="mt-0.5 text-sm font-semibold text-paper">{month.label}</h2>
                 </div>
-                <button
-                    type="button"
-                    disabled={zipping}
-                    onClick={() => void zip()}
-                    className="dtg-btn-secondary px-3 py-1.5 text-xs"
-                >
-                    {zipping ? <Spinner className="h-3.5 w-3.5" /> : <FileArchive className="h-3.5 w-3.5" />}
-                    Download all (ZIP)
-                </button>
+                {canDownload && (
+                    <button
+                        type="button"
+                        disabled={zipping}
+                        onClick={() => void zip()}
+                        className="dtg-btn-secondary px-3 py-1.5 text-xs"
+                    >
+                        {zipping ? <Spinner className="h-3.5 w-3.5" /> : <FileArchive className="h-3.5 w-3.5" />}
+                        Download all (ZIP)
+                    </button>
+                )}
             </header>
             <div className="overflow-x-auto">
                 <table className="w-full min-w-[46rem]">
@@ -195,7 +202,7 @@ function MonthTable({
                             <th className="dtg-th text-right">Actual</th>
                             <th className="dtg-th text-right">Difference</th>
                             <th className="dtg-th">Payslip</th>
-                            <th className="dtg-th" />
+                            {canDownload && <th className="dtg-th" />}
                         </tr>
                     </thead>
                     <tbody>
@@ -205,6 +212,7 @@ function MonthTable({
                                 line={l}
                                 striped={i % 2 === 1}
                                 canEdit={canEdit}
+                                canDownload={canDownload}
                                 onLine={onLine}
                                 onError={onError}
                             />
@@ -220,12 +228,14 @@ function Row({
     line,
     striped,
     canEdit,
+    canDownload,
     onLine,
     onError,
 }: {
     line: TaxLine;
     striped: boolean;
     canEdit: boolean;
+    canDownload: boolean;
     onLine: (line: TaxLine) => void;
     onError: (msg: string) => void;
 }) {
@@ -300,17 +310,19 @@ function Row({
             <td className="dtg-td">
                 <span className={`dtg-chip ${status.className}`}>{status.label}</span>
             </td>
-            <td className="dtg-td text-right">
-                <button
-                    type="button"
-                    disabled={downloading}
-                    onClick={() => void download()}
-                    className="dtg-btn-secondary px-3 py-1.5 text-xs"
-                >
-                    {downloading ? <Spinner className="h-3.5 w-3.5" /> : <Download className="h-3.5 w-3.5" />}
-                    Download slip
-                </button>
-            </td>
+            {canDownload && (
+                <td className="dtg-td text-right">
+                    <button
+                        type="button"
+                        disabled={downloading}
+                        onClick={() => void download()}
+                        className="dtg-btn-secondary px-3 py-1.5 text-xs"
+                    >
+                        {downloading ? <Spinner className="h-3.5 w-3.5" /> : <Download className="h-3.5 w-3.5" />}
+                        Download slip
+                    </button>
+                </td>
+            )}
         </tr>
     );
 }

@@ -144,11 +144,12 @@ export default async ({ db, step, tx, people }) => {
         eq(d.earnings.income_tax, 4100000, "the actual");
     });
 
-    await step("tax: payroll viewers preview any slip of an approved month", async () => {
-        for (const uid of [FINANCE, DIRECTOR, EXEC]) {
-            const d = await call(uid, "payslips_preview", [SEP.id, SEP.rina], ["uuid", "uuid"]);
-            eq(d.person_name, "RINA SARI", `preview for ${uid}`);
-            eq(d.issue_date, "2082-09-30", "dated the release day");
+    await step("tax: only finance previews anyone's slip of an approved month", async () => {
+        const d = await call(FINANCE, "payslips_preview", [SEP.id, SEP.rina], ["uuid", "uuid"]);
+        eq(d.person_name, "RINA SARI", "preview for finance");
+        eq(d.issue_date, "2082-09-30", "dated the release day");
+        for (const uid of [DIRECTOR, EXEC]) {
+            await refused(call(uid, "payslips_preview", [SEP.id, SEP.rina], ["uuid", "uuid"]), "PT404");
         }
         await refused(call(RINA, "payslips_preview", [SEP.id, SEP.rina], ["uuid", "uuid"]), "PT404");
         await refused(call(FINANCE, "payslips_preview", [DRAFT.id, DRAFT.rina], ["uuid", "uuid"]), "PT409");

@@ -15,7 +15,7 @@ import {
  *
  * One line saying when they go out (or when they went out), each person's slip
  * one click away for the people who read payroll -- built from the current
- * figures, so it can be opened before the release moment too -- and, for the
+ * figures, so finance can open it before the release moment too -- and, for the
  * director, a way to issue them now rather than waiting.
  */
 export default function MonthPayslips({
@@ -23,12 +23,15 @@ export default function MonthPayslips({
     label,
     lines,
     canIssue,
+    canOpen,
     onError,
 }: {
     monthId: string;
     label: string;
     lines: { id: string; person_name: string }[];
     canIssue: boolean;
+    /** A payslip is personal: only finance opens other people's. */
+    canOpen: boolean;
     onError: (msg: string) => void;
 }) {
     const dialog = useDialog();
@@ -101,7 +104,7 @@ export default function MonthPayslips({
                 )}
             </div>
 
-            {lines.length > 0 && (
+            {canOpen && lines.length > 0 && (
                 <div className="mt-3 flex flex-wrap gap-2 border-t border-white/[0.08] pt-3">
                     {lines.map((s) => (
                         <button

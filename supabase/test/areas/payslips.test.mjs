@@ -215,24 +215,33 @@ export default async ({ db, step, tx, people }) => {
         await refused(call(RINA, "payslips_for_month", [SEP], ["uuid"]), "PT404");
     });
 
-    await step("payslips: finance, the director and the executive read any slip", async () => {
+    await step("payslips: only finance opens other people's slips", async () => {
         const ids = await slipIds();
-        for (const uid of [FINANCE, DIRECTOR, EXEC]) {
-            const s = await call(uid, "payslips_get", [ids.budi], ["uuid"]);
-            eq(s.data.person_name, "BUDI SANTOSO", `slip for ${uid}`);
+        const s = await call(FINANCE, "payslips_get", [ids.budi], ["uuid"]);
+        eq(s.data.person_name, "BUDI SANTOSO", "finance reads Budi's slip");
+        // A slip is personal: the director and the executive do not open anyone else's.
+        // (Budi's record is the executive's own in the seed, so Rina's slip is the test.)
+        for (const uid of [DIRECTOR, EXEC]) {
+            await refused(call(uid, "payslips_get", [ids.rina], ["uuid"]), "PT404");
         }
         const m = await call(FINANCE, "payslips_for_month", [SEP], ["uuid"]);
         eq(m.issued, true, "issued");
         eq(m.issue_date, "2080-09-30", "issue date");
-        eq(m.slips.length, 3, "every slip listed");
+        eq(m.slips.length, 3, "every slip listed for finance");
+        // The director and the executive see the release status, not the slips.
+        for (const uid of [DIRECTOR, EXEC]) {
+            const v = await call(uid, "payslips_for_month", [SEP], ["uuid"]);
+            eq(v.issued, true, "they see it was issued");
+            eq(v.slips.length, 0, "but no slips listed");
+        }
     });
 
-    await step("payslips: the template is for payroll viewers and people with a slip", async () => {
+    await step("payslips: the template is for finance and people with a slip", async () => {
         const b64 = await call(RINA, "payslips_template");
         if (!b64.startsWith("JVBER")) throw new Error("not a PDF");
         await call(FINANCE, "payslips_template");
-        // The executive has no payroll line of his own but reads payroll.
-        await call(EXEC, "payslips_template");
+        // The executive has no slip of his own and does not open others'.
+        await refused(call(EXEC, "payslips_template"), "PT404");
     });
 
     await step("payslips: a month sent back hides its slips until it is re-issued", async () => {
@@ -275,10 +284,11 @@ export default async ({ db, step, tx, people }) => {
         // Before its release moment, on the director's say-so.
         const NOV = await openMonth(2081, 11, "approved");
         const one = await call(DIRECTOR, "payslips_issue_now", [NOV, BUDI_EMP], ["uuid", "uuid"]);
-        eq(one.slips.length, 1, "just Budi's");
+        eq((await slipsOf(NOV)).length, 1, "just Budi's");
         eq(one.issue_date, "2081-11-30", "dated the release day");
-        const all = await call(DIRECTOR, "payslips_issue_now", [NOV, null], ["uuid", "uuid"]);
-        eq(all.slips.length, 3, "the whole month");
+        eq(one.slips.length, 0, "the director is not shown the slips themselves");
+        await call(DIRECTOR, "payslips_issue_now", [NOV, null], ["uuid", "uuid"]);
+        eq((await slipsOf(NOV)).length, 3, "the whole month");
         const rows = await slipsOf(NOV);
         eq(rows.every((r) => r.generated_by_id === DIRECTOR), true, "issued by the director");
         const log = await db.query(
