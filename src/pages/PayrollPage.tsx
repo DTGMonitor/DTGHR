@@ -709,7 +709,8 @@ export default function PayrollPage() {
                             label={run.label}
                             lines={run.lines}
                             canIssue={user?.role === "director"}
-                            canOpen={user?.role === "finance"}
+                            // Finance; the director too, for now (temporary).
+                            canOpen={user?.role === "finance" || user?.role === "director"}
                             onError={setError}
                         />
                     )}

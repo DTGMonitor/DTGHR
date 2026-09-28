@@ -221,19 +221,18 @@ export default async ({ db, step, tx, people }) => {
         eq(s.data.person_name, "BUDI SANTOSO", "finance reads Budi's slip");
         // A slip is personal: the director and the executive do not open anyone else's.
         // (Budi's record is the executive's own in the seed, so Rina's slip is the test.)
-        for (const uid of [DIRECTOR, EXEC]) {
-            await refused(call(uid, "payslips_get", [ids.rina], ["uuid"]), "PT404");
-        }
+        await refused(call(EXEC, "payslips_get", [ids.rina], ["uuid"]), "PT404");
+        // The director, for now, while she reviews the screens (temporary).
+        eq((await call(DIRECTOR, "payslips_get", [ids.rina], ["uuid"])).data.person_name, "RINA SARI", "director");
         const m = await call(FINANCE, "payslips_for_month", [SEP], ["uuid"]);
         eq(m.issued, true, "issued");
         eq(m.issue_date, "2080-09-30", "issue date");
         eq(m.slips.length, 3, "every slip listed for finance");
         // The director and the executive see the release status, not the slips.
-        for (const uid of [DIRECTOR, EXEC]) {
-            const v = await call(uid, "payslips_for_month", [SEP], ["uuid"]);
-            eq(v.issued, true, "they see it was issued");
-            eq(v.slips.length, 0, "but no slips listed");
-        }
+        const v = await call(EXEC, "payslips_for_month", [SEP], ["uuid"]);
+        eq(v.issued, true, "the executive sees it was issued");
+        eq(v.slips.length, 0, "but no slips listed");
+        eq((await call(DIRECTOR, "payslips_for_month", [SEP], ["uuid"])).slips.length, 3, "the director, for now");
     });
 
     await step("payslips: the template is for finance and people with a slip", async () => {
@@ -286,7 +285,6 @@ export default async ({ db, step, tx, people }) => {
         const one = await call(DIRECTOR, "payslips_issue_now", [NOV, BUDI_EMP], ["uuid", "uuid"]);
         eq((await slipsOf(NOV)).length, 1, "just Budi's");
         eq(one.issue_date, "2081-11-30", "dated the release day");
-        eq(one.slips.length, 0, "the director is not shown the slips themselves");
         await call(DIRECTOR, "payslips_issue_now", [NOV, null], ["uuid", "uuid"]);
         eq((await slipsOf(NOV)).length, 3, "the whole month");
         const rows = await slipsOf(NOV);

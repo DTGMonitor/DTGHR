@@ -40,8 +40,9 @@ export default function PayrollTaxPage() {
     const { user } = useAuth();
     const mayBeHere =
         user?.role === "finance" || user?.role === "director" || user?.role === "executive";
-    // A payslip is personal: only finance opens other people's.
-    const canDownload = user?.role === "finance";
+    // A payslip is personal: only finance opens other people's -- and, for
+    // now, the director, while she reviews these screens (temporary).
+    const canDownload = user?.role === "finance" || user?.role === "director";
     const thisYear = new Date().getFullYear();
 
     const [year, setYear] = useState(thisYear);

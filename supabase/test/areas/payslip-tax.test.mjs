@@ -162,9 +162,10 @@ export default async ({ db, step, tx, people }) => {
         const d = await call(FINANCE, "payslips_preview", [SEP.id, SEP.rina], ["uuid", "uuid"]);
         eq(d.person_name, "RINA SARI", "preview for finance");
         eq(d.issue_date, "2082-09-30", "dated the release day");
-        for (const uid of [DIRECTOR, EXEC]) {
-            await refused(call(uid, "payslips_preview", [SEP.id, SEP.rina], ["uuid", "uuid"]), "PT404");
-        }
+        await refused(call(EXEC, "payslips_preview", [SEP.id, SEP.rina], ["uuid", "uuid"]), "PT404");
+        // The director, for now, while she reviews the screens (temporary).
+        eq((await call(DIRECTOR, "payslips_preview", [SEP.id, SEP.rina], ["uuid", "uuid"])).person_name,
+            "RINA SARI", "director preview");
         await refused(call(RINA, "payslips_preview", [SEP.id, SEP.rina], ["uuid", "uuid"]), "PT404");
         await refused(call(FINANCE, "payslips_preview", [DRAFT.id, DRAFT.rina], ["uuid", "uuid"]), "PT409");
         await refused(call(FINANCE, "payslips_preview", [OCT.id, SEP.rina], ["uuid", "uuid"]), "PT404");
