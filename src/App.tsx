@@ -23,6 +23,7 @@ import SchedulesPage from "@/pages/SchedulesPage";
 import ActivityLogPage from "@/pages/ActivityLogPage";
 import SettingsPage from "@/pages/SettingsPage";
 import BulletinAdminPage from "@/pages/BulletinAdminPage";
+import InvestigationsPage from "@/pages/InvestigationsPage";
 
 export default function App() {
     return (
@@ -62,6 +63,7 @@ export default function App() {
                             <Route path="/payslips" element={<PayslipsPage />} />
                             <Route path="/finance-requests" element={<FinanceRequestsPage />} />
                             <Route path="/support" element={<TicketsPage />} />
+                            <Route path="/investigations" element={<InvestigationsPage />} />
                             <Route path="/contracts" element={<ContractsPage />} />
                             <Route path="/my-scorecard" element={<MyScorecardPage />} />
                             <Route path="/compensation" element={<CompensationPage />} />

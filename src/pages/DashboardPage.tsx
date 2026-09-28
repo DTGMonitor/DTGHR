@@ -133,6 +133,25 @@ function bandLines(o: Overview): { today: ReactNode[]; waiting: ReactNode[] } {
      * is that notification: the first line he reads in the morning, rather
      * than something he has to go and look for.
      */
+    /*
+     * Investigations: a decision about you waiting for your response, and,
+     * for an investigator, a dispute nobody has answered yet.
+     */
+    for (const r of o.investigations?.respond ?? []) {
+        waiting.push(
+            <Link key={`inv-${r.reference}`} to={`/employees/${r.employee_id}?tab=conduct`} className="underline">
+                Respond to investigation {r.reference}.
+            </Link>,
+        );
+    }
+    for (const d of o.investigations?.disputes ?? []) {
+        waiting.push(
+            <Link key={`dispute-${d.reference}-${d.name}`} to={`/investigations?open=${d.investigation_id}`} className="underline">
+                {d.name} disputed the decision in {d.reference}.
+            </Link>,
+        );
+    }
+
     if (o.tickets_open) {
         waiting.push(
             `${o.tickets_open} IT ticket${o.tickets_open === 1 ? "" : "s"} ${

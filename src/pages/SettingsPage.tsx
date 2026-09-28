@@ -12,6 +12,7 @@ import HolidayCalendar from "@/components/settings/HolidayCalendar";
 import ProfileRequests from "@/components/employees/ProfileRequests";
 import Alert from "@/components/ui/Alert";
 import PayslipSettingsCard from "@/components/payslips/PayslipSettingsCard";
+import InvestigationSettingsCards from "@/components/investigations/InvestigationSettingsCards";
 
 /*
  * Permissions in one place.
@@ -314,6 +315,8 @@ export default function SettingsPage() {
                     ))}
                 </div>
             </section>
+
+            {isAdmin && <InvestigationSettingsCards onError={setError} />}
 
             {/*
                 Role frameworks.

@@ -1,4 +1,5 @@
 import api from "@/lib/api";
+import type { InvestigationsWaiting } from "@/services/investigationService";
 
 export interface OverviewDay {
     date: string;
@@ -83,6 +84,12 @@ export interface Overview {
             sent_back_by: string | null;
         }[];
     } | null;
+    /**
+     * Investigation outcomes waiting on this person's response, and (for an
+     * investigator) disputes not yet answered. Added by the /overview route
+     * from investigations_waiting(); absent if that call fails.
+     */
+    investigations?: InvestigationsWaiting | null;
     /**
      * Who is covering the site today, by first name. Management only.
      *
