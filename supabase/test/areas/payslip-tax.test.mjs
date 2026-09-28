@@ -176,8 +176,10 @@ export default async ({ db, step, tx, people }) => {
         const e = drawnText(await fillPayslip(tpl, estimate));
         eq(a.includes(" (estimate)"), false, "nothing on an actual");
         eq(a.includes(ESTIMATE_NOTE), false, "no note on an actual");
-        eq(e.filter((t) => t === " (estimate)").length, 2, "both labels");
-        eq(e.includes(ESTIMATE_NOTE), true, "the note");
+        // Deductions label has room for the word; the earnings one gets an asterisk.
+        eq(e.filter((t) => t === " (estimate)").length, 1, "deductions label");
+        eq(e.filter((t) => t === "*").length, 1, "earnings asterisk");
+        eq(e.includes("* " + ESTIMATE_NOTE), true, "the note, starred");
     });
 
     for (const m of [SEP, OCT, DRAFT]) {

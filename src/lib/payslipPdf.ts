@@ -295,14 +295,18 @@ export async function fillPayslip(
     right(page, formatAmount(data.net_pay), X.netPay, Y.netPay, bold, NET_SIZE, black, SPACING.netPay);
 
     // An estimated PPh 21 says so, on both labels and under the net pay.
+    // Each label takes " (estimate)" if it fits its cell at full size, and an
+    // asterisk otherwise (the earnings one: a shrunk suffix was unreadable).
     if (data.tax_is_estimate && italic) {
+        let starred = false;
         for (const label of [TAX_LABELS.earnings, TAX_LABELS.deductions]) {
             const x = label.x + regular.widthOfTextAtSize(label.text, SIZE);
             const room = label.cellEnd - CELL_PADDING - x;
-            const size = Math.min(SIZE, room / regular.widthOfTextAtSize(ESTIMATE_SUFFIX, 1));
-            left(page, ESTIMATE_SUFFIX, x, Y.rows[label.row]!, regular, size);
+            const fits = regular.widthOfTextAtSize(ESTIMATE_SUFFIX, SIZE) <= room;
+            if (!fits) starred = true;
+            left(page, fits ? ESTIMATE_SUFFIX : "*", x, Y.rows[label.row]!, regular);
         }
-        left(page, ESTIMATE_NOTE, NOTE_X, NOTE_Y, italic, NOTE_SIZE);
+        left(page, (starred ? "* " : "") + ESTIMATE_NOTE, NOTE_X, NOTE_Y, italic, NOTE_SIZE);
     }
 
     // "August 31st, 2026", the ordinal set as a superscript.
