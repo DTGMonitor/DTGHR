@@ -14,8 +14,9 @@ import Spinner from "@/components/ui/Spinner";
 import RoleHistory from "@/components/employees/RoleHistory";
 import ProfileRequests from "@/components/employees/ProfileRequests";
 import Alert from "@/components/ui/Alert";
+import MyPayslips from "@/components/payslips/MyPayslips";
 
-type TabKey = "personal" | "employment" | "statutory";
+type TabKey = "personal" | "employment" | "statutory" | "payslips";
 
 /*
  * Scorecards deliberately do not appear here.
@@ -24,10 +25,13 @@ type TabKey = "personal" | "employment" | "statutory";
  * them: split across both, "where is Lintang's Q3 scorecard" had two answers
  * and the profile tab only ever showed one person at a time.
  */
-const TABS: { key: TabKey; label: string; adminOnly?: boolean }[] = [
+const TABS: { key: TabKey; label: string; adminOnly?: boolean; ownOnly?: boolean }[] = [
     { key: "personal", label: "Personal" },
     { key: "employment", label: "Employment" },
     { key: "statutory", label: "Statutory & payroll" },
+    /* Your own slips, on your own profile only. Somebody else's are read on
+       the Payroll page, by the people who may read payroll. */
+    { key: "payslips", label: "Payslips", ownOnly: true },
 ];
 
 const GENDERS = [
@@ -281,9 +285,10 @@ export default function EmployeeProfilePage() {
 
     /* Statutory identifiers and an Indonesian bank account, for two
        Australians who have neither. */
-    const visibleTabs = TABS.filter((t) => !t.adminOnly || isHR).filter(
-        (t) => !(isFounder && t.key === "statutory"),
-    );
+    const isOwn = user?.employee_id === employee.id;
+    const visibleTabs = TABS.filter((t) => !t.adminOnly || isHR)
+        .filter((t) => !t.ownOnly || isOwn)
+        .filter((t) => !(isFounder && t.key === "statutory"));
 
     return (
         <div className="dtg-fade-in space-y-5">
@@ -422,6 +427,8 @@ export default function EmployeeProfilePage() {
                     <ProfileRequests mine />
                 </div>
             )}
+
+            {tab === "payslips" && isOwn && <MyPayslips />}
 
             {tab === "statutory" && (
                 <div className="space-y-4">

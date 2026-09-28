@@ -16,6 +16,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import Alert from "@/components/ui/Alert";
 import Spinner from "@/components/ui/Spinner";
 import { useDialog } from "@/components/ui/Dialog";
+import MonthPayslips from "@/components/payslips/MonthPayslips";
 
 /*
  * The monthly payroll run — the *Revised PT DTG - Salaries 2026* workbook,
@@ -699,6 +700,17 @@ export default function PayrollPage() {
                                 ))}
                         </div>
                     </section>
+
+                    {/* Approved: when its payslips go out, and each person's slip. */}
+                    {run.status === "approved" && (
+                        <MonthPayslips
+                            key={run.id}
+                            monthId={run.id}
+                            label={run.label}
+                            canIssue={user?.role === "director"}
+                            onError={setError}
+                        />
+                    )}
 
                     {/* What was asked for, on the page where it has to be fixed:
                         finance's, or the director's when the executive sent it
