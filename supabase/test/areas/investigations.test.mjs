@@ -1,5 +1,5 @@
 // Monitoring investigations and disciplinary outcomes
-// (supabase/migrations/20260928001100_investigations.sql).
+// (supabase/migrations/20260928001400_investigations.sql).
 export default async ({ db, step, tx, people }) => {
     const { DIRECTOR, PETER, HIMAWAN, RINA } = people;
 

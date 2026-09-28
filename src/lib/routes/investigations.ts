@@ -1,7 +1,7 @@
 // Routes for monitoring investigations and their disciplinary outcomes.
 // Every rule -- who investigates, who may be named, who sees which outcome --
 // is enforced in the investigations_* Postgres functions
-// (supabase/migrations/20260928001100_investigations.sql).
+// (supabase/migrations/20260928001400_investigations.sql).
 import { route } from "@/lib/api";
 import { rpc } from "@/lib/supabase";
 

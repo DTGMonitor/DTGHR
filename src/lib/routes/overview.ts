@@ -11,7 +11,7 @@ const int = (v: string | undefined, fallback: number): number => {
 };
 
 // The dashboard, plus what investigations have waiting on this person
-// (supabase/migrations/20260928001100_investigations.sql). The second call
+// (supabase/migrations/20260928001400_investigations.sql). The second call
 // never breaks the dashboard: if it fails, the band simply leaves it out.
 route("GET", "/overview", async () => {
     const [overview, investigations] = await Promise.all([
