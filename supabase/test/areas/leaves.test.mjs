@@ -78,8 +78,21 @@ export default async ({ db, step, tx, people }) => {
         const sv = student.map((t) => t.value);
         if (!sv.includes("study") || !sv.includes("maternity") || sv.includes("paternity") || sv.length !== 11)
             throw new Error(sv.join(","));
-        const pat = (await tx(U.LEAD, `select public.leaves_types() j`)).rows[0].j;
-        if (pat.length !== 11) throw new Error(`no gender recorded should offer all but study: ${pat.length}`);
+        // No gender recorded: none of the sex-limited types until it is set.
+        const pat = (await tx(U.LEAD, `select public.leaves_types() j`)).rows[0].j.map((t) => t.value);
+        for (const v of ["maternity", "paternity", "miscarriage", "menstrual", "study"])
+            if (pat.includes(v)) throw new Error(`no gender recorded was offered ${v}`);
+        if (pat.length !== 7) throw new Error(`no gender recorded: ${pat.join(",")}`);
+        // And submitting one anyway is refused at the table.
+        let refused = false;
+        try {
+            await tx(U.STAFF, `select public.submit_leave_request($1::jsonb)`, [JSON.stringify({
+                leave_type: "menstrual", start_date: "2099-01-05", end_date: "2099-01-05", days_requested: 1,
+            })]);
+        } catch (e) {
+            refused = e.code === "PT422" && /Menstrual leave is not available/.test(e.message);
+        }
+        if (!refused) throw new Error("a man could submit menstrual leave");
         const marriage = student.find((t) => t.value === "marriage");
         if (marriage.allowance_days !== 3 || marriage.group !== "special" || marriage.needs_document !== false)
             throw new Error(JSON.stringify(marriage));
