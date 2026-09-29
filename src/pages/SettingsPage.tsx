@@ -55,7 +55,7 @@ const CAPABILITIES: Capability[] = [
     {
         key: "can_manage_contracts",
         label: "Contracts",
-        help: "Adds and edits contracts — manpower, subscriptions and clients — and acknowledges their warnings. Nothing else.",
+        help: "Adds and edits contracts — manpower, subscriptions and clients — and clients' purchase orders, and acknowledges their warnings. Finance has this already. Nothing else.",
     },
     {
         key: "bonus_eligible",

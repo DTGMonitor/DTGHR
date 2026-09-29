@@ -39,6 +39,18 @@ export interface Contract {
     documents: ContractDocument[];
     reminders: ContractReminder[];
     open_reminders: number;
+    /** The POs issued under this contract, newest first. */
+    purchase_orders: ContractPurchaseOrder[];
+}
+
+export interface ContractPurchaseOrder {
+    id: string;
+    po_number: string;
+    po_date: string;
+    end_date: string | null;
+    value: number | null;
+    currency: string;
+    status: PurchaseOrderStatus;
 }
 
 export interface ContractList {
@@ -79,6 +91,91 @@ export const contractService = {
     },
     removeDocument: (id: string, documentId: string) =>
         api.delete<Contract>(`/contracts/${id}/documents/${documentId}`),
+};
+
+export type PurchaseOrderStatus = "active" | "completed" | "cancelled";
+
+export interface PurchaseOrder {
+    id: string;
+    contract_id: string | null;
+    contract_title: string | null;
+    po_number: string;
+    client_name: string;
+    description: string | null;
+    po_date: string;
+    start_date: string | null;
+    end_date: string | null;
+    /** Null when there is no end date; negative once it has passed. */
+    days_remaining: number | null;
+    value: number | null;
+    currency: string;
+    status: PurchaseOrderStatus;
+    notes: string | null;
+    documents: ContractDocument[];
+    created_at: string;
+    updated_at: string;
+}
+
+export interface PurchaseOrderList {
+    items: PurchaseOrder[];
+    can_manage: boolean;
+}
+
+export interface PurchaseOrderDraft {
+    contract_id?: string | null;
+    po_number: string;
+    /** Taken from the linked contract's client when left empty. */
+    client_name?: string | null;
+    description?: string | null;
+    po_date: string;
+    start_date?: string | null;
+    end_date?: string | null;
+    value?: number | null;
+    currency?: string;
+    status?: PurchaseOrderStatus;
+    notes?: string | null;
+}
+
+export interface PurchaseOrderFilters {
+    client?: string;
+    contract_id?: string;
+    status?: PurchaseOrderStatus;
+    from?: string;
+    to?: string;
+    sort?: "po_date" | "end_date";
+}
+
+/** A contract renewal or a PO end, from GET /contracts/coming-up. */
+export interface ComingUpItem {
+    kind: "contract" | "purchase_order";
+    id: string;
+    contract_id: string | null;
+    /** The contract's title, or the PO number. */
+    label: string;
+    client: string;
+    contract_kind: ContractKind | null;
+    end_date: string;
+    days_remaining: number;
+    overdue: boolean;
+}
+
+export const purchaseOrderService = {
+    list: (filters: PurchaseOrderFilters = {}) =>
+        api.get<PurchaseOrderList>("/purchase-orders", {
+            params: Object.fromEntries(Object.entries(filters).filter(([, v]) => v)),
+        }),
+    create: (body: PurchaseOrderDraft) => api.post<PurchaseOrder>("/purchase-orders", body),
+    update: (id: string, body: Partial<PurchaseOrderDraft>) =>
+        api.patch<PurchaseOrder>(`/purchase-orders/${id}`, body),
+    remove: (id: string) => api.delete(`/purchase-orders/${id}`),
+    uploadDocument: (id: string, file: File) => {
+        const form = new FormData();
+        form.append("file", file);
+        return api.post<PurchaseOrder>(`/purchase-orders/${id}/documents`, form);
+    },
+    removeDocument: (id: string, documentId: string) =>
+        api.delete<PurchaseOrder>(`/purchase-orders/${id}/documents/${documentId}`),
+    comingUp: () => api.get<{ items: ComingUpItem[] }>("/contracts/coming-up"),
 };
 
 /**

@@ -1,5 +1,6 @@
 import api from "@/lib/api";
 import type { InvestigationsWaiting } from "@/services/investigationService";
+import type { ComingUpItem } from "@/services/contractService";
 
 export interface OverviewDay {
     date: string;
@@ -90,6 +91,12 @@ export interface Overview {
      * from investigations_waiting(); absent if that call fails.
      */
     investigations?: InvestigationsWaiting | null;
+    /**
+     * Contract renewals and PO ends coming up, soonest first. Added by the
+     * /overview route from contracts_coming_up(); null for anybody who does
+     * not read contracts.
+     */
+    renewals?: ComingUpItem[] | null;
     /**
      * Who is covering the site today, by first name. Management only.
      *

@@ -26,7 +26,11 @@ export default async ({ db, step, tx, people }) => {
 
     await step("staff without the flag get 404 on the list", async () => {
         await expectRaise(() => tx(RINA, `select public.contracts_list(null)`), "PT404", /^Not found$/);
-        await expectRaise(() => tx(HIMAWAN, `select public.contracts_list(null)`), "PT404", /^Not found$/);
+    });
+
+    await step("finance reads and manages contracts (they sit under Finance)", async () => {
+        const r = await tx(HIMAWAN, `select public.contracts_list(null) j`);
+        if (r.rows[0].j.can_manage !== true) throw new Error("finance cannot manage");
     });
 
     await step("a reader without the flag cannot add a contract", async () => {
@@ -110,17 +114,17 @@ export default async ({ db, step, tx, people }) => {
     });
 
     await step("management reads without managing", async () => {
-        await db.exec(`update public.employees set is_management_role = true where user_id = '${HIMAWAN}'`);
+        await db.exec(`update public.employees set is_management_role = true where user_id = '${RINA}'`);
         try {
-            const r = await tx(HIMAWAN, `select public.contracts_list('client') j`);
+            const r = await tx(RINA, `select public.contracts_list('client') j`);
             const j = r.rows[0].j;
             if (j.can_manage !== false) throw new Error("can_manage true");
             if (j.items.length !== 1 || j.items[0].kind !== "client") throw new Error("kind filter");
             if (j.due_count !== 1) throw new Error(`due_count ${j.due_count}`);
-            await expectRaise(() => tx(HIMAWAN, `select public.contracts_update($1::uuid, '{"notes":"x"}'::jsonb)`, [client.id]),
+            await expectRaise(() => tx(RINA, `select public.contracts_update($1::uuid, '{"notes":"x"}'::jsonb)`, [client.id]),
                 "PT403", /not set up to manage contracts/);
         } finally {
-            await db.exec(`update public.employees set is_management_role = false where user_id = '${HIMAWAN}'`);
+            await db.exec(`update public.employees set is_management_role = false where user_id = '${RINA}'`);
         }
     });
 
@@ -211,13 +215,11 @@ export default async ({ db, step, tx, people }) => {
         await expectRaise(() => tx(DIRECTOR, `select public.contracts_add_document($1::uuid, gen_random_uuid(), 'x.pdf', $2, 10, 'x')`,
             [sub.id, PDF]), "PT409");
 
-        await db.exec(`update public.employees set is_management_role = true where user_id = '${HIMAWAN}'`);
-        try {
+        {
+            // Finance reads the document without any flag.
             const g = await tx(HIMAWAN, `select public.contracts_get_document($1::uuid, $2::uuid) j`, [client.id, DOC]);
             if (g.rows[0].j.storage_path !== `${client.id}/${DOC}`) throw new Error("storage_path");
             if (g.rows[0].j.content_type !== PDF) throw new Error("content_type");
-        } finally {
-            await db.exec(`update public.employees set is_management_role = false where user_id = '${HIMAWAN}'`);
         }
         await expectRaise(() => tx(RINA, `select public.contracts_get_document($1::uuid, $2::uuid)`, [client.id, DOC]), "PT404");
         await expectRaise(() => tx(DIRECTOR, `select public.contracts_get_document($1::uuid, $2::uuid)`, [sub.id, DOC]), "PT404");

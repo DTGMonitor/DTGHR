@@ -60,6 +60,12 @@ interface NavItem {
     payslipsOnly?: boolean;
     /** The investigator flag alone -- not management, not rank. */
     investigatorsOnly?: boolean;
+    /**
+     * Listed under the "Finance" heading rather than the main list: the
+     * money pages, and contracts with their POs. Visibility is still each
+     * item's own rule.
+     */
+    finance?: boolean;
 }
 
 const navItems: NavItem[] = [
@@ -109,6 +115,7 @@ const navItems: NavItem[] = [
         // Himawan prepares it; the two people who sign for money read it.
         // Distinct from "Pay forecast", which is next year and hypothetical.
         label: "Payroll",
+        finance: true,
         to: "/payroll",
         salaryChainOnly: true,
         Icon: ReceiptText,
@@ -117,6 +124,7 @@ const navItems: NavItem[] = [
         // The actual PPh 21 beside the estimate the payroll was approved
         // with; what the payslips and the A1 form show. Finance enters it.
         label: "Tax (PPh 21)",
+        finance: true,
         to: "/payroll-tax",
         salaryChainOnly: true,
         Icon: Percent,
@@ -127,6 +135,7 @@ const navItems: NavItem[] = [
         // while she reviews the screens (temporary). Everyone else reads
         // their own on My Profile.
         label: "Payslips",
+        finance: true,
         to: "/payslips",
         payslipsOnly: true,
         Icon: FileText,
@@ -136,6 +145,7 @@ const navItems: NavItem[] = [
         // each month, reviewed and approved like the payroll. The same three
         // people, so the same rule.
         label: "Finance requests",
+        finance: true,
         to: "/finance-requests",
         salaryChainOnly: true,
         Icon: Wallet,
@@ -144,15 +154,18 @@ const navItems: NavItem[] = [
         // What a pay decision costs, before anybody takes it. Management
         // and administrators: the question is what the company spends.
         label: "Pay forecast",
+        finance: true,
         to: "/compensation",
         managementOnly: true,
         Icon: Calculator,
     },
     {
-        // Manpower, subscriptions and clients. Management reads them; the flag
-        // adds and acknowledges.
-        label: "Contracts",
+        // Manpower, subscriptions and clients, and the clients' purchase
+        // orders. Management reads them; finance and the flag add and
+        // acknowledge. Under Finance, at the managing director's request.
+        label: "Contracts & POs",
         to: "/contracts",
+        finance: true,
         contractsOnly: true,
         Icon: FileSignature,
     },
@@ -224,7 +237,7 @@ export default function Sidebar({ open, onClose }: { open: boolean; onClose: () 
     const inSalaryChain =
         user?.role === "finance" || user?.role === "director" || user?.role === "executive";
 
-    const items = navItems
+    const visible = navItems
         .filter((item) => !item.reviewChainOnly || inReviewChain)
         .filter((item) => !item.managementOnly || isManagement)
         .filter((item) => !item.adminOnly || isAdmin)
@@ -238,6 +251,7 @@ export default function Sidebar({ open, onClose }: { open: boolean; onClose: () 
             (item) =>
                 !item.contractsOnly ||
                 isManagement ||
+                user?.role === "finance" ||
                 Boolean(user?.can_manage_contracts),
         )
         .filter(
@@ -246,6 +260,8 @@ export default function Sidebar({ open, onClose }: { open: boolean; onClose: () 
                 isManagement ||
                 Boolean(user?.can_manage_people),
         );
+    const items = visible.filter((item) => !item.finance);
+    const financeItems = visible.filter((item) => item.finance);
 
     const myProfile = user?.employee_id
         ? {
@@ -267,6 +283,38 @@ export default function Sidebar({ open, onClose }: { open: boolean; onClose: () 
           ]
         : items;
 
+    const renderItem = (item: { label: string; to: string; Icon: LucideIcon }) => (
+        <NavLink
+            key={item.to}
+            to={item.to}
+            end={item.to === "/"}
+            className={({ isActive }) =>
+                /* The active marker is a 2px left rule in the signal
+                   colour — the same device the marketing site uses to
+                   mark the live section. */
+                `group relative flex items-center gap-3 rounded-r border-l-2 py-2.5 pl-4 pr-3 text-sm transition-colors ${
+                    isActive
+                        ? "border-signal bg-white/[0.06] font-semibold text-paper"
+                        : "border-transparent font-medium text-paper-soft hover:border-teal-500 hover:bg-white/[0.03] hover:text-paper"
+                }`
+            }
+        >
+            {({ isActive }) => (
+                <>
+                    <item.Icon
+                        className={`h-[1.125rem] w-[1.125rem] flex-shrink-0 transition-colors ${
+                            isActive
+                                ? "text-signal"
+                                : "text-teal-500 group-hover:text-teal-300"
+                        }`}
+                        strokeWidth={1.75}
+                    />
+                    {item.label}
+                </>
+            )}
+        </NavLink>
+    );
+
     return (
         <>
             {/* Scrim for the mobile drawer. */}
@@ -287,38 +335,17 @@ export default function Sidebar({ open, onClose }: { open: boolean; onClose: () 
                     <p className="dtg-eyebrow px-3 pb-3">Workspace</p>
 
                     <div className="space-y-0.5">
-                        {navList.map((item) => (
-                            <NavLink
-                                key={item.to}
-                                to={item.to}
-                                end={item.to === "/"}
-                                className={({ isActive }) =>
-                                    /* The active marker is a 2px left rule in the signal
-                                       colour — the same device the marketing site uses to
-                                       mark the live section. */
-                                    `group relative flex items-center gap-3 rounded-r border-l-2 py-2.5 pl-4 pr-3 text-sm transition-colors ${
-                                        isActive
-                                            ? "border-signal bg-white/[0.06] font-semibold text-paper"
-                                            : "border-transparent font-medium text-paper-soft hover:border-teal-500 hover:bg-white/[0.03] hover:text-paper"
-                                    }`
-                                }
-                            >
-                                {({ isActive }) => (
-                                    <>
-                                        <item.Icon
-                                            className={`h-[1.125rem] w-[1.125rem] flex-shrink-0 transition-colors ${
-                                                isActive
-                                                    ? "text-signal"
-                                                    : "text-teal-500 group-hover:text-teal-300"
-                                            }`}
-                                            strokeWidth={1.75}
-                                        />
-                                        {item.label}
-                                    </>
-                                )}
-                            </NavLink>
-                        ))}
+                        {navList.map(renderItem)}
                     </div>
+
+                    {/* The money pages, and the contracts and POs that bring
+                        the money in, under their own heading. */}
+                    {financeItems.length > 0 && (
+                        <>
+                            <p className="dtg-eyebrow px-3 pb-3 pt-6">Finance</p>
+                            <div className="space-y-0.5">{financeItems.map(renderItem)}</div>
+                        </>
+                    )}
                 </nav>
 
                 {/* Footer: the mark plus the strapline, so the brand closes the frame. */}

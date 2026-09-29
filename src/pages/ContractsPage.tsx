@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useSearchParams } from "react-router-dom";
 
 import { useAuth } from "@/contexts/AuthContext";
 import { employeeService } from "@/services/employeeService";
@@ -8,10 +8,13 @@ import {
     contractService,
     describeLeadTime,
     money,
+    purchaseOrderService,
+    type ComingUpItem,
     type Contract,
     type ContractKind,
 } from "@/services/contractService";
 import DocumentViewer from "@/components/contracts/DocumentViewer";
+import PurchaseOrders, { type ViewDocument } from "@/components/contracts/PurchaseOrders";
 import { useDialog } from "@/components/ui/Dialog";
 import type { Employee } from "@/types/employee";
 import Alert from "@/components/ui/Alert";
@@ -31,6 +34,11 @@ import Spinner from "@/components/ui/Spinner";
  * has to be acknowledged by name rather than dismissed — and a client renewal
  * gets chased at two months, six weeks and one month, because agreeing one
  * with Telfer or FMI is a negotiation, not a signature.
+ *
+ * It sits under Finance, with the clients' purchase orders beside the
+ * contracts: once there are a few accounts, what matters is when each PO was
+ * issued and runs out, and which contracts are coming up for renewal -- so
+ * that is the first thing on the page.
  */
 
 const TABS: { key: ContractKind; label: string; blurb: string }[] = [
@@ -66,6 +74,7 @@ export default function ContractsPage() {
         Boolean(user?.is_management) ||
         Boolean(user?.is_superuser) ||
         Boolean(user?.can_manage_contracts) ||
+        user?.role === "finance" ||
         user?.role === "director" ||
         user?.role === "executive";
 
@@ -77,6 +86,23 @@ export default function ContractsPage() {
     const [busy, setBusy] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [composing, setComposing] = useState(false);
+    const [params, setParams] = useSearchParams();
+    const view: "contracts" | "pos" = params.get("tab") === "po" ? "pos" : "contracts";
+    const setView = (v: "contracts" | "pos") =>
+        setParams(
+            (prev) => {
+                const next = new URLSearchParams(prev);
+                if (v === "pos") next.set("tab", "po");
+                else next.delete("tab");
+                return next;
+            },
+            { replace: true },
+        );
+    const [comingUp, setComingUp] = useState<ComingUpItem[]>([]);
+    const [poContractFilter, setPoContractFilter] = useState("");
+    const [composePoFor, setComposePoFor] = useState<string | null>(null);
+    const [highlight, setHighlight] = useState<string | null>(null);
+    const [poViewing, setPoViewing] = useState<ViewDocument | null>(null);
     const [viewing, setViewing] = useState<{
         contractId: string;
         documentId: string;
@@ -86,9 +112,13 @@ export default function ContractsPage() {
 
     const load = useCallback(async () => {
         try {
-            const res = await contractService.list();
+            const [res, upcoming] = await Promise.all([
+                contractService.list(),
+                purchaseOrderService.comingUp().catch(() => null),
+            ]);
             setRows(res.data.items);
             setCanManage(res.data.can_manage);
+            setComingUp(upcoming?.data.items ?? []);
             if (res.data.can_manage) {
                 const emps = await employeeService.list({ page: 1, page_size: 100 });
                 setPeople(emps.data.items.filter((e) => e.is_active));
@@ -131,6 +161,27 @@ export default function ContractsPage() {
     );
 
     const shown = rows.filter((c) => c.kind === tab);
+    const clientContracts = useMemo(() => rows.filter((c) => c.kind === "client"), [rows]);
+    const onPoComposeHandled = useCallback(() => setComposePoFor(null), []);
+
+    /* From "Coming up" to the row itself: the right tab, then the row. */
+    const goTo = (item: ComingUpItem) => {
+        setHighlight(item.id);
+        if (item.kind === "purchase_order") {
+            setPoContractFilter("");
+            setView("pos");
+            return;
+        }
+        setView("contracts");
+        if (item.contract_kind) setTab(item.contract_kind);
+        window.setTimeout(
+            () =>
+                document
+                    .getElementById(`contract-${item.id}`)
+                    ?.scrollIntoView({ behavior: "smooth", block: "center" }),
+            50,
+        );
+    };
 
     if (user && !mayBeHere) return <Navigate to="/" replace />;
 
@@ -138,16 +189,17 @@ export default function ContractsPage() {
         <div className="dtg-fade-in space-y-6">
             <header className="flex flex-wrap items-end justify-between gap-4">
                 <div>
-                    <p className="dtg-eyebrow">Commitments</p>
+                    <p className="dtg-eyebrow">Finance</p>
                     <h1 className="mt-1.5 text-2xl font-bold tracking-tight text-paper">
-                        Contracts
+                        Contracts &amp; POs
                     </h1>
                     <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-paper-soft">
-                        Manpower, subscriptions and clients, each with its own warning schedule.
-                        A warning stays up until somebody acknowledges it.
+                        Manpower, subscriptions and clients, each with its own warning schedule,
+                        and the purchase orders clients issue under them. A warning stays up
+                        until somebody acknowledges it.
                     </p>
                 </div>
-                {canManage && !composing && (
+                {canManage && !composing && view === "contracts" && (
                     <button
                         onClick={() => setComposing(true)}
                         className="dtg-btn-primary px-4 py-2 text-sm"
@@ -158,6 +210,66 @@ export default function ContractsPage() {
             </header>
 
             {error && <Alert tone="danger">{error}</Alert>}
+
+            {/* ── Coming up: renewals within 90 days, PO ends within 60 ── */}
+            <section className="dtg-panel overflow-hidden">
+                <header className="border-b border-white/[0.08] px-5 py-3.5">
+                    <p className="dtg-eyebrow">Coming up</p>
+                    <h2 className="mt-0.5 text-sm font-semibold text-paper">
+                        {comingUp.length === 0
+                            ? "Nothing ends in the next 90 days"
+                            : `${comingUp.length} ${comingUp.length === 1 ? "end date" : "end dates"} ahead`}
+                    </h2>
+                    <p className="mt-0.5 text-micro text-muted">
+                        Contracts ending within 90 days (and any past their end nobody has
+                        acknowledged); active POs ending within 60 days. Soonest first.
+                    </p>
+                </header>
+                {comingUp.length > 0 && (
+                    <ul className="divide-y divide-white/[0.06]">
+                        {comingUp.map((item) => (
+                            <li key={`${item.kind}-${item.id}`}>
+                                <button
+                                    onClick={() => goTo(item)}
+                                    className="flex w-full flex-wrap items-center justify-between gap-3 px-5 py-3 text-left transition-colors hover:bg-white/[0.03]"
+                                >
+                                    <span className="min-w-0">
+                                        <span className="text-sm font-semibold text-paper">
+                                            {item.kind === "purchase_order"
+                                                ? `PO ${item.label}`
+                                                : item.label}
+                                        </span>
+                                        <span className="ml-2 text-micro uppercase tracking-label text-muted">
+                                            {item.kind === "purchase_order"
+                                                ? "purchase order"
+                                                : `${item.contract_kind} contract`}
+                                        </span>
+                                        <span className="mt-0.5 block text-xs text-paper-soft">
+                                            {item.client !== item.label ? `${item.client} · ` : ""}
+                                            ends {fmt(item.end_date)}
+                                        </span>
+                                    </span>
+                                    <span
+                                        className={`flex-shrink-0 rounded-full border px-2.5 py-1 text-micro font-semibold uppercase tracking-label ${
+                                            item.days_remaining < 0
+                                                ? "border-danger/40 bg-danger/10 text-danger"
+                                                : item.days_remaining <= 30
+                                                  ? "border-gold/30 bg-gold/10 text-gold"
+                                                  : "border-signal/30 bg-signal/10 text-signal"
+                                        }`}
+                                    >
+                                        {item.days_remaining < 0
+                                            ? `${Math.abs(item.days_remaining)} days overdue`
+                                            : item.days_remaining === 0
+                                              ? "today"
+                                              : `${item.days_remaining} days`}
+                                    </span>
+                                </button>
+                            </li>
+                        ))}
+                    </ul>
+                )}
+            </section>
 
             {/* ── What needs acknowledging ───────────────────────────────── */}
             {due.length > 0 && (
@@ -236,6 +348,43 @@ export default function ContractsPage() {
                 </section>
             )}
 
+            {/* ── Contracts, or purchase orders ─────────────────────────── */}
+            <div className="flex gap-1 border-b border-white/[0.08]">
+                {(
+                    [
+                        ["contracts", "Contracts"],
+                        ["pos", "Purchase orders"],
+                    ] as const
+                ).map(([key, label]) => (
+                    <button
+                        key={key}
+                        onClick={() => {
+                            if (key === "pos") setPoContractFilter("");
+                            setView(key);
+                        }}
+                        className={`-mb-px border-b-2 px-4 py-2.5 text-sm font-semibold transition-colors ${
+                            view === key
+                                ? "border-signal text-paper"
+                                : "border-transparent text-muted hover:text-paper-soft"
+                        }`}
+                    >
+                        {label}
+                    </button>
+                ))}
+            </div>
+
+            {view === "pos" ? (
+                <PurchaseOrders
+                    contracts={clientContracts}
+                    contractFilter={poContractFilter}
+                    composeFor={composePoFor}
+                    onComposeHandled={onPoComposeHandled}
+                    highlight={highlight}
+                    onChanged={() => void load()}
+                    onView={setPoViewing}
+                />
+            ) : (
+            <>
             {/* ── The three drawers ──────────────────────────────────────── */}
             <div className="flex flex-wrap gap-2">
                 {TABS.map((t) => {
@@ -295,7 +444,13 @@ export default function ContractsPage() {
             ) : (
                 <div className="space-y-3">
                     {shown.map((c) => (
-                        <article key={c.id} className="dtg-panel overflow-hidden">
+                        <article
+                            key={c.id}
+                            id={`contract-${c.id}`}
+                            className={`dtg-panel overflow-hidden ${
+                                highlight === c.id ? "ring-1 ring-gold/40" : ""
+                            }`}
+                        >
                             <div className="flex flex-wrap items-start justify-between gap-4 border-b border-white/[0.08] px-5 py-3.5">
                                 <div className="min-w-0">
                                     <p className="text-sm font-semibold text-paper">{c.title}</p>
@@ -443,6 +598,65 @@ export default function ContractsPage() {
                             </div>
                             )}
 
+                            {/* The POs issued under this account. */}
+                            {c.kind === "client" && (
+                                <div className="border-t border-white/[0.06] px-5 py-3">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <span className="text-micro font-semibold uppercase tracking-label text-muted">
+                                            Purchase orders ({c.purchase_orders.length})
+                                        </span>
+                                        {c.purchase_orders.length > 0 && (
+                                            <button
+                                                onClick={() => {
+                                                    setPoContractFilter(c.id);
+                                                    setHighlight(null);
+                                                    setView("pos");
+                                                }}
+                                                className="text-micro text-teal-200 underline-offset-2 hover:underline"
+                                            >
+                                                View all
+                                            </button>
+                                        )}
+                                        {canManage && (
+                                            <button
+                                                onClick={() => {
+                                                    setPoContractFilter(c.id);
+                                                    setComposePoFor(c.id);
+                                                    setView("pos");
+                                                }}
+                                                className="rounded border border-dashed border-white/15 px-2.5 py-1 text-micro text-muted transition-colors hover:border-signal/40 hover:text-paper-soft"
+                                            >
+                                                Add PO
+                                            </button>
+                                        )}
+                                    </div>
+                                    {c.purchase_orders.length > 0 && (
+                                        <ul className="mt-2 space-y-1">
+                                            {c.purchase_orders.map((po) => (
+                                                <li
+                                                    key={po.id}
+                                                    className="flex flex-wrap items-center gap-x-3 text-micro text-paper-soft"
+                                                >
+                                                    <span className="font-mono font-semibold text-paper">
+                                                        {po.po_number}
+                                                    </span>
+                                                    <span>issued {fmt(po.po_date)}</span>
+                                                    {po.end_date && <span>ends {fmt(po.end_date)}</span>}
+                                                    {po.value !== null && (
+                                                        <span className="font-mono">
+                                                            {money(po.value, po.currency)}
+                                                        </span>
+                                                    )}
+                                                    <span className="uppercase tracking-label text-muted">
+                                                        {po.status}
+                                                    </span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    )}
+                                </div>
+                            )}
+
                             {canManage && (
                                 <div className="flex flex-wrap gap-2 border-t border-white/[0.08] px-5 py-3">
                                     <button
@@ -509,6 +723,17 @@ export default function ContractsPage() {
                         </article>
                     ))}
                 </div>
+            )}
+            </>
+            )}
+
+            {poViewing && (
+                <DocumentViewer
+                    src={poViewing.src}
+                    filename={poViewing.filename}
+                    contentType={poViewing.contentType}
+                    onClose={() => setPoViewing(null)}
+                />
             )}
 
             {viewing && (

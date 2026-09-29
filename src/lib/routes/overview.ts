@@ -13,12 +13,19 @@ const int = (v: string | undefined, fallback: number): number => {
 // The dashboard, plus what investigations have waiting on this person
 // (supabase/migrations/20260928001400_investigations.sql). The second call
 // never breaks the dashboard: if it fails, the band simply leaves it out.
+//
+// Contract renewals and PO ends coming up (20260929000100_purchase_orders.sql)
+// for whoever reads contracts; anybody else is answered 404, which becomes
+// null here.
 route("GET", "/overview", async () => {
-    const [overview, investigations] = await Promise.all([
+    const [overview, investigations, renewals] = await Promise.all([
         rpc<Record<string, unknown>>("overview_get"),
         rpc<unknown>("investigations_waiting").catch(() => null),
+        rpc<{ items: unknown[] }>("contracts_coming_up")
+            .then((r) => r.items)
+            .catch(() => null),
     ]);
-    return { ...overview, investigations };
+    return { ...overview, investigations, renewals };
 });
 
 route("GET", "/dashboard/stats", () => rpc("dashboard_stats"));

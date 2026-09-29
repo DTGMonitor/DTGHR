@@ -216,6 +216,37 @@ function bandLines(o: Overview): { today: ReactNode[]; waiting: ReactNode[] } {
         }
     }
 
+    /*
+     * Renewals and PO ends within a month, for whoever reads contracts --
+     * the managing director: "it will be important to track PO dates and
+     * when contracts are coming up for renewal". The rest are on the page.
+     */
+    const soon = (o.renewals ?? []).filter((r) => r.days_remaining <= 30);
+    for (const r of soon.slice(0, 4)) {
+        const when =
+            r.days_remaining < 0
+                ? `ended ${Math.abs(r.days_remaining)} day${r.days_remaining === -1 ? "" : "s"} ago`
+                : r.days_remaining === 0
+                  ? "ends today"
+                  : `${r.kind === "contract" ? "renews" : "ends"} in ${r.days_remaining} day${r.days_remaining === 1 ? "" : "s"}`;
+        waiting.push(
+            <Link
+                key={`renewal-${r.kind}-${r.id}`}
+                to={r.kind === "contract" ? "/contracts" : "/contracts?tab=po"}
+                className="underline"
+            >
+                {r.kind === "contract" ? `Contract with ${r.client}` : `PO ${r.label}`} {when}.
+            </Link>,
+        );
+    }
+    if (soon.length > 4) {
+        waiting.push(
+            <Link key="renewal-more" to="/contracts" className="underline">
+                And {soon.length - 4} more within a month on Contracts &amp; POs.
+            </Link>,
+        );
+    }
+
     if (o.is_management && o.approvals) {
         /*
          * What is waiting, by name, not by count.

@@ -8,6 +8,7 @@ import { route } from "@/lib/api";
 import { ApiError, rpc, supabase } from "@/lib/supabase";
 
 const BUCKET = "contract-documents";
+const PO_BUCKET = "purchase-order-documents";
 
 interface StoredDocument {
     id: string;
@@ -26,16 +27,19 @@ function newId(): string {
     });
 }
 
-async function removeObjects(paths: string[]): Promise<void> {
+async function removeObjects(paths: string[], bucket = BUCKET): Promise<void> {
     if (!paths.length) return;
     // Best effort: the row is already gone, and an orphaned object is only
     // reachable by somebody who could read the contract anyway.
-    await supabase.storage.from(BUCKET).remove(paths);
+    await supabase.storage.from(bucket).remove(paths);
 }
 
 route("GET", "/contracts", ({ query }) =>
     rpc("contracts_list", { p_kind: query.kind ?? null }),
 );
+
+// Renewals and PO ends in the next 90 / 60 days, soonest first.
+route("GET", "/contracts/coming-up", () => rpc("contracts_coming_up"));
 
 route("POST", "/contracts", ({ body }) => rpc("contracts_create", { p_body: body ?? {} }));
 
@@ -115,4 +119,90 @@ route("DELETE", "/contracts/:id/documents/:documentId", async ({ path }) => {
     );
     await removeObjects([res.storage_path]);
     return res.contract;
+});
+
+// ---------------------------------------------------------------------------
+// Purchase orders (20260929000100_purchase_orders.sql). Documents live in the
+// private `purchase-order-documents` bucket under `<po_id>/<document_id>`.
+// ---------------------------------------------------------------------------
+route("GET", "/purchase-orders", ({ query }) =>
+    rpc("purchase_orders_list", {
+        p_client: query.client || null,
+        p_contract_id: query.contract_id || null,
+        p_status: query.status || null,
+        p_from: query.from || null,
+        p_to: query.to || null,
+        p_sort: query.sort || null,
+    }),
+);
+
+route("GET", "/purchase-orders/:id", ({ path }) => rpc("purchase_orders_get", { p_id: path.id }));
+
+route("POST", "/purchase-orders", ({ body }) =>
+    rpc("purchase_orders_create", { p_body: body ?? {} }),
+);
+
+route("PATCH", "/purchase-orders/:id", ({ path, body }) =>
+    rpc("purchase_orders_update", { p_id: path.id, p_body: body ?? {} }),
+);
+
+route("DELETE", "/purchase-orders/:id", async ({ path }) => {
+    const res = await rpc<{ storage_paths: string[] }>("purchase_orders_delete", { p_id: path.id });
+    await removeObjects(res?.storage_paths ?? [], PO_BUCKET);
+    return undefined; // 204 No Content
+});
+
+route("POST", "/purchase-orders/:id/documents", async ({ path, body }) => {
+    const file = body instanceof FormData ? body.get("file") : null;
+    if (!(file instanceof Blob)) {
+        throw new ApiError("Field required", 422);
+    }
+    const filename = file instanceof File ? file.name : "";
+    const contentType = file.type;
+
+    await rpc("purchase_orders_check_document", {
+        p_id: path.id,
+        p_content_type: contentType,
+        p_byte_size: file.size,
+    });
+
+    const documentId = newId();
+    const storagePath = `${path.id}/${documentId}`;
+    const { error } = await supabase.storage
+        .from(PO_BUCKET)
+        .upload(storagePath, file, { contentType, upsert: false });
+    if (error) throw new ApiError(error.message, 400);
+
+    try {
+        return await rpc("purchase_orders_add_document", {
+            p_id: path.id,
+            p_document_id: documentId,
+            p_filename: filename,
+            p_content_type: contentType,
+            p_byte_size: file.size,
+            p_storage_path: storagePath,
+        });
+    } catch (err) {
+        await removeObjects([storagePath], PO_BUCKET);
+        throw err;
+    }
+});
+
+route("GET", "/purchase-orders/:id/documents/:documentId", async ({ path }) => {
+    const doc = await rpc<StoredDocument>("purchase_orders_get_document", {
+        p_id: path.id,
+        p_document_id: path.documentId,
+    });
+    const { data, error } = await supabase.storage.from(PO_BUCKET).download(doc.storage_path);
+    if (error || !data) throw new ApiError("Not found", 404);
+    return new Blob([data], { type: doc.content_type });
+});
+
+route("DELETE", "/purchase-orders/:id/documents/:documentId", async ({ path }) => {
+    const res = await rpc<{ purchase_order: unknown; storage_path: string }>(
+        "purchase_orders_delete_document",
+        { p_id: path.id, p_document_id: path.documentId },
+    );
+    await removeObjects([res.storage_path], PO_BUCKET);
+    return res.purchase_order;
 });
