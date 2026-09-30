@@ -287,6 +287,23 @@ export default async ({ db, step, tx, people }) => {
         if (all.items.length !== 1 || all.open_count !== 0) throw new Error("include_closed");
     });
 
+    await step("tickets: the reporter may close their own live ticket, and do nothing else", async () => {
+        await reset();
+        const t = await raise(NESSY);
+        await fails(() => setStatus(NESSY, t.id, "resolved", "Restarted it"), "PT403", /Only IT support/);
+        await fails(() => setStatus(NESSY, t.id, "in_progress"), "PT403", /Only IT support/);
+        await fails(() => setStatus(PETER, t.id, "closed", "Not mine"), "PT403", /Only IT support/);
+        const c = await setStatus(NESSY, t.id, "closed", "Fixed it myself");
+        if (c.status !== "closed") throw new Error("not closed");
+        const last = c.events[c.events.length - 1];
+        if (last.to_status !== "closed" || last.body !== "Fixed it myself") throw new Error("trail");
+        await fails(() => setStatus(NESSY, t.id, "closed", "Again"), "PT409", /already closed/);
+
+        const r = await raise(NESSY);
+        await resolve(BINTANG, r.id);
+        await fails(() => setStatus(NESSY, r.id, "closed", "Late"), "PT409", /already resolved/);
+    });
+
     await step("tickets: assigning is IT support's, and only to somebody who works the queue", async () => {
         await reset();
         const t = await raise(NESSY);

@@ -234,6 +234,25 @@ export default function TicketsPage() {
         }
     };
 
+    // The reporter's own way out: they fixed it, or no longer need it.
+    const closeMine = async (ticket: Ticket) => {
+        const note = await dialog.prompt({
+            title: `Close ${ticket.reference}`,
+            body: "Let IT know why, e.g. you fixed it yourself or it is no longer needed.",
+            multiline: true,
+            required: true,
+            confirmLabel: "Close ticket",
+        });
+        if (!note) return;
+        try {
+            const res = await ticketService.setStatus(ticket.id, "closed", note);
+            setOpenTicket(res.data);
+            await load();
+        } catch (err) {
+            complain(err, "Could not close that ticket.");
+        }
+    };
+
     const shown =
         tab === "history"
             ? (history?.items ?? []).filter((t) => !historyCategory || t.category === historyCategory)
@@ -619,6 +638,20 @@ export default function TicketsPage() {
                                                 Reply
                                             </button>
                                         )}
+
+                                        {!openTicket.can_work &&
+                                            openTicket.reporter_id !== null &&
+                                            openTicket.reporter_id === user?.employee_id &&
+                                            openTicket.status !== "resolved" &&
+                                            openTicket.status !== "closed" && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => void closeMine(openTicket)}
+                                                    className="dtg-btn-secondary px-3 py-1.5 text-xs"
+                                                >
+                                                    Close ticket
+                                                </button>
+                                            )}
 
                                         {openTicket.can_work && (
                                             <>
