@@ -30,6 +30,18 @@
 
 begin;
 
+-- A role change entered by mistake on Nessy's record (a toggle back to
+-- Geotechnical Monitoring Engineer, dated 27 July 2026). Removed before the
+-- backfill below reads the changes, so her history is not reconstructed
+-- backwards. Matches that one row exactly; a no-op anywhere else.
+delete from public.employee_role_changes rc
+ using public.employees e
+ where e.id = rc.employee_id
+   and lower(e.email) = 'nessy.salsabilita@dtgeotech.com'
+   and rc.effective_date = date '2026-07-27'
+   and rc.previous_position = 'Business & Technical Support'
+   and rc.new_position = 'Geotechnical Monitoring Engineer';
+
 -- ---------------------------------------------------------------------------
 -- 1. The table.
 -- ---------------------------------------------------------------------------
