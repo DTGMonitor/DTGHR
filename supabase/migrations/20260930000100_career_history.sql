@@ -313,8 +313,10 @@ begin
     if p_effective_date is null then
         raise exception 'Start date is required.' using errcode = 'PT422';
     end if;
-    if p_effective_date > (public.local_today() + interval '1 year')::date then
-        raise exception 'The start date cannot be more than a year from now.' using errcode = 'PT422';
+    -- Not ahead of time: the latest entry is the profile's current role, so a
+    -- promotion recorded early would change it at once.
+    if p_effective_date > public.local_today() then
+        raise exception 'The start date can''t be in the future.' using errcode = 'PT422';
     end if;
     if p_position is null or btrim(p_position) = '' then
         raise exception 'Position is required.' using errcode = 'PT422';

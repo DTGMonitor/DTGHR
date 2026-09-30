@@ -162,55 +162,18 @@ export default async ({ db, step, tx }) => {
         }
     });
 
-    await step("career: validation -- date, position, a year ahead at most, one entry per date", async () => {
+    await step("career: validation -- date, position, not in the future, one entry per date", async () => {
         await raises(() => add(HERA, E_PAT, { position: "X" }), "PT422", /Start date is required/);
         await raises(() => add(HERA, E_PAT, { effective_date: "2024-01-01", position: " " }), "PT422", /Position is required/);
-        const far = await inDays(400);
-        await raises(() => add(HERA, E_PAT, { effective_date: far, position: "X" }), "PT422", /more than a year/);
+        const tomorrow = await inDays(1);
+        await raises(() => add(HERA, E_PAT, { effective_date: tomorrow, position: "X" }), "PT422",
+            /^The start date can't be in the future\.$/);
+        const [latest] = await list(HERA, E_PAT);
+        await raises(() => edit(HERA, latest.id, { effective_date: tomorrow }), "PT422", /in the future/);
         await raises(() => add(HERA, E_PAT, { effective_date: "2023-01-01", position: "X" }), "PT409",
             /^There is already an entry on that date\.$/);
         const [cur] = await list(HERA, E_PAT);
         await raises(() => edit(HERA, cur.id, { effective_date: "2023-01-01" }), "PT409", /already an entry/);
-    });
-
-    await step("career: adding an older entry leaves the profile; a newer one sets it", async () => {
-        const older = await add(HERA, E_PAT, { effective_date: "2024-06-01", position: "Engineer II",
-            job_level: "L1", department: "Ops", note: "Promoted" });
-        if (older.note !== "Promoted" || older.end_date !== await (async () => {
-            const r = await db.query(`select to_char(public.local_today() - 1,'YYYY-MM-DD') d`);
-            return r.rows[0].d;
-        })()) throw new Error(JSON.stringify(older));
-        let p = await profile(E_PAT);
-        if (p.position !== "Senior Engineer" || p.job_level !== "L2") throw new Error(JSON.stringify(p));
-
-        const newer = await add(HERA, E_PAT, { effective_date: await inDays(30), position: "Lead Engineer",
-            job_level: "L3", department: "Monitoring" });
-        p = await profile(E_PAT);
-        if (p.position !== "Lead Engineer" || p.job_level !== "L3" || p.department !== "Monitoring")
-            throw new Error(JSON.stringify(p));
-        // The sync is not itself a profile change: no entry for today changed.
-        const e = await entries(E_PAT);
-        if (e.length !== 4) throw new Error(JSON.stringify(e));
-        const t = e.find((x) => x.d === today);
-        if (t.position !== "Senior Engineer") throw new Error(JSON.stringify(t));
-
-        const edited = await edit(HERA, newer.id, { position: "Principal Engineer", note: "Promoted" });
-        if (edited.position !== "Principal Engineer" || edited.job_level !== "L3") throw new Error(JSON.stringify(edited));
-        p = await profile(E_PAT);
-        if (p.position !== "Principal Engineer") throw new Error(JSON.stringify(p));
-
-        await del(HERA, newer.id);
-        p = await profile(E_PAT);
-        if (p.position !== "Senior Engineer" || p.job_level !== "L2" || p.department !== "Ops") throw new Error(JSON.stringify(p));
-        if ((await entries(E_PAT)).length !== 3) throw new Error("entry not deleted");
-
-        // Editing an older entry's date past the latest makes it the current one.
-        await edit(HERA, older.id, { effective_date: await inDays(10) });
-        p = await profile(E_PAT);
-        if (p.position !== "Engineer II" || p.job_level !== "L1") throw new Error(JSON.stringify(p));
-        await edit(HERA, older.id, { effective_date: "2024-06-01" });
-        p = await profile(E_PAT);
-        if (p.position !== "Senior Engineer") throw new Error(JSON.stringify(p));
     });
 
     await step("career: the only entry cannot be deleted", async () => {
@@ -219,8 +182,52 @@ export default async ({ db, step, tx }) => {
         await raises(() => del(HERA, "ce000000-0000-0000-0000-0000000000ff"), "PT404");
     });
 
+    await step("career: adding an older entry leaves the profile; a newer one sets it", async () => {
+        const older = await add(HERA, E_PAT, { effective_date: "2024-06-01", position: "Engineer II",
+            job_level: "L1", department: "Ops", note: "Promoted" });
+        const yesterday = await inDays(-1);
+        if (older.note !== "Promoted" || older.end_date !== yesterday) throw new Error(JSON.stringify(older));
+        let p = await profile(E_PAT);
+        if (p.position !== "Senior Engineer" || p.job_level !== "L2") throw new Error(JSON.stringify(p));
+
+        // Solo has only the joining entry (2025-05-05): a later one becomes current.
+        const newer = await add(HERA, E_SOLO, { effective_date: "2026-01-05", position: "Senior Technician",
+            job_level: "T2", department: "Monitoring", note: "Promoted" });
+        if (!newer.is_current) throw new Error(JSON.stringify(newer));
+        p = await profile(E_SOLO);
+        if (p.position !== "Senior Technician" || p.job_level !== "T2" || p.department !== "Monitoring")
+            throw new Error(JSON.stringify(p));
+        // The sync is not itself a profile change: no entry for today.
+        let e = await entries(E_SOLO);
+        if (e.length !== 2 || e.some((x) => x.d === today)) throw new Error(JSON.stringify(e));
+
+        const edited = await edit(HERA, newer.id, { position: "Lead Technician" });
+        if (edited.position !== "Lead Technician" || edited.job_level !== "T2") throw new Error(JSON.stringify(edited));
+        p = await profile(E_SOLO);
+        if (p.position !== "Lead Technician") throw new Error(JSON.stringify(p));
+
+        // Moving it before the joining entry makes the joining entry current again.
+        await edit(HERA, newer.id, { effective_date: "2025-01-01" });
+        p = await profile(E_SOLO);
+        if (p.position !== "Technician" || p.job_level !== null || p.department !== "Ops") throw new Error(JSON.stringify(p));
+        await edit(HERA, newer.id, { effective_date: "2026-01-05" });
+
+        await del(HERA, newer.id);
+        p = await profile(E_SOLO);
+        if (p.position !== "Technician" || p.department !== "Ops") throw new Error(JSON.stringify(p));
+        e = await entries(E_SOLO);
+        if (e.length !== 1) throw new Error("entry not deleted");
+
+        // Editing today's entry on Pat changes Pat's profile.
+        const [cur] = await list(HERA, E_PAT);
+        await edit(HERA, cur.id, { position: "Principal Engineer" });
+        p = await profile(E_PAT);
+        if (p.position !== "Principal Engineer") throw new Error(JSON.stringify(p));
+        await del(HERA, older.id);
+    });
+
     await step("career: changes are logged", async () => {
-        const r = await db.query(`select action from public.activity_logs where target_id=$1 and action like 'CAREER_%'`, [E_PAT]);
+        const r = await db.query(`select action from public.activity_logs where target_id = any($1::uuid[]) and action like 'CAREER_%'`, [[E_PAT, E_SOLO]]);
         const actions = new Set(r.rows.map((x) => x.action));
         for (const a of ["CAREER_ENTRY_ADDED", "CAREER_ENTRY_UPDATED", "CAREER_ENTRY_DELETED"])
             if (!actions.has(a)) throw new Error(`no ${a}`);

@@ -108,6 +108,7 @@ function EntryForm({
                     <input
                         type="date"
                         required
+                        max={todayIso()}
                         className="dtg-input"
                         value={draft.effective_date}
                         onChange={set("effective_date")}
@@ -306,13 +307,10 @@ export default function CareerHistory({
                 ) : (
                     <ol className="relative ml-1.5 border-l border-white/[0.1]">
                         {rows.map((r) => {
-                            const upcoming = r.effective_date > today;
                             const end = r.end_date ?? today;
                             const range = r.end_date
                                 ? `${monthYear(r.effective_date)} – ${monthYear(r.end_date)}`
-                                : upcoming
-                                  ? `From ${monthYear(r.effective_date)}`
-                                  : `${monthYear(r.effective_date)} – present`;
+                                : `${monthYear(r.effective_date)} – present`;
                             return (
                                 <li key={r.id} className="relative pb-5 pl-5 last:pb-0">
                                     <span
@@ -345,12 +343,9 @@ export default function CareerHistory({
                                             <div className="min-w-0">
                                                 <p className="font-mono text-micro text-teal-200">
                                                     {range}
-                                                    {!upcoming && (
-                                                        <span className="ml-2 text-muted">
-                                                            · {duration(r.effective_date, end)}
-                                                        </span>
-                                                    )}
-                                                    {upcoming && <span className="ml-2 text-muted">· upcoming</span>}
+                                                    <span className="ml-2 text-muted">
+                                                        · {duration(r.effective_date, end)}
+                                                    </span>
                                                 </p>
                                                 <p className="mt-1 text-sm font-semibold text-paper">{r.position}</p>
                                                 {(r.job_level || r.department) && (
