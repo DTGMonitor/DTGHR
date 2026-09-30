@@ -27,8 +27,10 @@
 --
 -- contracts_create, contracts_update and _contracts_serialise are re-created
 -- from their newest definitions (20260926001000_contracts.sql,
--- 20260929000100_purchase_orders.sql); contracts_send_renewal_notices from
--- 20260929000100_purchase_orders.sql.
+-- 20260929000100_purchase_orders.sql); contracts_send_renewal_notices and
+-- _contracts_coming_up from 20260929000100_purchase_orders.sql, so that
+-- auto-renewals do not nag: "Coming up" shows one only within its largest
+-- warning, and monthly/quarterly ones get no renewal email.
 -- ===========================================================================
 
 begin;
@@ -575,8 +577,75 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------
+-- 6b. Coming up: as in 20260929000100_purchase_orders.sql, except that an
+-- auto-renewing contract shows only within its own largest warning (monthly
+-- with [7]: the last 7 days before renewal), not the 90-day window.
+-- ---------------------------------------------------------------------------
+create or replace function public._contracts_coming_up(p_today date)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+    select coalesce(jsonb_agg(to_jsonb(x) order by x.days_remaining, x.label), '[]'::jsonb)
+      from (
+          select 'contract'::text as kind,
+                 c.id,
+                 c.id as contract_id,
+                 c.title::text as label,
+                 coalesce(nullif(btrim(c.counterparty), ''), c.title)::text as client,
+                 c.kind::text as contract_kind,
+                 to_char(c.end_date, 'YYYY-MM-DD') as end_date,
+                 (c.end_date - p_today) as days_remaining,
+                 (c.end_date < p_today) as overdue
+            from public.contracts c
+           where c.status = 'active'
+             and not (c.auto_renew and c.billing_cycle in ('monthly', 'quarterly', 'annual'))
+             and c.end_date <= p_today + 90
+             and (c.end_date >= p_today
+                  or not exists (select 1 from public.contract_reminders r
+                                  where r.contract_id = c.id)
+                  or exists (select 1 from public.contract_reminders r
+                              where r.contract_id = c.id and r.acknowledged_at is null))
+          union all
+          select 'contract'::text,
+                 c.id,
+                 c.id,
+                 c.title::text,
+                 coalesce(nullif(btrim(c.counterparty), ''), c.title)::text,
+                 c.kind::text,
+                 to_char(c.end_date, 'YYYY-MM-DD'),
+                 (c.end_date - p_today),
+                 false
+            from public.contracts c
+           where c.status = 'active'
+             and c.auto_renew and c.billing_cycle in ('monthly', 'quarterly', 'annual')
+             and c.end_date >= p_today
+             and c.end_date <= p_today + coalesce((select max(r.days_before)
+                                                     from public.contract_reminders r
+                                                    where r.contract_id = c.id), 0)
+          union all
+          select 'purchase_order',
+                 po.id,
+                 po.contract_id,
+                 po.po_number::text,
+                 po.client_name::text,
+                 null,
+                 to_char(po.end_date, 'YYYY-MM-DD'),
+                 (po.end_date - p_today),
+                 false
+            from public.purchase_orders po
+           where po.status = 'active'
+             and po.end_date between p_today and p_today + 60
+      ) x;
+$$;
+
+-- ---------------------------------------------------------------------------
 -- 7. Renewal emails: as in 20260929000100_purchase_orders.sql, after rolling
--- auto-renewing contracts on so no email names a date already gone.
+-- auto-renewing contracts on so no email names a date already gone. Monthly
+-- and quarterly auto-renewals (usually auto-debit) get no email; annual ones
+-- still do.
 -- ---------------------------------------------------------------------------
 create or replace function public.contracts_send_renewal_notices(p_today date default public.local_today())
 returns int
@@ -599,6 +668,7 @@ begin
                c.kind::text as contract_kind, c.end_date, (c.end_date - p_today) as days
           from public.contracts c
          where c.status = 'active' and c.end_date between p_today and p_today + 60
+           and not (c.auto_renew and c.billing_cycle in ('monthly', 'quarterly'))
         union all
         select 'purchase_order', po.id, po.po_number::text, po.client_name::text,
                null, po.end_date, (po.end_date - p_today)
@@ -666,6 +736,7 @@ revoke all on function public._contracts_serialise(uuid, date)                fr
 revoke all on function public.contracts_create(jsonb)                         from public;
 revoke all on function public.contracts_update(uuid, jsonb)                   from public;
 revoke all on function public.contracts_send_renewal_notices(date)            from public;
+revoke all on function public._contracts_coming_up(date)                      from public;
 
 grant execute on function public.contracts_create(jsonb)                      to authenticated;
 grant execute on function public.contracts_update(uuid, jsonb)                to authenticated;

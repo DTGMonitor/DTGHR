@@ -214,5 +214,44 @@ export default async ({ db, step, tx, people }) => {
         await db.exec(`delete from public.renewal_notices`);
     });
 
+    const setEnd = (id, n) =>
+        db.query(`update public.contracts set end_date = public.local_today() + $2::int where id = $1`, [id, n]);
+
+    await step("renew: coming up shows an auto-renewal only within its largest warning", async () => {
+        const comingUp = async () =>
+            (await tx(DIRECTOR, `select public.contracts_coming_up() j`)).rows[0].j.items.map((i) => i.id);
+        const m = await create({ kind: "subscription", title: "CU monthly", start_date: "2026-01-15", billing_cycle: "monthly", auto_renew: true });
+        const a = await create({ kind: "subscription", title: "CU annual", start_date: "2026-01-15", billing_cycle: "annual", auto_renew: true });
+        const plain = await create({ kind: "subscription", title: "CU plain", end_date: await plus(80), billing_cycle: "monthly" });
+        made.push(m.id, a.id, plain.id);
+        await setEnd(m.id, 10);
+        await setEnd(a.id, 45);
+        let ids = await comingUp();
+        if (ids.includes(m.id)) throw new Error("monthly shown 10 days out with a 7-day warning");
+        if (ids.includes(a.id)) throw new Error("annual shown 45 days out with a 30-day warning");
+        if (!ids.includes(plain.id)) throw new Error("non-renewing contract missing from the 90-day window");
+        await setEnd(m.id, 7);
+        await setEnd(a.id, 20);
+        ids = await comingUp();
+        if (!ids.includes(m.id)) throw new Error("monthly missing within its 7-day warning");
+        if (!ids.includes(a.id)) throw new Error("annual missing within its 30-day warning");
+    });
+
+    await step("renew: no renewal emails for monthly or quarterly auto-renewals; annual still gets them", async () => {
+        const m = await create({ kind: "subscription", title: "N monthly", start_date: "2026-01-15", billing_cycle: "monthly", auto_renew: true });
+        const q = await create({ kind: "subscription", title: "N quarterly", start_date: "2026-01-15", billing_cycle: "quarterly", auto_renew: true });
+        const a = await create({ kind: "subscription", title: "N annual", start_date: "2026-01-15", billing_cycle: "annual", auto_renew: true });
+        const manual = await create({ kind: "subscription", title: "N manual", end_date: await plus(5), billing_cycle: "monthly" });
+        made.push(m.id, q.id, a.id, manual.id);
+        for (const c of [m, q, a]) await setEnd(c.id, 5);
+        await db.query(`select public.contracts_send_renewal_notices()`);
+        const sent = (await db.query(`select item_id from public.renewal_notices where item_id = any($1::uuid[])`,
+            [[m.id, q.id, a.id, manual.id]])).rows.map((r) => r.item_id);
+        if (sent.includes(m.id) || sent.includes(q.id)) throw new Error("monthly/quarterly auto-renewal emailed");
+        if (!sent.includes(a.id)) throw new Error("annual auto-renewal not emailed");
+        if (!sent.includes(manual.id)) throw new Error("non-renewing contract not emailed");
+        await db.exec(`delete from public.renewal_notices`);
+    });
+
     await db.query(`delete from public.contracts where id = any($1::uuid[])`, [made]);
 };
