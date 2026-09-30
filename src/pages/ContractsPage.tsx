@@ -341,13 +341,21 @@ export default function ContractsPage() {
                                                         <span className="font-semibold text-paper">
                                                             {c.title}
                                                         </span>{" "}
-                                                        ends {fmt(c.end_date)}. Acknowledging it
-                                                        takes it off the list and records who did
-                                                        so.
+                                                        {c.auto_renew ? "renews on" : "ends"}{" "}
+                                                        {fmt(c.end_date)}. Acknowledging it takes it
+                                                        off the list and records who did so.
                                                     </>
                                                 ),
                                                 label: "What is being done",
-                                                placeholder: "Renewal sent to their procurement",
+                                                // An example that fits the kind of contract.
+                                                placeholder:
+                                                    c.kind === "client"
+                                                        ? "Renewal sent to their procurement"
+                                                        : c.kind === "manpower"
+                                                          ? "Extension being prepared"
+                                                          : c.auto_renew
+                                                            ? "Card balance checked — keep subscription"
+                                                            : "Renewing with the vendor",
                                                 multiline: true,
                                                 confirmLabel: "Acknowledge",
                                             });
