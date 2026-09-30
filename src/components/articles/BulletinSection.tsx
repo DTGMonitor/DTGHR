@@ -6,7 +6,6 @@ import {
     ARTICLE_STATUS_LABELS,
     articleDate,
     articleImageUrl,
-    articleMonth,
     type ArticleDetail,
     type ArticleSummary,
 } from "@/types/article";
@@ -86,6 +85,9 @@ function Cover({ article, className = "" }: { article: ArticleSummary; className
     );
 }
 
+/** How many live articles the dashboard carries; older ones drop off it. */
+const DASHBOARD_LIMIT = 6;
+
 export default function BulletinSection() {
     const [params, setParams] = useSearchParams();
     const openSlug = params.get("read");
@@ -138,39 +140,18 @@ export default function BulletinSection() {
 
 
     /*
-     * The current month is open; everything older is folded away.
-     *
-     * Nothing is ever removed -- September's first week stays readable next
-     * year. But this sits on the dashboard, and a list that grows by four
-     * articles a month would push the rest of the page off the screen by
-     * Christmas. The fold keeps the newest month in view and the archive one
-     * click away.
-     */
-    const currentMonth = items.find((a) => a.is_live)
-        ? articleMonth(items.find((a) => a.is_live)!)
-        : null;
-    const [showArchive, setShowArchive] = useState(false);
-
-    /*
-     * The carousel carries the current month; older months are behind the
-     * fold. Nothing is removed -- September's first week is still readable
-     * next year -- but a track that grows by four slides a month stops being
-     * something you swipe and starts being something you scroll past.
-     */
-    /*
-     * The carousel is what staff see: live articles only.
+     * The carousel is what staff see: live articles only, and only the newest
+     * six (pinned ones first, as the list comes).
      *
      * Drafts used to sit in it, which meant starting an article put an
      * "Untitled article" slide in the middle of the bulletin -- alarming for
      * the writer and meaningless to everyone else. They now have their own
-     * strip below, visible only to the people who can write.
+     * strip below, visible only to the people who can write. Older articles
+     * drop off the dashboard as new ones arrive; nothing is deleted, and the
+     * Bulletin page still holds every one.
      */
     const live = items.filter((a) => a.is_live);
-
-    const visible = showArchive
-        ? live
-        : live.filter((a) => articleMonth(a) === currentMonth);
-    const archiveCount = live.length - visible.length;
+    const visible = live.slice(0, DASHBOARD_LIMIT);
 
     const trackRef = useRef<HTMLDivElement>(null);
     const [index, setIndex] = useState(0);
@@ -307,7 +288,7 @@ export default function BulletinSection() {
                     different places was three chances to wonder which one was
                     the real one. */}
                 <span className="font-mono text-micro text-muted">
-                    {items.length} article{items.length === 1 ? "" : "s"}
+                    {visible.length} article{visible.length === 1 ? "" : "s"}
                 </span>
             </div>
 
@@ -406,22 +387,6 @@ export default function BulletinSection() {
                     </div>
                 )}
             </div>
-
-
-            {archiveCount > 0 && (
-                <button
-                    onClick={() => setShowArchive((v) => !v)}
-                    className="dtg-btn-secondary w-full justify-center py-2.5 text-xs"
-                >
-                    <Icon
-                        name={showArchive ? "arrowLeft" : "arrowRight"}
-                        className={`h-3.5 w-3.5 transition-transform ${showArchive ? "rotate-90" : "rotate-90"}`}
-                    />
-                    {showArchive
-                        ? "Hide earlier months"
-                        : `Earlier months · ${archiveCount} article${archiveCount === 1 ? "" : "s"}`}
-                </button>
-            )}
         </div>
     );
 }
