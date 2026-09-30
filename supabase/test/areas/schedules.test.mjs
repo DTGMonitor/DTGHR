@@ -352,4 +352,32 @@ export default async ({ db, step, tx, people }) => {
                                      where action like 'PUBLIC_HOLIDAY_%' and target_id = $1`, [h.id]);
         if (log.rows[0].n !== 3) throw new Error(`logged ${log.rows[0].n}`);
     });
+
+    await step("a national holiday turns office days into PH, and back when it goes", async () => {
+        // Friday 2 February 2029: Bintang (office) has D, Lintang (crew) DS.
+        const code = async (emp) => (await db.query(
+            `select shift_code from public.shift_assignments where employee_id = $1 and date = '2029-02-02'`,
+            [emp])).rows[0].shift_code;
+        await db.query(`delete from public.public_holidays where date = '2029-02-02'`);
+
+        await db.query(`insert into public.public_holidays (id, date, name, is_national)
+                        values (gen_random_uuid(), '2029-02-02', 'Test Day', false)`);
+        if (await code(E.OFFICE) !== "D") throw new Error("cuti bersama changed the roster");
+
+        await db.query(`update public.public_holidays set is_national = true where date = '2029-02-02'`);
+        if (await code(E.OFFICE) !== "PH") throw new Error("office day not made PH");
+        if (await code(E.CREW) !== "DS") throw new Error("the crew was touched");
+
+        // Management asks Bintang in: set by hand, and it stays.
+        await db.query(`update public.shift_assignments set shift_code = 'D'
+                         where employee_id = $1 and date = '2029-02-02'`, [E.OFFICE]);
+        await db.query(`update public.public_holidays set name = 'Renamed' where date = '2029-02-02'`);
+        if (await code(E.OFFICE) !== "D") throw new Error("a rename re-applied the holiday");
+        await db.query(`update public.shift_assignments set shift_code = 'PH'
+                         where employee_id = $1 and date = '2029-02-02'`, [E.OFFICE]);
+
+        await db.query(`delete from public.public_holidays where date = '2029-02-02'`);
+        if (await code(E.OFFICE) !== "D") throw new Error("PH not reverted to D");
+        if (await code(E.CREW) !== "DS") throw new Error("the crew was touched on removal");
+    });
 };
