@@ -4,11 +4,17 @@ import { Navigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { employeeService } from "@/services/employeeService";
 import {
+    BILLING_CYCLES,
     CURRENCIES,
     contractService,
+    cycleUnit,
+    defaultReminders,
     describeLeadTime,
+    isRecurring,
     money,
+    nextRenewal,
     purchaseOrderService,
+    type BillingCycle,
     type ComingUpItem,
     type Contract,
     type ContractKind,
@@ -65,6 +71,23 @@ function fmt(iso: string): string {
         month: "long",
         year: "numeric",
     });
+}
+
+/** "29 Oct 2026" -- for the renewal lines, where the date sits in a sentence. */
+function fmtShort(iso: string): string {
+    return new Date(`${iso}T00:00:00`).toLocaleDateString("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+    });
+}
+
+/** " / month" from the cycle, or the old free text on unclassified rows. */
+function amountSuffix(c: Contract): string {
+    const unit = cycleUnit(c.billing_cycle);
+    if (unit) return ` / ${unit}`;
+    if (c.billing_cycle === "one_off") return " one-off";
+    return c.billing_period ? ` / ${c.billing_period}` : "";
 }
 
 export default function ContractsPage() {
@@ -456,22 +479,43 @@ export default function ContractsPage() {
                                     <p className="text-sm font-semibold text-paper">{c.title}</p>
                                     <p className="mt-0.5 text-xs text-muted">
                                         {c.counterparty ? `${c.counterparty} · ` : ""}
-                                        {c.start_date ? `${fmt(c.start_date)} — ` : "ends "}
-                                        {fmt(c.end_date)}
+                                        {c.auto_renew && c.next_renewal ? (
+                                            <>
+                                                {c.start_date ? `since ${fmt(c.start_date)} · ` : ""}
+                                                Renews{" "}
+                                                {c.billing_cycle === "annual"
+                                                    ? "annually"
+                                                    : c.billing_cycle === "quarterly"
+                                                      ? "quarterly"
+                                                      : c.billing_cycle === "monthly"
+                                                        ? "monthly"
+                                                        : "automatically"}{" "}
+                                                · next {fmtShort(c.next_renewal)}
+                                            </>
+                                        ) : (
+                                            <>
+                                                {c.start_date ? `${fmt(c.start_date)} — ` : "ends "}
+                                                {fmt(c.end_date)}
+                                            </>
+                                        )}
                                     </p>
                                 </div>
                                 <div className="flex items-center gap-3">
                                     {c.amount !== null && (
                                         <span className="font-mono text-sm text-paper-soft">
                                             {money(c.amount, c.currency)}
-                                            {c.billing_period ? ` / ${c.billing_period}` : ""}
+                                            {amountSuffix(c)}
                                         </span>
                                     )}
                                     <span
                                         className={`rounded-full border px-2.5 py-1 text-micro font-semibold uppercase tracking-label ${
                                             c.status !== "active"
                                                 ? "border-white/15 bg-white/[0.04] text-muted"
-                                                : c.days_remaining < 0
+                                                : c.auto_renew
+                                                  ? c.open_reminders > 0
+                                                      ? "border-gold/30 bg-gold/10 text-gold"
+                                                      : "border-signal/30 bg-signal/10 text-signal"
+                                                  : c.days_remaining < 0
                                                   ? "border-danger/40 bg-danger/10 text-danger"
                                                   : c.days_remaining <= 60
                                                     ? "border-gold/30 bg-gold/10 text-gold"
@@ -480,9 +524,13 @@ export default function ContractsPage() {
                                     >
                                         {c.status !== "active"
                                             ? c.status
-                                            : c.days_remaining < 0
-                                              ? "expired"
-                                              : `${c.days_remaining} days left`}
+                                            : c.auto_renew
+                                              ? c.days_remaining <= 0
+                                                  ? "renews today"
+                                                  : `renews in ${c.days_remaining} day${c.days_remaining === 1 ? "" : "s"}`
+                                              : c.days_remaining < 0
+                                                ? "expired"
+                                                : `${c.days_remaining} days left`}
                                     </span>
                                 </div>
                             </div>
@@ -687,7 +735,8 @@ export default function ContractsPage() {
                                     >
                                         Warning schedule
                                     </button>
-                                    {c.status === "active" && (
+                                    {/* An auto-renewing contract renews itself. */}
+                                    {c.status === "active" && !c.auto_renew && (
                                         <button
                                             disabled={busy === c.id}
                                             onClick={() =>
@@ -763,6 +812,7 @@ function NewContract({
     onDone: () => Promise<void>;
     onError: (m: string) => void;
 }) {
+    const initialCycle = "monthly" as BillingCycle;
     const [form, setForm] = useState({
         kind,
         title: "",
@@ -772,13 +822,22 @@ function NewContract({
         end_date: "",
         amount: "",
         currency: "IDR",
-        billing_period: "",
+        billing_cycle: initialCycle,
+        // A subscription usually just renews: Claude, Dropbox, TeamViewer.
+        auto_renew: kind === "subscription",
         notes: "",
-        reminders: kind === "client" ? "60, 42, 30" : "30",
+        reminders: defaultReminders(kind, kind === "manpower" ? "one_off" : initialCycle),
     });
     const [saving, setSaving] = useState(false);
 
     const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
+
+    const isPerson = form.kind === "manpower";
+    // Manpower has no billing; an employment contract ends when it ends.
+    const renews = !isPerson && isRecurring(form.billing_cycle) && form.auto_renew;
+    const upcoming = renews && form.start_date
+        ? nextRenewal(form.start_date, form.billing_cycle)
+        : null;
 
     const submit = async () => {
         setSaving(true);
@@ -789,10 +848,11 @@ function NewContract({
                 counterparty: form.counterparty || null,
                 employee_id: form.employee_id || null,
                 start_date: form.start_date || null,
-                end_date: form.end_date,
+                end_date: renews ? null : form.end_date,
                 amount: form.amount ? Number(form.amount) : null,
                 currency: form.currency,
-                billing_period: form.billing_period || null,
+                billing_cycle: isPerson ? null : form.billing_cycle,
+                auto_renew: renews,
                 notes: form.notes || null,
                 reminder_days: form.reminders
                     .split(",")
@@ -808,8 +868,6 @@ function NewContract({
             setSaving(false);
         }
     };
-
-    const isPerson = form.kind === "manpower";
 
     return (
         <section className="dtg-panel overflow-hidden">
@@ -830,7 +888,11 @@ function NewContract({
                             setForm((f) => ({
                                 ...f,
                                 kind: k,
-                                reminders: k === "client" ? "60, 42, 30" : "30",
+                                auto_renew: k === "subscription",
+                                reminders: defaultReminders(
+                                    k,
+                                    k === "manpower" ? "one_off" : f.billing_cycle,
+                                ),
                             }));
                         }}
                         className="dtg-input mt-1.5 w-full"
@@ -890,15 +952,24 @@ function NewContract({
                     />
                 </label>
 
-                <label className="block">
-                    <span className="dtg-eyebrow">Ends</span>
-                    <input
-                        type="date"
-                        value={form.end_date}
-                        onChange={(e) => set("end_date", e.target.value)}
-                        className="dtg-input mt-1.5 w-full"
-                    />
-                </label>
+                {renews ? (
+                    /* Renews itself: no end date to write, only the start. */
+                    <div className="flex items-end pb-2 text-xs text-muted">
+                        {upcoming
+                            ? `Next renewal: ${fmtShort(upcoming)} — then every ${cycleUnit(form.billing_cycle)}`
+                            : "Enter the start date; it renews from there."}
+                    </div>
+                ) : (
+                    <label className="block">
+                        <span className="dtg-eyebrow">Ends</span>
+                        <input
+                            type="date"
+                            value={form.end_date}
+                            onChange={(e) => set("end_date", e.target.value)}
+                            className="dtg-input mt-1.5 w-full"
+                        />
+                    </label>
+                )}
 
                 {!isPerson && (
                     <>
@@ -933,15 +1004,41 @@ function NewContract({
                                 </div>
                             </div>
                         </label>
-                        <label className="block">
-                            <span className="dtg-eyebrow">Billed</span>
-                            <input
-                                value={form.billing_period}
-                                onChange={(e) => set("billing_period", e.target.value)}
-                                placeholder="monthly, annual, one-off"
-                                className="dtg-input mt-1.5 w-full"
-                            />
-                        </label>
+                        <div className="block">
+                            <label className="block">
+                                <span className="dtg-eyebrow">Billed</span>
+                                <select
+                                    value={form.billing_cycle}
+                                    onChange={(e) => {
+                                        const cycle = e.target.value as BillingCycle;
+                                        setForm((f) => ({
+                                            ...f,
+                                            billing_cycle: cycle,
+                                            reminders: defaultReminders(f.kind, cycle),
+                                        }));
+                                    }}
+                                    className="dtg-input mt-1.5 w-full"
+                                >
+                                    {BILLING_CYCLES.map((b) => (
+                                        <option key={b.key} value={b.key}>
+                                            {b.label}
+                                        </option>
+                                    ))}
+                                </select>
+                            </label>
+                            {isRecurring(form.billing_cycle) && (
+                                <label className="mt-2 flex items-center gap-2 text-xs text-paper-soft">
+                                    <input
+                                        type="checkbox"
+                                        checked={form.auto_renew}
+                                        onChange={(e) =>
+                                            setForm((f) => ({ ...f, auto_renew: e.target.checked }))
+                                        }
+                                    />
+                                    Renews automatically
+                                </label>
+                            )}
+                        </div>
                     </>
                 )}
 
@@ -954,8 +1051,8 @@ function NewContract({
                         placeholder="60, 42, 30"
                     />
                     <span className="mt-1 block text-micro text-muted">
-                        Days before the end date. 60, 42, 30 is two months, six weeks and one
-                        month — each acknowledged separately.
+                        Days before the {renews ? "each renewal" : "end date"}. 60, 42, 30 is two
+                        months, six weeks and one month — each acknowledged separately.
                     </span>
                 </label>
 
@@ -972,7 +1069,9 @@ function NewContract({
 
             <div className="flex gap-2 border-t border-white/[0.08] px-5 py-3">
                 <button
-                    disabled={!form.title || !form.end_date || saving}
+                    disabled={
+                        !form.title || (renews ? !form.start_date : !form.end_date) || saving
+                    }
                     onClick={() => void submit()}
                     className="dtg-btn-primary px-3 py-1.5 text-xs disabled:opacity-40"
                 >

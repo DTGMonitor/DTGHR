@@ -2,6 +2,84 @@ import api from "@/lib/api";
 
 export type ContractKind = "manpower" | "subscription" | "client";
 export type ContractStatus = "active" | "renewed" | "ended" | "cancelled";
+export type BillingCycle = "one_off" | "monthly" | "quarterly" | "annual";
+
+export const BILLING_CYCLES: { key: BillingCycle; label: string }[] = [
+    { key: "one_off", label: "One-off" },
+    { key: "monthly", label: "Monthly" },
+    { key: "quarterly", label: "Quarterly" },
+    { key: "annual", label: "Annual" },
+];
+
+const CYCLE_MONTHS: Record<Exclude<BillingCycle, "one_off">, number> = {
+    monthly: 1,
+    quarterly: 3,
+    annual: 12,
+};
+
+/** "month", "quarter", "year" -- for "/ month" and "every month". */
+export function cycleUnit(cycle: BillingCycle | null): string | null {
+    switch (cycle) {
+        case "monthly":
+            return "month";
+        case "quarterly":
+            return "quarter";
+        case "annual":
+            return "year";
+        default:
+            return null;
+    }
+}
+
+export function isRecurring(cycle: BillingCycle | null | undefined): boolean {
+    return cycle === "monthly" || cycle === "quarterly" || cycle === "annual";
+}
+
+/** Today in Jakarta, as YYYY-MM-DD -- the day the server counts from. */
+export function jakartaToday(): string {
+    return new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Jakarta",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+    }).format(new Date());
+}
+
+function addMonths(iso: string, months: number): string {
+    const [y = 0, m = 1, d = 1] = iso.split("-").map(Number);
+    const total = (m - 1) + months;
+    const year = y + Math.floor(total / 12);
+    const month = ((total % 12) + 12) % 12;
+    // Clamp to the month's last day, as Postgres does: 31 Jan + 1 month = 28/29 Feb.
+    const last = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+    const day = Math.min(d, last);
+    return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+/**
+ * The first start + k cycles (k >= 1) after today -- the same rule the
+ * database uses (_contracts_next_renewal), so the form shows what will be
+ * stored.
+ */
+export function nextRenewal(start: string, cycle: BillingCycle, today = jakartaToday()): string | null {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || cycle === "one_off") return null;
+    const step = CYCLE_MONTHS[cycle];
+    let k = 1;
+    let d = addMonths(start, step);
+    while (d <= today) {
+        k += 1;
+        d = addMonths(start, k * step);
+    }
+    return d;
+}
+
+/** The default warnings for a new contract, as the database picks them. */
+export function defaultReminders(kind: ContractKind, cycle: BillingCycle): string {
+    if (kind === "client") return "60, 42, 30";
+    if (cycle === "monthly") return "7";
+    if (cycle === "quarterly") return "14";
+    return "30";
+}
 
 export interface ContractReminder {
     id: string;
@@ -34,6 +112,12 @@ export interface Contract {
     amount: number | null;
     currency: string;
     billing_period: string | null;
+    /** Null on contracts recorded before the cycle was a choice. */
+    billing_cycle: BillingCycle | null;
+    /** Renews itself: end_date is then the next renewal. */
+    auto_renew: boolean;
+    /** The next renewal date when auto_renew, else null. */
+    next_renewal: string | null;
     notes: string | null;
     status: ContractStatus;
     documents: ContractDocument[];
@@ -65,10 +149,13 @@ export interface ContractDraft {
     counterparty?: string | null;
     employee_id?: string | null;
     start_date?: string | null;
-    end_date: string;
+    /** Not needed (and ignored) when auto_renew: it is worked out from the start. */
+    end_date?: string | null;
     amount?: number | null;
     currency?: string;
     billing_period?: string | null;
+    billing_cycle?: BillingCycle | null;
+    auto_renew?: boolean;
     notes?: string | null;
     reminder_days?: number[];
 }
