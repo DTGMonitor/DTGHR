@@ -154,6 +154,33 @@ export default async ({ db, step, tx, people }) => {
 
     // --- the figures -----------------------------------------------------
 
+    await step("payslips: name from the profile, position from career history", async () => {
+        const slip = async () =>
+            (await slipsOf(SEP)).find((r) => r.employee_id === RINA_EMP).data;
+        const saved = (await db.query(
+            `select first_name, last_name, position from public.employees where id = $1`, [RINA_EMP])).rows[0];
+
+        await db.query(`update public.employees set first_name = 'Rina', last_name = 'Ayu Sari' where id = $1`,
+            [RINA_EMP]);
+        eq((await slip()).person_name, "RINA AYU SARI", "full name from the profile, rebuilt on change");
+
+        await db.query(`delete from public.employee_career where employee_id = $1`, [RINA_EMP]);
+        await db.query(`insert into public.employee_career (employee_id, effective_date, position)
+                        values ($1, '2080-01-01', 'Engineer'), ($1, '2080-09-30', 'Senior Engineer'),
+                               ($1, '2080-10-01', 'Director')`, [RINA_EMP]);
+        eq((await slip()).position, "SENIOR ENGINEER", "the role on the month's last day");
+        await db.query(`delete from public.employee_career where employee_id = $1 and position <> 'Engineer'`,
+            [RINA_EMP]);
+        eq((await slip()).position, "ENGINEER", "rebuilt when history is corrected");
+
+        const guest = (await slipsOf(SEP)).find((r) => r.employee_id === null).data;
+        eq(guest.person_name, "GUEST CONSULTANT", "no staff record: the sheet's name");
+
+        await db.query(`delete from public.employee_career where employee_id = $1`, [RINA_EMP]);
+        await db.query(`update public.employees set first_name = $2, last_name = $3, position = $4
+                         where id = $1`, [RINA_EMP, saved.first_name, saved.last_name, saved.position]);
+    });
+
     await step("payslips: a slip's figures are the payroll line's", async () => {
         const run = await call(FINANCE, "payroll_get_month", [SEP], ["uuid"]);
         const line = run.lines.find((l) => l.person_name === "Rina Sari");
