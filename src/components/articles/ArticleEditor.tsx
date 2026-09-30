@@ -399,11 +399,14 @@ export default function ArticleEditor({
                             id="a-summary"
                             value={summary}
                             onChange={(e) => setSummary(e.target.value)}
-                            rows={2}
-                            maxLength={400}
+                            rows={4}
+                            maxLength={1000}
                             className="dtg-input resize-y"
-                            placeholder="One or two sentences. This is what shows on the card."
+                            placeholder="One or two short paragraphs. This is what shows on the card."
                         />
+                        <p className="mt-1 text-right font-mono text-micro text-muted">
+                            {summary.length} / 1000
+                        </p>
                     </div>
                     <div>
                         <label htmlFor="a-category" className="dtg-label">Category</label>
