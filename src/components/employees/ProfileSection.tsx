@@ -19,7 +19,7 @@ export interface FieldDef {
     label: string;
     type?: FieldType;
     options?: { value: string; label: string }[];
-    /** Identifiers and account numbers read better in the mono face. */
+    /** Identifiers and account numbers: same face, with digits of even width. */
     mono?: boolean;
     help?: string;
     placeholder?: string;
@@ -42,8 +42,8 @@ function displayValue(employee: EmployeeDetail, field: FieldDef): ReactNode {
     }
     if (field.type === "date") {
         return new Date(String(raw)).toLocaleDateString("en-GB", {
-            day: "2-digit",
-            month: "short",
+            day: "numeric",
+            month: "long",
             year: "numeric",
         });
     }
@@ -177,7 +177,7 @@ export default function ProfileSection({
                                 ) : (
                                     <p
                                         className={`text-sm text-paper ${
-                                            field.mono ? "font-mono text-xs" : ""
+                                            field.mono ? "tabular-nums" : ""
                                         }`}
                                     >
                                         {displayValue(employee, field)}

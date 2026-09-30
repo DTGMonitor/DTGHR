@@ -315,7 +315,7 @@ export default function EmployeeProfilePage() {
                     <h1 className="mt-1.5 text-2xl font-bold tracking-tight text-paper">
                         {employee.first_name} {employee.last_name}
                     </h1>
-                    <p className="mt-1 font-mono text-xs text-muted">{employee.email}</p>
+                    <p className="mt-1 text-xs text-muted">{employee.email}</p>
 
                     <div className="mt-3.5 flex flex-wrap gap-2">
                         <span className="dtg-chip border-teal-300/35 bg-teal-300/10 text-teal-300">
