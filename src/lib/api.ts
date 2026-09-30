@@ -82,6 +82,31 @@ function toQuery(params: Record<string, unknown> | undefined): Record<string, st
     return out;
 }
 
+/*
+ * Moments come back from Postgres `timestamp` columns as bare strings,
+ * "2026-09-29T10:00:00", with no zone -- and they are UTC, the database's
+ * clock. `new Date()` reads a bare string as the browser's local time, so in
+ * Jakarta every one showed seven hours early (a ticket raised at 09:14 read
+ * 02:14; an article scheduled for 17:00 came back as 10:00, and near midnight
+ * on the wrong day). Every `…_at` field that is a bare date-time is marked UTC
+ * here, once, for every screen. Values that already carry a zone, and plain
+ * dates, are left alone.
+ */
+const BARE_DATETIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/;
+
+function markUtc(value: unknown, key = ""): unknown {
+    if (typeof value === "string") {
+        return key.endsWith("_at") && BARE_DATETIME.test(value) ? `${value}Z` : value;
+    }
+    if (Array.isArray(value)) return value.map((v) => markUtc(v, key));
+    if (value && typeof value === "object" && !(value instanceof Blob)) {
+        return Object.fromEntries(
+            Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, markUtc(v, k)]),
+        );
+    }
+    return value;
+}
+
 async function dispatch(
     method: Method,
     url: string,
@@ -111,7 +136,7 @@ async function dispatch(
                 body,
                 responseType: config?.responseType,
             });
-            return { data };
+            return { data: markUtc(data) };
         } catch (err) {
             if (err instanceof ApiError) throw err;
             throw toApiError(err as Error);
