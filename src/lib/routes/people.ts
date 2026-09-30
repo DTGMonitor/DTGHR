@@ -67,6 +67,25 @@ route("PATCH", "/employees/:id/history/:changeId", ({ path, body }) =>
     }),
 );
 
+// --- career history (20260930000100_career_history.sql) ---------------------
+
+route("GET", "/employees/:id/career", ({ path }) =>
+    rpc("people_career_list", { p_employee_id: path.id }),
+);
+
+route("POST", "/employees/:id/career", ({ path, body }) =>
+    rpc("people_career_add", { p_employee_id: path.id, p_payload: body ?? {} }),
+);
+
+route("PATCH", "/employees/:id/career/:entryId", ({ path, body }) =>
+    rpc("people_career_update", { p_entry_id: path.entryId, p_payload: body ?? {} }),
+);
+
+route("DELETE", "/employees/:id/career/:entryId", async ({ path }) => {
+    await rpc("people_career_delete", { p_entry_id: path.entryId });
+    return null;
+});
+
 // --- photos, in the private employee-photos bucket --------------------------
 
 route("GET", "/employees/:id/photo", async ({ path }) => {

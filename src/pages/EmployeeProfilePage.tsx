@@ -11,7 +11,7 @@ import ProfileSection, { type FieldDef } from "@/components/employees/ProfileSec
 import PhotoField from "@/components/employees/PhotoField";
 import Icon from "@/components/ui/icons";
 import Spinner from "@/components/ui/Spinner";
-import RoleHistory from "@/components/employees/RoleHistory";
+import CareerHistory from "@/components/employees/CareerHistory";
 import ProfileRequests from "@/components/employees/ProfileRequests";
 import Alert from "@/components/ui/Alert";
 import MyPayslips from "@/components/payslips/MyPayslips";
@@ -419,7 +419,13 @@ export default function EmployeeProfilePage() {
                         Not for the founders: a career history is the record of
                         somebody moving through the company, and they own it.
                         There is no promotion for a founder to have had. */}
-                    {!isFounder && <RoleHistory employeeId={employee.id} canEdit={isHR} />}
+                    {!isFounder && (
+                        <CareerHistory
+                            employeeId={employee.id}
+                            canEdit={isHR}
+                            onChanged={load}
+                        />
+                    )}
                 </div>
             )}
 

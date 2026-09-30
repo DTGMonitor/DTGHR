@@ -216,11 +216,11 @@ export default function ProfileRequests({
                                         </span>
                                     )}
                                     <span className="dtg-eyebrow mr-2">{r.field_label}</span>
-                                    <span className="text-muted line-through">
+                                    <span className="text-muted">
                                         {r.current_value || "not set"}
                                     </span>
                                     <span className="mx-2 text-teal-300">→</span>
-                                    <span className="font-semibold text-paper">
+                                    <span className="text-paper">
                                         {r.requested_value || "not set"}
                                     </span>
                                 </p>
