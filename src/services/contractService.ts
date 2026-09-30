@@ -207,10 +207,16 @@ export function describeLeadTime(days: number): string {
  */
 export const CURRENCIES = ["IDR", "USD", "AUD", "SGD", "EUR", "GBP"] as const;
 
+/**
+ * Rupiah in whole numbers; every other currency to the cent -- a US$99.90
+ * subscription shown as US$100 is a figure nobody can reconcile.
+ */
 export function money(amount: number, currency = "IDR"): string {
+    const cents = currency === "IDR" ? 0 : 2;
     return new Intl.NumberFormat("en-GB", {
         style: "currency",
         currency,
-        maximumFractionDigits: 0,
+        minimumFractionDigits: cents,
+        maximumFractionDigits: cents,
     }).format(amount);
 }
