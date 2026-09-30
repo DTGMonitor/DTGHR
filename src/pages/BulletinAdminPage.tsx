@@ -163,7 +163,13 @@ export default function BulletinAdminPage() {
                 </p>
             </div>
 
-            <span className={`dtg-chip ${STATUS_TONES[a.status] ?? "border-white/20 text-muted"}`}>
+            {/* A scheduled article whose moment has passed is as live as a
+                published one, so it wears the same green. */}
+            <span
+                className={`dtg-chip ${
+                    a.is_live ? STATUS_TONES.published : (STATUS_TONES[a.status] ?? "border-white/20 text-muted")
+                }`}
+            >
                 {a.is_live ? "Live" : ARTICLE_STATUS_LABELS[a.status]}
             </span>
 
