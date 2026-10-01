@@ -24,21 +24,6 @@ const GROUP_TITLES: Record<LeaveTypeOption["group"], string> = {
     special: "Special leave",
 };
 
-function calcWorkingDays(start: string, end: string): number {
-    if (!start || !end) return 0;
-    const s = new Date(start);
-    const e = new Date(end);
-    if (e < s) return 0;
-    let count = 0;
-    const cur = new Date(s);
-    while (cur <= e) {
-        const day = cur.getDay();
-        if (day !== 0 && day !== 6) count++;
-        cur.setDate(cur.getDate() + 1);
-    }
-    return count;
-}
-
 export default function LeaveRequestModal({ balances, onClose, onSubmitted }: Props) {
     const [form, setForm] = useState({
         leave_type: LeaveType.ANNUAL,
@@ -60,9 +45,31 @@ export default function LeaveRequestModal({ balances, onClose, onSubmitted }: Pr
             .catch(() => setError("Could not load the kinds of leave available to you."));
     }, []);
 
+    /*
+     * The days come from the server: it reads the person's roster (a Break
+     * costs nothing, a weekend day shift costs a day) and, for a month not
+     * rostered yet, Monday to Friday less national holidays. It is the same
+     * count the request is charged at.
+     */
     useEffect(() => {
-        const days = calcWorkingDays(form.start_date, form.end_date);
-        setForm((prev) => ({ ...prev, days_requested: days }));
+        const { start_date, end_date } = form;
+        if (!start_date || !end_date || end_date < start_date) {
+            setForm((prev) => ({ ...prev, days_requested: 0 }));
+            return;
+        }
+        let stale = false;
+        void leaveService
+            .workingDays(start_date, end_date)
+            .then((res) => {
+                if (!stale) setForm((prev) => ({ ...prev, days_requested: res.data.days }));
+            })
+            .catch(() => {
+                if (!stale) setForm((prev) => ({ ...prev, days_requested: 0 }));
+            });
+        return () => {
+            stale = true;
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [form.start_date, form.end_date]);
 
     const selectedBalance = balances.find((b) => b.leave_type === form.leave_type);
@@ -81,7 +88,7 @@ export default function LeaveRequestModal({ balances, onClose, onSubmitted }: Pr
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (form.days_requested <= 0) {
-            setError("Please select valid start and end dates.");
+            setError("Those dates have no working days on your schedule.");
             return;
         }
         setLoading(true);

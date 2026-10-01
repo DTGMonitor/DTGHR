@@ -35,6 +35,10 @@ route("GET", "/leaves/balances/:employeeId", ({ path, query }) =>
 
 route("GET", "/leaves/summary", () => rpc("leave_summary"));
 
+route("GET", "/leaves/working-days", ({ query }) =>
+    rpc("leaves_working_days", { p_start: opt(query.start_date), p_end: opt(query.end_date) }),
+);
+
 route("GET", "/leaves/pending-approvals", ({ query }) =>
     rpc("leaves_pending_approvals", {
         p_page: int(query.page, 1),

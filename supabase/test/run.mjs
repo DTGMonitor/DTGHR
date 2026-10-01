@@ -396,7 +396,7 @@ await step("an overlapping request is refused", async () => {
 await step("over-drawing the balance is refused", async () => {
     try {
         await tx(RINA, `select public.submit_leave_request(
-            '{"leave_type":"annual","start_date":"2026-11-20","end_date":"2026-11-30","days_requested":40}'::jsonb)`);
+            '{"leave_type":"annual","start_date":"2026-11-20","end_date":"2027-03-31","days_requested":1}'::jsonb)`);
         throw new Error("expected a raise");
     } catch (e) {
         if (!/Insufficient annual leave/.test(e.message)) throw new Error(`wrong error: ${e.message}`);

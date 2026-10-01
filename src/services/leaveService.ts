@@ -38,6 +38,11 @@ export const leaveService = {
         return api.get("/leaves/types");
     },
 
+    /** The days a request would take, counted as the server will count them. */
+    workingDays(start_date: string, end_date: string): Promise<{ data: { days: number } }> {
+        return api.get("/leaves/working-days", { params: { start_date, end_date } });
+    },
+
     submitRequest(data: LeaveRequestCreateData): Promise<{ data: LeaveRequest }> {
         return api.post("/leaves", data);
     },

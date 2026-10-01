@@ -136,8 +136,8 @@ export default async ({ db, step, tx, people }) => {
 
     await step("annual is checked against the year-end position", async () => {
         await raises(() => submit(U.STAFF, { leave_type: "annual", start_date: "2026-10-01",
-            end_date: "2026-10-30", days_requested: 30 }),
-            /^Insufficient annual leave\. 24\.00 day\(s\) left at the end of 2026, 30 requested\.$/, "PT400");
+            end_date: "2026-11-06", days_requested: 1 }),
+            /^Insufficient annual leave\. 24\.00 day\(s\) left at the end of 2026, 27 requested\.$/, "PT400");
     });
 
     await step("request validation answers 422", async () => {
@@ -145,8 +145,8 @@ export default async ({ db, step, tx, people }) => {
             end_date: "2026-10-10", days_requested: 1 }), /end_date must be on or after start_date/, "PT422");
         await raises(() => submit(U.STAFF, { leave_type: "personal", start_date: "2026-10-12",
             end_date: "2026-10-12", days_requested: 1 }), /Invalid leave_type/, "PT422");
-        await raises(() => submit(U.STAFF, { leave_type: "sick", start_date: "2026-10-12",
-            end_date: "2026-10-12", days_requested: 0 }), /days_requested must be positive/, "PT422");
+        await raises(() => submit(U.STAFF, { leave_type: "sick", start_date: "2026-10-10",
+            end_date: "2026-10-11" }), /^There are no working days between those dates\.$/, "PT422");
     });
 
     let staffSick;
@@ -229,6 +229,29 @@ export default async ({ db, step, tx, people }) => {
 
     // --- annual counted from dates -----------------------------------------
 
+    await step("days are counted from the roster, else weekdays less national holidays", async () => {
+        const days = async (a, b) =>
+            (await tx(U.STAFF, `select public.leaves_working_days($1::date, $2::date) j`, [a, b])).rows[0].j.days;
+        // Sat 19 DS, Sun 20 nothing, Mon 21 B, Tue 22 NS: two days.
+        await db.exec(`insert into public.shift_assignments (id, schedule_id, employee_id, date, shift_code) values
+            (gen_random_uuid(), 'bbbbbbbb-0000-0000-0000-000000000001', '${E.STAFF}', '2026-09-19', 'DS'),
+            (gen_random_uuid(), 'bbbbbbbb-0000-0000-0000-000000000001', '${E.STAFF}', '2026-09-21', 'B'),
+            (gen_random_uuid(), 'bbbbbbbb-0000-0000-0000-000000000001', '${E.STAFF}', '2026-09-22', 'NS')`);
+        if (await days("2026-09-19", "2026-09-22") !== 2) throw new Error(`roster ${await days("2026-09-19", "2026-09-22")}`);
+        await db.exec(`delete from public.shift_assignments where employee_id = '${E.STAFF}'
+                        and date between '2026-09-19' and '2026-09-22'`);
+
+        // No roster: Tue 13 to Thu 15 October, the Wednesday a national holiday.
+        await db.exec(`delete from public.public_holidays where date = '2026-10-14';
+                       insert into public.public_holidays (id, date, name, is_national)
+                       values (gen_random_uuid(), '2026-10-14', 'Test Day', true)`);
+        if (await days("2026-10-13", "2026-10-15") !== 2) throw new Error("holiday counted");
+        await db.exec(`update public.public_holidays set is_national = false where date = '2026-10-14'`);
+        if (await days("2026-10-13", "2026-10-15") !== 3) throw new Error("cuti bersama not counted");
+        await db.exec(`delete from public.public_holidays where date = '2026-10-14'`);
+        if (await days("2026-10-15", "2026-10-13") !== 0) throw new Error("backwards range");
+    });
+
     await step("a day on the roster and in an approved request counts once", async () => {
         await db.exec(`insert into public.shift_assignments (id, schedule_id, employee_id, date, shift_code)
                        values (gen_random_uuid(), 'bbbbbbbb-0000-0000-0000-000000000001', '${E.STAFF}', '2026-09-15', 'AL')`);
@@ -256,7 +279,7 @@ export default async ({ db, step, tx, people }) => {
         const used = async () => Number((await db.query(`select used_days from public.leave_balances
             where employee_id='${E.STUDENT}' and leave_type='study' and year=2026`)).rows[0].used_days);
         await raises(() => submit(U.STUDENT, { leave_type: "study", start_date: "2026-10-01",
-            end_date: "2026-10-06", days_requested: 6 }),
+            end_date: "2026-10-08" }),
             /^Insufficient study leave balance\. Remaining: 5\.0, Requested: 6\.0$/, "PT400");
         const req = await submit(U.STUDENT, { leave_type: "study", start_date: "2026-10-01",
             end_date: "2026-10-02", days_requested: 2 });
