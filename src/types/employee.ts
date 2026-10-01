@@ -14,6 +14,8 @@ export interface Employee {
     has_account: boolean;
     /** Peter and Mark: management, exempt from review. Never hired, so no hire date. */
     is_founder?: boolean;
+    /** In the list; the detail record has its own has_photo. */
+    has_photo?: boolean;
     on_leave_today: boolean;
     created_at: string;
     updated_at: string;

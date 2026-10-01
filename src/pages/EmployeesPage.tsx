@@ -9,6 +9,7 @@ import CreateAccountModal from "@/components/employees/CreateAccountModal";
 import Icon from "@/components/ui/icons";
 import Spinner from "@/components/ui/Spinner";
 import Alert from "@/components/ui/Alert";
+import AuthImage from "@/components/articles/AuthImage";
 
 const PAGE_SIZE = 20;
 
@@ -36,11 +37,21 @@ function StatusBadge({ active, onLeave }: { active: boolean; onLeave?: boolean }
 }
 
 /** Initials avatar. Square-ish and teal, matching the header's. */
-function Avatar({ first, last }: { first: string; last: string }) {
+/** The person's photo, cropped to the face, or their initials. */
+function Avatar({ emp }: { emp: Employee }) {
+    const initials = `${(emp.first_name[0] ?? "").toUpperCase()}${(emp.last_name[0] ?? "").toUpperCase()}`;
     return (
-        <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded border border-teal-300/20 bg-teal-900 font-mono text-[0.6875rem] font-semibold tracking-wider text-teal-100">
-            {(first[0] ?? "").toUpperCase()}
-            {(last[0] ?? "").toUpperCase()}
+        <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center overflow-hidden rounded border border-teal-300/20 bg-teal-900 font-mono text-[0.6875rem] font-semibold tracking-wider text-teal-100">
+            {emp.has_photo ? (
+                <AuthImage
+                    src={employeeService.photoUrl(emp.id, emp.updated_at)}
+                    alt=""
+                    className="h-full w-full origin-[50%_18%] scale-[1.7] object-cover object-top"
+                    fallback={initials}
+                />
+            ) : (
+                initials
+            )}
         </div>
     );
 }
@@ -314,7 +325,7 @@ export default function EmployeesPage() {
                                                 to={`/employees/${emp.id}`}
                                                 className="group flex items-center gap-3 rounded outline-offset-2"
                                             >
-                                                <Avatar first={emp.first_name} last={emp.last_name} />
+                                                <Avatar emp={emp} />
                                                 <div className="min-w-0">
                                                     <p className="truncate font-medium text-paper group-hover:text-signal">
                                                         {emp.first_name} {emp.last_name}
