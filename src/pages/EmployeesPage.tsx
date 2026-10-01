@@ -329,11 +329,12 @@ export default function EmployeesPage() {
                                         <td className="dtg-td text-paper-soft">{emp.department}</td>
                                         <td className="dtg-td text-paper-soft">{emp.position}</td>
                                         <td className="dtg-td whitespace-nowrap font-mono text-xs text-muted">
-                                            {new Date(emp.date_of_joining).toLocaleDateString("en-GB", {
-                                                day: "2-digit",
-                                                month: "short",
-                                                year: "numeric",
-                                            })}
+                                            {!emp.is_founder &&
+                                                new Date(emp.date_of_joining).toLocaleDateString("en-GB", {
+                                                    day: "2-digit",
+                                                    month: "short",
+                                                    year: "numeric",
+                                                })}
                                         </td>
                                         <td className="dtg-td">
                                             <StatusBadge active={emp.is_active} onLeave={emp.on_leave_today} />
