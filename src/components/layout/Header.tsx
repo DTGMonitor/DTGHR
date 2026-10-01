@@ -1,4 +1,8 @@
+import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import AuthImage from "@/components/articles/AuthImage";
+import PhotoPreview from "@/components/employees/PhotoPreview";
+import { employeeService } from "@/services/employeeService";
 import { Link, useNavigate } from "react-router-dom";
 import { ProductLockup } from "@/components/brand/Logo";
 
@@ -19,6 +23,7 @@ export default function Header({
 }) {
     const { user, logout } = useAuth();
     const navigate = useNavigate();
+    const [previewing, setPreviewing] = useState(false);
 
     const handleLogout = () => {
         logout();
@@ -63,13 +68,35 @@ export default function Header({
                     <p className="truncate font-mono text-micro text-muted">{user?.email}</p>
                 </div>
 
-                {/* Avatar. Square-ish and teal — DTG never uses round gradient blobs. */}
-                <div
-                    className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded border border-teal-300/25 bg-teal-900 font-mono text-xs font-semibold tracking-wider text-teal-100"
+                {/* Avatar. Square-ish and teal — DTG never uses round gradient
+                    blobs. The person's photo, cropped to the face, where they
+                    have one; initials otherwise. Click to see it full size. */}
+                <button
+                    type="button"
+                    onClick={() => user?.employee_id && setPreviewing(true)}
+                    disabled={!user?.employee_id}
+                    aria-label="View your photo"
+                    className="flex h-9 w-9 flex-shrink-0 items-center justify-center overflow-hidden rounded border border-teal-300/25 bg-teal-900 font-mono text-xs font-semibold tracking-wider text-teal-100 enabled:cursor-zoom-in"
                     title={user?.full_name ?? undefined}
                 >
-                    {initials(user?.full_name)}
-                </div>
+                    {user?.employee_id ? (
+                        <AuthImage
+                            src={employeeService.photoUrl(user.employee_id)}
+                            alt=""
+                            className="h-full w-full origin-[50%_18%] scale-[1.7] object-cover object-top"
+                            fallback={initials(user?.full_name)}
+                        />
+                    ) : (
+                        initials(user?.full_name)
+                    )}
+                </button>
+                {previewing && user?.employee_id && (
+                    <PhotoPreview
+                        employeeId={user.employee_id}
+                        name={user.full_name}
+                        onClose={() => setPreviewing(false)}
+                    />
+                )}
 
                 <button
                     id="logout-button"

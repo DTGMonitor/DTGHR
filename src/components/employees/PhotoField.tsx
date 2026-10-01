@@ -4,12 +4,13 @@ import type { EmployeeDetail } from "@/types/employee";
 import Icon from "@/components/ui/icons";
 import Spinner from "@/components/ui/Spinner";
 import AuthImage from "@/components/articles/AuthImage";
+import PhotoPreview from "@/components/employees/PhotoPreview";
 
 const MAX_BYTES = 2 * 1024 * 1024;
 const ACCEPT = "image/jpeg,image/png,image/webp";
 
-/** Longest edge after downscaling. Plenty for a profile portrait. */
-const MAX_EDGE = 512;
+/** Longest edge after downscaling: sharp enough to view full size. */
+const MAX_EDGE = 1024;
 
 /**
  * Downscale and re-encode in the browser before uploading.
@@ -59,6 +60,7 @@ export default function PhotoField({
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [broken, setBroken] = useState(false);
+    const [previewing, setPreviewing] = useState(false);
 
     const initials = `${employee.first_name[0] ?? ""}${employee.last_name[0] ?? ""}`.toUpperCase();
     const showImage = employee.has_photo && !broken;
@@ -107,21 +109,38 @@ export default function PhotoField({
     return (
         <div className="flex flex-col items-center gap-3">
             <div className="relative">
-                <div className="flex h-28 w-28 items-center justify-center overflow-hidden rounded-2xl border border-white/12 bg-deep">
+                {/* Portrait, 3:4, as ID photos are taken: a square cut the
+                    head off the top. Click to see it full size. */}
+                <div className="flex h-[150px] w-28 items-center justify-center overflow-hidden rounded-2xl border border-white/12 bg-deep">
                     {showImage ? (
                         // The photo sits in a private Storage bucket, so it is
                         // fetched through the API client rather than by the
                         // browser from a bare URL.
-                        <AuthImage
-                            src={employeeService.photoUrl(employee.id, employee.updated_at)}
-                            alt={`${employee.first_name} ${employee.last_name}`}
-                            className="h-full w-full object-cover"
-                            fallback={initialsBadge}
-                        />
+                        <button
+                            type="button"
+                            onClick={() => setPreviewing(true)}
+                            aria-label="View the photo full size"
+                            className="h-full w-full cursor-zoom-in"
+                        >
+                            <AuthImage
+                                src={employeeService.photoUrl(employee.id, employee.updated_at)}
+                                alt={`${employee.first_name} ${employee.last_name}`}
+                                className="h-full w-full object-cover object-top"
+                                fallback={initialsBadge}
+                            />
+                        </button>
                     ) : (
                         initialsBadge
                     )}
                 </div>
+                {previewing && (
+                    <PhotoPreview
+                        employeeId={employee.id}
+                        name={`${employee.first_name} ${employee.last_name}`}
+                        version={employee.updated_at}
+                        onClose={() => setPreviewing(false)}
+                    />
+                )}
 
                 {busy && (
                     <div className="absolute inset-0 flex items-center justify-center rounded-2xl bg-deep/70">
