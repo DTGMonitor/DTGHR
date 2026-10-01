@@ -8,12 +8,13 @@
 --
 -- leaves_count_days() counts, for each day in the range:
 --
---   * where the person has a roster cell: a working code (DS, NS, C, D, TW,
---     T) or a leave code already planned there (AL, SL, DL) counts; B, PH,
---     O and ST do not. A published schedule's cell wins over a draft's.
---   * where there is no cell yet (a month not rostered): Monday to Friday,
---     less national holidays. Cuti bersama counts: it is taken from annual
---     leave.
+--   * for the rotating crew (work_pattern 'roster'), where they have a
+--     roster cell: a working code (DS, NS, C, D, TW, T) or a leave code
+--     already planned there (AL, SL, DL) counts; B, PH, O and ST do not. A
+--     published schedule's cell wins over a draft's.
+--   * for office-day staff, and for the crew on a day not rostered yet:
+--     Monday to Friday, less national holidays. Cuti bersama counts: it is
+--     taken from annual leave.
 --
 -- submit_leave_request() now counts the days itself; days_requested in the
 -- payload is ignored. GET /leaves/working-days gives the form the same
@@ -32,11 +33,13 @@ set search_path = public, pg_temp
 as $$
     select count(*)::int
       from generate_series(p_start, p_end, interval '1 day') g(d)
+      left join public.employees e on e.id = p_employee_id and e.work_pattern = 'roster'
       left join lateral (
             select a.shift_code
               from public.shift_assignments a
               join public.work_schedules s on s.id = a.schedule_id
-             where a.employee_id = p_employee_id
+             where e.id is not null
+               and a.employee_id = e.id
                and a.date = g.d::date
              order by (s.status = 'published') desc, a.updated_at desc
              limit 1

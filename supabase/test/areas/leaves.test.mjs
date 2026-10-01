@@ -237,7 +237,14 @@ export default async ({ db, step, tx, people }) => {
             (gen_random_uuid(), 'bbbbbbbb-0000-0000-0000-000000000001', '${E.STAFF}', '2026-09-19', 'DS'),
             (gen_random_uuid(), 'bbbbbbbb-0000-0000-0000-000000000001', '${E.STAFF}', '2026-09-21', 'B'),
             (gen_random_uuid(), 'bbbbbbbb-0000-0000-0000-000000000001', '${E.STAFF}', '2026-09-22', 'NS')`);
-        if (await days("2026-09-19", "2026-09-22") !== 2) throw new Error(`roster ${await days("2026-09-19", "2026-09-22")}`);
+        // Office day: the cells are not read; Mon 21 and Tue 22 count.
+        if (await days("2026-09-19", "2026-09-22") !== 2) throw new Error("office day read the roster");
+        await db.exec(`update public.employees set work_pattern = 'roster' where id = '${E.STAFF}'`);
+        // The crew: Sat 19 DS and Tue 22 NS count; Mon 21 is a Break.
+        const crew = await days("2026-09-18", "2026-09-22");
+        await db.exec(`update public.employees set work_pattern = 'office_day' where id = '${E.STAFF}'`);
+        // Fri 18 has no cell: a weekday, so it counts. 18, 19, 22.
+        if (crew !== 3) throw new Error(`roster ${crew}`);
         await db.exec(`delete from public.shift_assignments where employee_id = '${E.STAFF}'
                         and date between '2026-09-19' and '2026-09-22'`);
 
