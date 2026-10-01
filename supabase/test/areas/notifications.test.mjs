@@ -121,6 +121,9 @@ export default async ({ db, step, tx, people }) => {
         await db.query(`update public.app_settings set value = 'https://hr.example.test/' where key = 'public_site_url'`);
         await db.exec(readFileSync(join(import.meta.dirname, "..", "..", "migrations",
             "20260926001300_notifications.sql"), "utf8"));
+        // And the later finance rules on top of it, as the live database has them.
+        await db.exec(readFileSync(join(import.meta.dirname, "..", "..", "migrations",
+            "20260930001000_finance_peter_approves.sql"), "utf8"));
         const r = await db.query(`select public.notifications_site_url() u`);
         await db.query(`update public.app_settings set value = 'https://dtghr-fe.vercel.app' where key = 'public_site_url'`);
         eq(r.rows[0].u, "https://hr.example.test", "site url");
@@ -264,25 +267,23 @@ export default async ({ db, step, tx, people }) => {
         never(rows, MAIL.MARK, MAIL.OLDEXEC, HIMAWAN_MAIL, DIRECTOR_MAIL);
         eq(rows[0].subject, `Finance request ${r.reference} has been submitted for approval`, "subject");
         if (!rows[0].body_text.includes("Total: IDR 2,500,000")) throw new Error(rows[0].body_text);
+        const cc = await expectSent(r.id, "finance_submitted_cc", await roleMails("director"), "/finance-requests");
+        if (!cc[0].subject.endsWith("has been sent to Peter (for your information)")) throw new Error(cc[0].subject);
+        if (!cc[0].body_text.includes("No action is needed from you.")) throw new Error(cc[0].body_text);
     });
 
-    await step("notifications: the director's review enqueues nothing; a send-back reaches finance", async () => {
+    await step("notifications: approving enqueues nothing; a send-back reaches finance", async () => {
         await clear();
-        await call(DIRECTOR, "finance_review", [requestId]);
-        eq(await count(), 0, "review");
         await call(PETER, "finance_send_back", [requestId, "Attach the receipt", "finance"]);
         const rows = await expectSent(requestId, "finance_sent_back", await roleMails("finance"), "/finance-requests");
         never(rows, PETER_MAIL);
     });
 
-    await step("notifications: the executive sending a request back to the director reaches the director", async () => {
+    await step("notifications: approving a finance request enqueues nothing", async () => {
         await call(HIMAWAN, "finance_submit", [requestId]);
-        await call(DIRECTOR, "finance_review", [requestId]);
         await clear();
-        await call(PETER, "finance_send_back", [requestId, "Check the vendor", "director"]);
-        const rows = await expectSent(requestId, "finance_sent_back_director", await roleMails("director"), "/finance-requests");
-        never(rows, PETER_MAIL, HIMAWAN_MAIL);
-        if (!rows[0].body_text.includes("Check the vendor")) throw new Error(rows[0].body_text);
+        await call(PETER, "finance_approve", [requestId]);
+        eq(await count(), 0, "approve");
     });
 
     // --- leave ---------------------------------------------------------------

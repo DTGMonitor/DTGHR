@@ -407,8 +407,8 @@ export default function SettingsPage() {
  *
  * Nurhuda, September 2026: approval is Peter's today, "tp gpp kasih opsi aja
  * ini kalau peter nyerahin ke saya dan saya bisa approved juga disetting".
- * Off: the Director reviews and the CEO approves. On: the Director's review
- * is the approval, and nothing waits on the CEO.
+ * Off: Peter approves; the Director is only copied in. On: the Director may
+ * approve (or send back) as well.
  */
 function FinanceApprovalSetting({ onError }: { onError: (msg: string) => void }) {
     const [on, setOn] = useState<boolean | null>(null);
@@ -440,18 +440,18 @@ function FinanceApprovalSetting({ onError }: { onError: (msg: string) => void })
             <div className="max-w-xl">
                 <p className="dtg-eyebrow">Finance requests</p>
                 <h2 className="mt-0.5 text-sm font-semibold text-paper">
-                    The Director gives the final approval
+                    The Director can approve finance requests
                 </h2>
                 <p className="mt-1.5 text-xs leading-relaxed text-muted">
                     {on
-                        ? "On. The Director's review approves a finance request; it does not go on to the CEO. Turn it off to return approval to the CEO."
-                        : "Off. The Director reviews each finance request and the CEO approves it. Turn it on when the CEO hands approval to the Director."}
+                        ? "On. The Director can approve or send back a finance request, as Peter can."
+                        : "Off. Finance requests go to Peter for approval. The Director is copied in for information only."}
                 </p>
             </div>
             <button
                 role="switch"
                 aria-checked={on}
-                aria-label="The Director gives the final approval on finance requests"
+                aria-label="The Director can approve finance requests"
                 disabled={saving}
                 onClick={() => void toggle()}
                 className={`relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border transition-colors ${

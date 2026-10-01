@@ -22,19 +22,26 @@ import DocumentViewer from "@/components/contracts/DocumentViewer";
  *
  * Nurhuda, September 2026: "tiap bulan mas him ada request kayak petty cash,
  * bayar tax, bpjs, atau apapun itu dan menunggu approval peter" -- what each
- * item is and how much, with a total. Himawan prepares a request; the
- * director reviews it; the CEO approves it, or the director does when Peter
- * has handed that over in Settings; then Himawan marks it paid.
+ * item is and how much, with a total. Himawan prepares a request and sends
+ * it to Peter, who approves it or sends it back; then Himawan marks it paid.
+ * The Director sees every request but is only copied in -- unless approval
+ * has been handed over in Settings, when the Director may approve as well.
  *
  * Which buttons show is read from what the server says -- `awaiting`,
  * `is_editable`, `can_create` -- so the page never offers an action the
  * server will refuse.
  */
 
+/** Whether this person may approve (or send back) the request now. */
+function mayApprove(r: FinanceRequest, role: string | undefined, directorFinal: boolean): boolean {
+    if (r.status !== "submitted" && r.status !== "endorsed") return false;
+    return role === "executive" || (role === "director" && directorFinal);
+}
+
 const STATUS: Record<FinanceStatus, { label: string; cls: string }> = {
     draft: { label: "Draft", cls: "border-white/15 bg-white/[0.04] text-muted" },
-    submitted: { label: "With the Director", cls: "border-teal-500/40 bg-teal-500/10 text-teal-200" },
-    endorsed: { label: "With the CEO", cls: "border-teal-500/40 bg-teal-500/10 text-teal-200" },
+    submitted: { label: "Awaiting approval", cls: "border-teal-500/40 bg-teal-500/10 text-teal-200" },
+    endorsed: { label: "Awaiting approval", cls: "border-teal-500/40 bg-teal-500/10 text-teal-200" },
     approved: { label: "Approved", cls: "border-signal/40 bg-signal/10 text-signal" },
     changes_requested: { label: "Sent back", cls: "border-danger/40 bg-danger/10 text-danger" },
     paid: { label: "Paid", cls: "border-white/15 bg-white/[0.04] text-paper-soft" },
@@ -143,7 +150,7 @@ export default function FinanceRequestsPage() {
         void act(r.id, () => financeService.sendBack(r.id, note, to), "Could not send it back.");
     };
 
-    const mine = requests.filter((r) => r.awaiting && r.awaiting === user?.role);
+    const mine = requests.filter((r) => mayApprove(r, user?.role, directorFinal));
     const shown = requests.filter((r) => showPaid || r.status !== "paid");
 
     if (user && !mayBeHere) return <Navigate to="/" replace />;
@@ -157,10 +164,8 @@ export default function FinanceRequestsPage() {
                         Finance requests
                     </h1>
                     <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-paper-soft">
-                        Petty cash, tax, BPJS and other payments. Prepared by finance, reviewed by
-                        the Director and{" "}
-                        {directorFinal ? "approved by the Director" : "approved by the CEO"} before
-                        payment.
+                        Petty cash, tax, BPJS and other payments, prepared by finance and approved
+                        before payment.
                     </p>
                 </div>
                 <div className="flex items-end gap-3">
@@ -186,8 +191,8 @@ export default function FinanceRequestsPage() {
 
             {mine.length > 0 && (
                 <Alert tone="warning">
-                    {mine.length} request{mine.length === 1 ? " is" : "s are"} waiting on your{" "}
-                    {user?.role === "director" ? "review" : "approval"}.
+                    {mine.length} request{mine.length === 1 ? " is" : "s are"} waiting on your
+                    approval.
                 </Alert>
             )}
 
@@ -290,7 +295,8 @@ function RequestCard({
     confirm: ReturnType<typeof useDialog>["confirm"];
 }) {
     const isFinance = role === "finance";
-    const myTurn = r.awaiting !== null && r.awaiting === role;
+    const myTurn = mayApprove(r, role, directorFinal);
+    const approver = role === "executive" || (role === "director" && directorFinal);
     const style = STATUS[r.status];
     const fileInput = useRef<HTMLInputElement>(null);
     const [paidOn, setPaidOn] = useState(todayISO());
@@ -344,7 +350,6 @@ function RequestCard({
                             <Alert tone="danger">
                                 <span className="font-semibold">
                                     Sent back
-                                    {r.status === "submitted" ? " to the Director" : ""}
                                     {r.revision_by_name ? ` by ${r.revision_by_name}` : ""}:
                                 </span>{" "}
                                 {r.revision_note}
@@ -459,7 +464,7 @@ function RequestCard({
 
                     {/* The trail, in plain words. */}
                     <ul className="space-y-0.5 text-micro text-muted">
-                        {r.submitted_at && <li>Sent for review {longDate(r.submitted_at)}</li>}
+                        {r.submitted_at && <li>Sent for approval {longDate(r.submitted_at)}</li>}
                         {r.reviewed_at && (
                             <li>
                                 Reviewed by {r.reviewed_by_name} {longDate(r.reviewed_at)}
@@ -490,7 +495,7 @@ function RequestCard({
                                     className="dtg-btn-primary px-3 py-1.5 text-xs"
                                 >
                                     <Send className="h-3.5 w-3.5" />
-                                    Send for review
+                                    Send for approval
                                 </button>
                                 <button onClick={onEdit} className="dtg-btn-secondary px-3 py-1.5 text-xs">
                                     Edit
@@ -520,17 +525,17 @@ function RequestCard({
                             </>
                         )}
 
-                        {myTurn && role === "director" && (
+                        {myTurn && (
                             <>
                                 <button
                                     disabled={busy}
                                     onClick={() =>
-                                        void onAct(r.id, () => financeService.review(r.id), "Could not review it.")
+                                        void onAct(r.id, () => financeService.approve(r.id), "Could not approve it.")
                                     }
                                     className="dtg-btn-primary px-3 py-1.5 text-xs"
                                 >
                                     <Check className="h-3.5 w-3.5" />
-                                    {directorFinal ? "Review and approve" : "Reviewed, pass to CEO"}
+                                    Approve
                                 </button>
                                 <button
                                     onClick={() => void onSendBack(r, "finance")}
@@ -541,38 +546,7 @@ function RequestCard({
                                 </button>
                             </>
                         )}
-
-                        {myTurn && role === "executive" && (
-                            <button
-                                disabled={busy}
-                                onClick={() =>
-                                    void onAct(r.id, () => financeService.approve(r.id), "Could not approve it.")
-                                }
-                                className="dtg-btn-primary px-3 py-1.5 text-xs"
-                            >
-                                <Check className="h-3.5 w-3.5" />
-                                Approve
-                            </button>
-                        )}
-                        {role === "executive" && (myTurn || r.status === "approved") && (
-                            <>
-                                <button
-                                    onClick={() => void onSendBack(r, "director")}
-                                    className="dtg-btn-secondary px-3 py-1.5 text-xs"
-                                >
-                                    <CornerUpLeft className="h-3.5 w-3.5" />
-                                    Back to Director
-                                </button>
-                                <button
-                                    onClick={() => void onSendBack(r, "finance")}
-                                    className="dtg-btn-secondary px-3 py-1.5 text-xs"
-                                >
-                                    <CornerUpLeft className="h-3.5 w-3.5" />
-                                    Back to Finance
-                                </button>
-                            </>
-                        )}
-                        {role === "director" && r.status === "approved" && (
+                        {approver && r.status === "approved" && (
                             <button
                                 onClick={() => void onSendBack(r, "finance")}
                                 className="dtg-btn-secondary px-3 py-1.5 text-xs"

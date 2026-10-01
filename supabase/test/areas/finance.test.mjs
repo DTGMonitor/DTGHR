@@ -62,11 +62,9 @@ export default async ({ db, step, tx, people }) => {
         await db.exec(`delete from public.finance_requests where reference in ('FR-9999','FR-10000','FR-10001')`);
     });
 
-    await step("finance: the full chain, director then executive then paid", async () => {
+    await step("finance: finance sends it to Peter, Peter approves, finance pays", async () => {
         let r = await raise();
-        if (r.awaiting !== "director" || r.is_editable !== false) throw new Error(`${r.awaiting}/${r.is_editable}`);
-        r = await call(DIRECTOR, "finance_review", [r.id]);
-        if (r.status !== "endorsed" || r.awaiting !== "executive") throw new Error(`${r.status}/${r.awaiting}`);
+        if (r.awaiting !== "executive" || r.is_editable !== false) throw new Error(`${r.awaiting}/${r.is_editable}`);
         r = await call(PETER, "finance_approve", [r.id]);
         if (r.status !== "approved" || r.approved_by_name !== "Peter Saunders") throw new Error(`${r.status}/${r.approved_by_name}`);
         r = await call(HIMAWAN, "finance_mark_paid", [r.id, "2026-10-08", "BCA transfer"]);
@@ -78,12 +76,25 @@ export default async ({ db, step, tx, people }) => {
         if (log.rows[0]?.description !== want) throw new Error(`log: ${log.rows[0]?.description}`);
     });
 
-    await step("finance: with the final say handed over, the director's review approves", async () => {
+    await step("finance: the director is copied in, with nothing to do", async () => {
+        const r = await raise();
+        await expectError(call(DIRECTOR, "finance_approve", [r.id]), "PT403", /Only Peter approves a finance request\./);
+        await expectError(call(DIRECTOR, "finance_review", [r.id]), "PT403", /Only Peter approves/);
+        await expectError(call(DIRECTOR, "finance_send_back", [r.id, "Not mine.", "finance"]), "PT403",
+            /Only whoever approves it can send it back\./);
+        const seen = await call(DIRECTOR, "finance_get", [r.id]);
+        if (seen.id !== r.id) throw new Error("the director cannot read it");
+    });
+
+    await step("finance: with approval handed over, the director approves too", async () => {
         const s = await setFinal(true);
         if (s.director_final_approval !== true) throw new Error("not saved");
         let r = await raise();
-        r = await call(DIRECTOR, "finance_review", [r.id]);
+        r = await call(DIRECTOR, "finance_approve", [r.id]);
         if (r.status !== "approved" || r.approved_by_name !== "HR Admin") throw new Error(`${r.status}/${r.approved_by_name}`);
+        const other = await raise();
+        const p = await call(PETER, "finance_approve", [other.id]);
+        if (p.status !== "approved") throw new Error("Peter lost approval");
         const list = await call(HIMAWAN, "finance_list");
         if (list.director_final_approval !== true) throw new Error("list does not say so");
         await setFinal(false);
@@ -98,17 +109,13 @@ export default async ({ db, step, tx, people }) => {
         await expectError(call(RINA, "finance_settings_get"), "PT404");
     });
 
-    await step("finance: the executive sends back to the director, the director to finance", async () => {
+    await step("finance: Peter sends back to finance; a resubmit clears the reason", async () => {
         let r = await raise();
-        await call(DIRECTOR, "finance_review", [r.id]);
-        let back = await call(PETER, "finance_send_back", [r.id, "Check the BPJS figure with me.", "director"]);
-        if (back.status !== "submitted" || back.awaiting !== "director") throw new Error(`${back.status}/${back.awaiting}`);
-        if (back.revision_note !== "Check the BPJS figure with me.") throw new Error(`note ${back.revision_note}`);
-        if (back.reviewed_by_name !== null || back.reviewed_at !== null) throw new Error("review signature kept");
-
-        back = await call(DIRECTOR, "finance_send_back", [r.id, "BPJS is August's.", "finance"]);
-        if (back.status !== "changes_requested" || back.is_editable !== true) throw new Error(`${back.status}`);
-        if (back.revision_by_name !== "HR Admin") throw new Error(`revision_by_name ${back.revision_by_name}`);
+        const back = await call(PETER, "finance_send_back", [r.id, "Attach the BPJS invoice.", "finance"]);
+        if (back.status !== "changes_requested" || back.is_editable !== true) throw new Error(back.status);
+        if (back.revision_by_name !== "Peter Saunders") throw new Error(`revision_by_name ${back.revision_by_name}`);
+        await expectError(call(PETER, "finance_send_back", [r.id, "To her.", "director"]), "PT422",
+            /goes back to finance only/);
 
         const fixed = { ...REQUEST, items: REQUEST.items.slice(0, 2) };
         const upd = await call(HIMAWAN, "finance_update", [r.id, JSON.stringify(fixed)]);
@@ -117,9 +124,8 @@ export default async ({ db, step, tx, people }) => {
         if (r.revision_note !== null) throw new Error("revision note survived the resubmit");
     });
 
-    await step("finance: sending back an approved request clears both signatures", async () => {
+    await step("finance: sending back an approved request clears the signature", async () => {
         let r = await raise();
-        await call(DIRECTOR, "finance_review", [r.id]);
         await call(PETER, "finance_approve", [r.id]);
         r = await call(PETER, "finance_send_back", [r.id, "Wrong month.", "finance"]);
         if (r.status !== "changes_requested" || r.approved_by_name !== null || r.approved_at !== null)
@@ -128,26 +134,22 @@ export default async ({ db, step, tx, people }) => {
 
     await step("finance: send-back rules -- who, when, and a reason", async () => {
         const r = await raise();
-        // Submitted: the executive is not who it waits on.
-        await expectError(call(PETER, "finance_send_back", [r.id, "Not yet.", "finance"]), "PT403",
-            /Only whoever it is waiting on can send it back\./);
-        // Only the executive sends back to the director, and only once reviewed.
-        await expectError(call(DIRECTOR, "finance_send_back", [r.id, "To me.", "director"]), "PT403",
-            /Only the executive sends a request back to the director, once reviewed\./);
-        await expectError(call(PETER, "finance_send_back", [r.id, "To her.", "director"]), "PT403");
         await expectError(call(HIMAWAN, "finance_send_back", [r.id, "Mine.", "finance"]), "PT403");
-        await expectError(call(DIRECTOR, "finance_send_back", [r.id, "no", "finance"]), "PT422");
+        await expectError(call(PETER, "finance_send_back", [r.id, "no", "finance"]), "PT422");
+        const d = await create();
+        await expectError(call(PETER, "finance_send_back", [d.id, "A draft.", "finance"]), "PT409",
+            /cannot be sent back now/);
     });
 
     await step("finance: nobody acts out of turn", async () => {
+        const d = await create();
+        await expectError(call(PETER, "finance_approve", [d.id]), "PT409",
+            new RegExp(`${d.reference} is draft; it cannot be approved now\.`));
         const r = await raise();
-        await expectError(call(PETER, "finance_approve", [r.id]), "PT409",
-            new RegExp(`${r.reference} is submitted; it cannot be approved now\\.`));
         await expectError(call(HIMAWAN, "finance_update", [r.id, JSON.stringify(REQUEST)]), "PT409",
             /is submitted; it cannot be edited now\./);
         await expectError(create(DIRECTOR), "PT403", /Only finance raises a request\./);
-        await expectError(call(DIRECTOR, "finance_approve", [r.id]), "PT403", /Only the executive approves a request\./);
-        await expectError(call(PETER, "finance_review", [r.id]), "PT403", /Only the director reviews a request\./);
+        await expectError(call(HIMAWAN, "finance_approve", [r.id]), "PT403", /Only Peter approves/);
         await expectError(call(HIMAWAN, "finance_mark_paid", [r.id, "2026-10-01", null]), "PT409",
             /cannot be marked paid now/);
         await expectError(call(HIMAWAN, "finance_delete", [r.id]), "PT409", /cannot be discarded now/);
@@ -225,7 +227,7 @@ export default async ({ db, step, tx, people }) => {
         if (out.documents.length !== 2) throw new Error("second not attached");
         await expectError(call(HIMAWAN, "finance_document_delete", [r.id, doc.id]), "PT409", /cannot be changed now/);
 
-        await call(DIRECTOR, "finance_send_back", [r.id, "Attach the tax slip.", "finance"]);
+        await call(PETER, "finance_send_back", [r.id, "Attach the tax slip.", "finance"]);
         const del = await call(HIMAWAN, "finance_document_delete", [r.id, doc.id]);
         if (del.storage_path !== path || del.request.documents.length !== 1) throw new Error(JSON.stringify(del));
         await expectError(call(HIMAWAN, "finance_document_delete", [r.id, doc.id]), "PT404");

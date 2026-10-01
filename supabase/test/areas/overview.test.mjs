@@ -259,7 +259,7 @@ export default async ({ db, step, tx, people }) => {
         eq((await at(PETER)).approvals.kpi.filter((k) => k.period === "OV-2090"), [], "not Peter's");
     });
 
-    await step("overview: finance requests on the director's review and the executive's approval", async () => {
+    await step("overview: finance requests wait on Peter; the director only when handed approval", async () => {
         await db.exec(`
             insert into public.finance_requests (id, reference, title, status, requested_by_id, revision_note, revision_by_id, created_at) values
               ('0e0e0e0e-1200-0000-0000-000000000201','OV-0001','Overview petty cash','submitted','${HIMAWAN}', null, null, '2090-01-01'),
@@ -271,15 +271,19 @@ export default async ({ db, step, tx, people }) => {
               ('0e0e0e0e-1200-0000-0000-000000000201','petty_cash','Cash', 1500000),
               ('0e0e0e0e-1200-0000-0000-000000000201','other','Snacks', 250000.5);
         `);
-        const d = await at(U.DIR);
-        eq(d.approvals.finance.filter((f) => f.reference.startsWith("OV-")), [
+        const ov = (o) => o.approvals.finance.filter((f) => f.reference.startsWith("OV-"));
+        eq(ov(await at(PETER)), [
             { reference: "OV-0001", title: "Overview petty cash", total: 1750000.5, requested_by: "Himawan",
               sent_back_note: null, sent_back_by: null },
             { reference: "OV-0002", title: "Overview tax", total: 0, requested_by: "Himawan",
               sent_back_note: "Wrong month.", sent_back_by: "Peter Saunders" },
-        ], "director's finance");
-        eq((await at(PETER)).approvals.finance.filter((f) => f.reference.startsWith("OV-")).map((f) => f.reference),
-           ["OV-0003"], "executive's finance");
+            { reference: "OV-0003", title: "Overview BPJS", total: 0, requested_by: "Himawan",
+              sent_back_note: null, sent_back_by: null },
+        ], "executive's finance");
+        eq(ov(await at(U.DIR)), [], "the director is only copied in");
+        await db.exec(`update public.finance_settings set director_final_approval = true`);
+        eq(ov(await at(U.DIR)).length, 3, "the director, once handed approval");
+        await db.exec(`update public.finance_settings set director_final_approval = false`);
     });
 
     await step("overview: finance's desk -- sent back, and the month running out", async () => {
