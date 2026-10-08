@@ -135,10 +135,11 @@ export default async ({ db, step, tx, people }) => {
         const { readFileSync } = await import("node:fs");
         const { join } = await import("node:path");
         await db.query(`update public.app_settings set value = 'https://hr.example.test/' where key = 'public_site_url'`);
-        // The latest notifications migration; 20260926001300 can no longer be
-        // replayed on top of it (notifications_recipients changed shape).
-        await db.exec(readFileSync(join(import.meta.dirname, "..", "..", "migrations",
-            "20261007000100_in_app_notifications.sql"), "utf8"));
+        // The in-app migration and the finance rules after it, as the live
+        // database has them. 20260926001300 can no longer be replayed on top
+        // (notifications_recipients changed shape).
+        for (const f of ["20261007000100_in_app_notifications.sql", "20261008000100_finance_cc_in_app.sql"])
+            await db.exec(readFileSync(join(import.meta.dirname, "..", "..", "migrations", f), "utf8"));
         const old = await db.query(`select count(*)::int n from pg_proc
             where proname = 'notifications_enqueue' and pg_get_function_identity_arguments(oid) like '%text[]%'`);
         eq(old.rows[0].n, 0, "the paragraphs overload is gone");
@@ -334,6 +335,11 @@ export default async ({ db, step, tx, people }) => {
         eq(rows[0].subject, `Finance request ${r.reference} has been submitted for approval`, "subject");
         if (!rows.payload.details.some(([k, v]) => k === "Total" && v === "IDR 2,500,000"))
             throw new Error(JSON.stringify(rows.payload.details));
+        // The director is copied in, for information only: not an action item.
+        const cc = await expectSent(r.id, "finance_submitted_cc", await roleMails("director"), "/finance-requests");
+        if (!cc[0].subject.endsWith("has been sent to Peter (for your information)")) throw new Error(cc[0].subject);
+        eq([cc.payload.tone, cc.payload.eyebrow], ["reminder", "For your information"], "cc payload");
+        if (!cc.payload.intro.includes("No action is needed from you.")) throw new Error(cc.payload.intro);
     });
 
     await step("notifications: approving enqueues nothing; a send-back reaches finance", async () => {

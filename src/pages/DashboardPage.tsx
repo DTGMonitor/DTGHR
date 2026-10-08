@@ -360,6 +360,7 @@ const SAID_BY_APPROVALS = [
     "salary_submitted",
     "kpi_submitted",
     "finance_submitted",
+    "finance_submitted_cc",
     "finance_sent_back_director",
 ];
 
