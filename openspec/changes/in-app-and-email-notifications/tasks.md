@@ -10,7 +10,7 @@ because it works with both row shapes. The migration is next and has to pass
 - [x] 1.2 Change the claim path so rows with `notification_id` get their payload (join `notifications`) and the run reads `app_settings.public_site_url` once. Render, send, then store `body_html`/`body_text` on the row. Rows without `notification_id` keep sending their stored `body_html`
 - [x] 1.3 A render error marks only that row failed, with the message, and it's retried like a Graph error
 - [x] 1.4 Add a small Deno script (not deployed) that renders one sample per tone to HTML files so they can be checked in a browser. Update the function's header comment to describe the new flow
-- [ ] 1.5 Deploy `send-notifications --no-verify-jwt`. Check that a legacy-style test row still sends
+- [x] 1.5 Deploy `send-notifications --no-verify-jwt`. Check that a legacy-style test row still sends
 
 ## 2. Migration: the notifications table and the new enqueue
 
@@ -62,8 +62,8 @@ with the containers at the end.
 
 ## 4. Apply to live
 
-- [ ] 4.1 Back up, then apply the migration in the SQL editor
-- [ ] 4.2 Check that `cron.job` has the retention job and that `notifications` is in the realtime publication
+- [x] 4.1 Back up, then apply the migration in the SQL editor
+- [x] 4.2 Check that `cron.job` has the retention job and that `notifications` is in the realtime publication
 - [ ] 4.3 Send one notification of each tone to a desktop Outlook mailbox and to Outlook on the web, and check the layout
 
 ## 5. Frontend: provider and data
