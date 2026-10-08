@@ -259,6 +259,19 @@ export default async ({ db, step, tx, people }) => {
         if (await days("2026-10-15", "2026-10-13") !== 0) throw new Error("backwards range");
     });
 
+    await step("special leave on the roster (SP) never comes out of annual leave", async () => {
+        const valid = (await db.query(`select public.schedules_valid_code('SP') v`)).rows[0].v;
+        if (valid !== true) throw new Error("SP refused");
+        const before = (await position(E.STAFF, "2026-12-31")).taken;
+        await db.exec(`insert into public.shift_assignments (id, schedule_id, employee_id, date, shift_code) values
+            (gen_random_uuid(), 'bbbbbbbb-0000-0000-0000-000000000001', '${E.STAFF}', '2026-09-24', 'SP'),
+            (gen_random_uuid(), 'bbbbbbbb-0000-0000-0000-000000000001', '${E.STAFF}', '2026-09-25', 'SP')`);
+        const after = (await position(E.STAFF, "2026-12-31")).taken;
+        if (after !== before) throw new Error(`annual taken moved ${before} -> ${after}`);
+        await db.exec(`delete from public.shift_assignments where employee_id = '${E.STAFF}'
+                        and date in ('2026-09-24', '2026-09-25')`);
+    });
+
     await step("a day on the roster and in an approved request counts once", async () => {
         await db.exec(`insert into public.shift_assignments (id, schedule_id, employee_id, date, shift_code)
                        values (gen_random_uuid(), 'bbbbbbbb-0000-0000-0000-000000000001', '${E.STAFF}', '2026-09-15', 'AL')`);

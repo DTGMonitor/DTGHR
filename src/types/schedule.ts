@@ -20,6 +20,7 @@ export enum ShiftCode {
     AL = "AL",   // Annual leave
     SL = "SL",   // Sick leave
     DL = "DL",   // Discretionary leave day
+    SP = "SP",   // Special leave: marriage, bereavement, paternity -- not annual leave
     PH = "PH",   // Public holiday
     TW = "TW",   // Travel work
     ST = "ST",   // Study leave
@@ -172,6 +173,7 @@ export const SHIFT_STYLES: Record<ShiftCode, ShiftStyle> = {
     [ShiftCode.AL]: { bg: "#AFABAB", fg: "#FFFFFF", label: "Annual leave" },
     [ShiftCode.SL]: { bg: "#D8A141", fg: "#000000", label: "Sick leave" },
     [ShiftCode.DL]: { bg: "#0070C0", fg: "#FFFFFF", label: "Discretionary leave" },
+    [ShiftCode.SP]: { bg: "#C2185B", fg: "#FFFFFF", label: "Special leave" },
     [ShiftCode.PH]: { bg: "#00B050", fg: "#000000", label: "Public holiday" },
     [ShiftCode.TW]: { bg: "#CC3610", fg: "#FFFFFF", label: "Travel work" },
     [ShiftCode.ST]: { bg: "#CC3610", fg: "#FFFFFF", label: "Study leave" },
@@ -188,6 +190,7 @@ export const SHIFT_CODE_ORDER: ShiftCode[] = [
     ShiftCode.AL,
     ShiftCode.SL,
     ShiftCode.DL,
+    ShiftCode.SP,
     ShiftCode.PH,
     ShiftCode.O,
     ShiftCode.TW,
