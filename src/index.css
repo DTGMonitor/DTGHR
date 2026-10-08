@@ -219,6 +219,23 @@
     animation: dtg-fade-in 0.18s ease-out both;
 }
 
+/* The row a notification opened, picked out for a moment (revealElement). */
+@keyframes dtg-flash {
+    from {
+        box-shadow: 0 0 0 2px rgba(99, 183, 93, 0.9);
+        background-color: rgba(99, 183, 93, 0.12);
+    }
+
+    to {
+        box-shadow: 0 0 0 2px rgba(99, 183, 93, 0);
+        background-color: transparent;
+    }
+}
+
+.dtg-flash {
+    animation: dtg-flash 2.2s ease-out both;
+}
+
 @media (prefers-reduced-motion: reduce) {
 
     *,

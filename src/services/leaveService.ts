@@ -1,6 +1,7 @@
 import api from "@/lib/api";
 import type {
     LeaveRequest,
+    LeaveRequestDetail,
     LeaveBalance,
     LeaveType,
     LeaveTypeOption,
@@ -45,6 +46,11 @@ export const leaveService = {
 
     submitRequest(data: LeaveRequestCreateData): Promise<{ data: LeaveRequest }> {
         return api.post("/leaves", data);
+    },
+
+    /** One request: yours, or one you may review. */
+    getRequest(id: string): Promise<{ data: LeaveRequestDetail }> {
+        return api.get(`/leaves/${id}`);
     },
 
     cancelRequest(id: string): Promise<{ data: LeaveRequest }> {

@@ -3,6 +3,7 @@ import { Navigate } from "react-router-dom";
 import { Check, CornerUpLeft, FileText, Paperclip, Plus, Send, Trash2 } from "lucide-react";
 
 import { useAuth } from "@/contexts/AuthContext";
+import { revealElement, useOpenParam } from "@/lib/useOpenParam";
 import {
     CATEGORY_LABELS,
     financeService,
@@ -87,7 +88,9 @@ export default function FinanceRequestsPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState<string | null>(null);
-    const [open, setOpen] = useState<string | null>(null);
+    // The expanded request lives in the URL (?open=<id>), so a notification
+    // can land on it.
+    const [open, setOpen] = useOpenParam();
     /** "new", a request id being edited, or null. */
     const [editing, setEditing] = useState<string | null>(null);
     const [showPaid, setShowPaid] = useState(false);
@@ -152,6 +155,20 @@ export default function FinanceRequestsPage() {
 
     const mine = requests.filter((r) => mayApprove(r, user?.role, directorFinal));
     const shown = requests.filter((r) => showPaid || r.status !== "paid");
+
+    // Arriving with ?open=: show it even if paid, and bring it into view; say
+    // so when it is not one this person can see.
+    useEffect(() => {
+        if (!open || loading) return;
+        const target = requests.find((r) => r.id === open);
+        if (!target) {
+            setError("That finance request could not be found.");
+            setOpen(null);
+            return;
+        }
+        if (target.status === "paid") setShowPaid(true);
+        revealElement(`finance-${open}`);
+    }, [open, loading]);
 
     if (user && !mayBeHere) return <Navigate to="/" replace />;
 
@@ -312,7 +329,7 @@ function RequestCard({
     }, [r.items]);
 
     return (
-        <article className={`dtg-panel overflow-hidden ${myTurn ? "ring-1 ring-signal/30" : ""}`}>
+        <article id={`finance-${r.id}`} className={`dtg-panel overflow-hidden ${myTurn ? "ring-1 ring-signal/30" : ""}`}>
             <button
                 type="button"
                 onClick={onToggle}

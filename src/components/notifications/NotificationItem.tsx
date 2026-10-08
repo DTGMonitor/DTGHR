@@ -1,12 +1,13 @@
-import { relativeTime, type AppNotification, type NotificationTone } from "@/lib/notifications";
+import { relativeTime, settledLabel, type AppNotification, type NotificationTone } from "@/lib/notifications";
 
 /*
  * One notification, as the bell's list and the notifications page show it.
  * The tone is a 2px left rule and the eyebrow colour -- the same device the
  * sidebar uses for the live page -- so a list of them reads at a glance:
  * green waiting on you or good news, red sent back or refused, gold a date
- * coming up. Unread carries a dot and full-strength text; an action item that
- * someone has since dealt with is muted and says so.
+ * coming up. Unread carries a dot and full-strength text; an item that asked
+ * something of you and has since been dealt with is muted and says how, and
+ * by whom.
  */
 
 const TONE: Record<NotificationTone, { rule: string; eyebrow: string }> = {
@@ -17,7 +18,7 @@ const TONE: Record<NotificationTone, { rule: string; eyebrow: string }> = {
 };
 
 export function isSettled(n: AppNotification): boolean {
-    return n.resolved_at !== null && n.payload.tone === "action";
+    return n.resolved_at !== null && n.needs_action;
 }
 
 export default function NotificationItem({
@@ -57,7 +58,7 @@ export default function NotificationItem({
                         )}
                         {settled && (
                             <span className="rounded-sm border border-white/12 px-1.5 text-micro font-medium text-paper-soft">
-                                No action needed
+                                {settledLabel(n)}
                             </span>
                         )}
                     </p>

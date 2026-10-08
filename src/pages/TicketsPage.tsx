@@ -4,6 +4,7 @@ import { LifeBuoy, Lock, Plus, ShieldCheck } from "lucide-react";
 import Alert from "@/components/ui/Alert";
 import Spinner from "@/components/ui/Spinner";
 import { useDialog } from "@/components/ui/Dialog";
+import { revealElement, useOpenParam } from "@/lib/useOpenParam";
 import { useAuth } from "@/contexts/AuthContext";
 import CategoryInsights, { CATEGORY_NAMES, duration } from "@/components/tickets/CategoryInsights";
 import {
@@ -105,6 +106,9 @@ export default function TicketsPage() {
     const [history, setHistory] = useState<TicketHistory | null>(null);
     const [historyCategory, setHistoryCategory] = useState<TicketCategory | null>(null);
     const [openTicket, setOpenTicket] = useState<Ticket | null>(null);
+    // Which ticket is open lives in the URL (?open=<id>), so a notification
+    // can land on it.
+    const [openId, setOpenId] = useOpenParam();
     const [includeClosed, setIncludeClosed] = useState(false);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -151,14 +155,32 @@ export default function TicketsPage() {
     const mayReply = (t: Ticket) =>
         t.can_work || (t.reporter_id !== null && t.reporter_id === user?.employee_id);
 
-    const open = async (id: string) => {
-        try {
-            const res = await ticketService.get(id);
-            setOpenTicket(res.data);
-        } catch {
-            setError("Could not open that ticket.");
+    useEffect(() => {
+        if (!openId) {
+            setOpenTicket(null);
+            return;
         }
-    };
+        if (openTicket?.id === openId) return;
+        let live = true;
+        ticketService
+            .get(openId)
+            .then((res) => {
+                if (!live) return;
+                setTab("tickets");
+                // A finished ticket is only listed with the closed ones shown.
+                if (res.data.status === "resolved" || res.data.status === "closed") setIncludeClosed(true);
+                setOpenTicket(res.data);
+                revealElement(`ticket-${res.data.id}`);
+            })
+            .catch(() => {
+                if (!live) return;
+                setError("That ticket could not be found.");
+                setOpenId(null);
+            });
+        return () => {
+            live = false;
+        };
+    }, [openId]);
 
     const complain = (e: unknown, fallback: string) => {
         const detail = (e as { response?: { data?: { detail?: unknown } } }).response?.data?.detail;
@@ -319,7 +341,7 @@ export default function TicketsPage() {
                             role="tab"
                             aria-selected={tab === key}
                             onClick={() => {
-                                setOpenTicket(null);
+                                setOpenId(null);
                                 setTab(key);
                             }}
                             className={`-mb-px border-b-2 px-3.5 py-2.5 text-sm transition-colors ${
@@ -541,12 +563,10 @@ export default function TicketsPage() {
             ) : (
                 <div className="space-y-3">
                     {shown.map((t) => (
-                        <article key={t.id} className="dtg-panel overflow-hidden">
+                        <article key={t.id} id={`ticket-${t.id}`} className="dtg-panel overflow-hidden">
                             <button
                                 type="button"
-                                onClick={() =>
-                                    openTicket?.id === t.id ? setOpenTicket(null) : void open(t.id)
-                                }
+                                onClick={() => setOpenId(openTicket?.id === t.id ? null : t.id)}
                                 className="flex w-full flex-wrap items-center justify-between gap-3 px-5 py-3.5 text-left transition hover:bg-white/[0.03]"
                             >
                                 <div className="min-w-0">

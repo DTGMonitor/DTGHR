@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { LeaveType, LeaveStatus } from "@/types/leave";
-import type { LeaveRequest, LeaveBalance } from "@/types/leave";
+import type { LeaveRequest, LeaveRequestDetail, LeaveBalance } from "@/types/leave";
+import Drawer from "@/components/ui/Drawer";
+import { useOpenParam } from "@/lib/useOpenParam";
 import { leaveService } from "@/services/leaveService";
 import { useAuth } from "@/contexts/AuthContext";
 import LeaveRequestModal from "@/components/leaves/LeaveRequestModal";
@@ -93,6 +95,208 @@ function StatusBadge({ status }: { status: LeaveStatus }) {
         <span className={`dtg-chip ${STATUS_STYLES[status]}`}>
             {status}
         </span>
+    );
+}
+
+/** "29 September 2026, 08:12" */
+function stamp(iso: string): string {
+    return new Date(iso).toLocaleString("en-GB", {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+    });
+}
+
+/*
+ * One request, opened from a notification or a row (/leaves?open=<id>).
+ *
+ * Readable by the person who asked and by anyone who may review it -- the
+ * server decides, and says what the reader may do (can_review, can_cancel).
+ * The actions are the ones the page already uses; nothing new writes here.
+ */
+function LeaveDetailPanel({
+    id,
+    onClose,
+    onChanged,
+}: {
+    id: string;
+    onClose: () => void;
+    onChanged: () => void;
+}) {
+    const [req, setReq] = useState<LeaveRequestDetail | null>(null);
+    const [missing, setMissing] = useState(false);
+    const [note, setNote] = useState("");
+    const [busy, setBusy] = useState<"approve" | "reject" | "cancel" | null>(null);
+    const [error, setError] = useState<string | null>(null);
+
+    const load = useCallback(async () => {
+        try {
+            const res = await leaveService.getRequest(id);
+            setReq(res.data);
+            setMissing(false);
+        } catch {
+            setMissing(true);
+        }
+    }, [id]);
+
+    useEffect(() => {
+        setReq(null);
+        void load();
+    }, [load]);
+
+    const act = async (what: "approve" | "reject" | "cancel") => {
+        setBusy(what);
+        setError(null);
+        try {
+            if (what === "approve") await leaveService.approveRequest(id, { note: note || undefined });
+            else if (what === "reject") await leaveService.rejectRequest(id, { note: note || undefined });
+            else await leaveService.cancelRequest(id);
+            setNote("");
+            await load();
+            onChanged();
+        } catch (e) {
+            const detail = (e as { response?: { data?: { detail?: unknown } } }).response?.data?.detail;
+            setError(typeof detail === "string" ? detail : "That did not go through.");
+        } finally {
+            setBusy(null);
+        }
+    };
+
+    const title = req
+        ? req.is_mine
+            ? "Your leave request"
+            : (req.employee_name ?? "Leave request")
+        : missing
+          ? "Leave request"
+          : "Loading…";
+    const eyebrow = req ? `${LEAVE_TYPE_LABELS[req.leave_type]} leave` : "Leave";
+    const decided =
+        req && req.status !== LeaveStatus.PENDING
+            ? req.status === LeaveStatus.CANCELLED
+                ? { what: "Cancelled", at: req.updated_at }
+                : {
+                      what: `${req.status === LeaveStatus.APPROVED ? "Approved" : "Rejected"}${
+                          req.reviewed_by_name ? ` by ${req.reviewed_by_name}` : ""
+                      }`,
+                      at: req.reviewed_at,
+                  }
+            : null;
+
+    return (
+        <Drawer
+            title={title}
+            eyebrow={eyebrow}
+            onClose={onClose}
+            footer={
+                req && (req.can_review || req.can_cancel) ? (
+                    <div className="space-y-3">
+                        {error && <p className="text-sm text-danger">{error}</p>}
+                        {req.can_review && (
+                            <>
+                                <input
+                                    type="text"
+                                    placeholder="Note (optional)"
+                                    value={note}
+                                    onChange={(e) => setNote(e.target.value)}
+                                    className="dtg-input w-full"
+                                />
+                                <div className="flex gap-2">
+                                    <button
+                                        type="button"
+                                        disabled={busy !== null}
+                                        onClick={() => void act("approve")}
+                                        className="dtg-btn-primary flex-1 justify-center"
+                                    >
+                                        {busy === "approve" ? "Approving…" : "Approve"}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        disabled={busy !== null}
+                                        onClick={() => void act("reject")}
+                                        className="dtg-btn-danger flex-1 justify-center"
+                                    >
+                                        {busy === "reject" ? "Rejecting…" : "Reject"}
+                                    </button>
+                                </div>
+                            </>
+                        )}
+                        {req.can_cancel && (
+                            <button
+                                type="button"
+                                disabled={busy !== null}
+                                onClick={() => void act("cancel")}
+                                className="dtg-btn-secondary w-full justify-center"
+                            >
+                                {busy === "cancel" ? "Cancelling…" : "Cancel this request"}
+                            </button>
+                        )}
+                    </div>
+                ) : undefined
+            }
+        >
+            <div className="flex-1 space-y-6 overflow-y-auto px-5 py-5 sm:px-6">
+                {missing ? (
+                    <p className="text-sm text-paper-soft">
+                        This leave request could not be found. It may have been removed, or it is not one you can see.
+                    </p>
+                ) : !req ? (
+                    <div className="space-y-3">
+                        {[0, 1, 2].map((i) => (
+                            <div key={i} className="h-10 animate-pulse rounded bg-white/[0.04]" />
+                        ))}
+                    </div>
+                ) : (
+                    <>
+                        <div>
+                            <StatusBadge status={req.status} />
+                        </div>
+                        <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2.5 text-sm">
+                            {!req.is_mine && (
+                                <>
+                                    <dt className="text-muted">Employee</dt>
+                                    <dd className="text-paper">{req.employee_name ?? "—"}</dd>
+                                </>
+                            )}
+                            <dt className="text-muted">Dates</dt>
+                            <dd className="text-paper">
+                                {req.start_date === req.end_date
+                                    ? longDate(req.start_date)
+                                    : `${longDate(req.start_date)} to ${longDate(req.end_date)}`}
+                            </dd>
+                            <dt className="text-muted">Days</dt>
+                            <dd className="text-paper">{req.days_requested}</dd>
+                            <dt className="text-muted">Reason</dt>
+                            <dd className="whitespace-pre-line text-paper">{req.reason || "—"}</dd>
+                        </dl>
+
+                        <div>
+                            <p className="dtg-eyebrow">Timeline</p>
+                            <ol className="mt-3 space-y-3 border-l border-white/10 pl-4 text-sm">
+                                <li>
+                                    <p className="text-paper">Submitted</p>
+                                    <p className="font-mono text-micro text-muted">{stamp(req.created_at)}</p>
+                                </li>
+                                {decided && (
+                                    <li>
+                                        <p className="text-paper">{decided.what}</p>
+                                        {decided.at && (
+                                            <p className="font-mono text-micro text-muted">{stamp(decided.at)}</p>
+                                        )}
+                                        {req.reviewer_note && (
+                                            <blockquote className="mt-1.5 border-l-2 border-white/15 bg-deep/40 px-3 py-2 text-paper-soft">
+                                                {req.reviewer_note}
+                                            </blockquote>
+                                        )}
+                                    </li>
+                                )}
+                            </ol>
+                        </div>
+                    </>
+                )}
+            </div>
+        </Drawer>
     );
 }
 
@@ -309,6 +513,16 @@ export default function LeavesPage() {
      */
     const hasOwnLeave = !loadingBalances && balances.length > 0;
 
+    // The request open in the detail panel lives in the URL (?open=<id>), so a
+    // notification or an email can land on it.
+    const [openId, setOpenId] = useOpenParam();
+    const closePanel = useCallback(() => setOpenId(null), [setOpenId]);
+    const panelChanged = useCallback(() => {
+        fetchRequests();
+        fetchBalances();
+        fetchApprovals();
+    }, [fetchRequests, fetchBalances, fetchApprovals]);
+
     const handleSubmitted = () => {
         setShowModal(false);
         fetchRequests();
@@ -492,7 +706,15 @@ export default function LeavesPage() {
                             <tbody className="divide-y divide-white/5">
                                 {pendingApprovals.map((req) => (
                                     <tr key={req.id} className="bg-surface/20">
-                                        <td className="px-4 py-3 text-paper-soft text-sm font-medium">{req.employee_name ?? req.employee_id.slice(0, 8)}</td>
+                                        <td className="px-4 py-3 text-sm font-medium">
+                                            <button
+                                                type="button"
+                                                onClick={() => setOpenId(req.id)}
+                                                className="text-left text-paper-soft underline-offset-2 hover:text-paper hover:underline"
+                                            >
+                                                {req.employee_name ?? req.employee_id.slice(0, 8)}
+                                            </button>
+                                        </td>
                                         <td className="px-4 py-3 text-paper-soft">
                                             {LEAVE_TYPE_LABELS[req.leave_type]} Leave
                                         </td>
@@ -619,7 +841,13 @@ export default function LeavesPage() {
                                     {requests.map((req) => (
                                         <tr key={req.id} className="bg-surface/20 hover:bg-white/5 transition">
                                             <td className="px-4 py-3 text-paper-soft">
-                                                {LEAVE_TYPE_LABELS[req.leave_type]} Leave
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setOpenId(req.id)}
+                                                    className="text-left underline-offset-2 hover:text-paper hover:underline"
+                                                >
+                                                    {LEAVE_TYPE_LABELS[req.leave_type]} Leave
+                                                </button>
                                             </td>
                                             <td className="px-4 py-3 text-paper-soft whitespace-nowrap">
                                                 {formatDate(req.start_date)} – {formatDate(req.end_date)}
@@ -660,6 +888,8 @@ export default function LeavesPage() {
             )}
 
             {/* Leave Request Modal */}
+            {openId && <LeaveDetailPanel id={openId} onClose={closePanel} onChanged={panelChanged} />}
+
             {hasOwnLeave && showModal && (
                 <LeaveRequestModal
                     balances={balances}

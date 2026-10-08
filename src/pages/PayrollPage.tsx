@@ -13,6 +13,7 @@ import {
 
 import api from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
+import { useOpenParam } from "@/lib/useOpenParam";
 import Alert from "@/components/ui/Alert";
 import Spinner from "@/components/ui/Spinner";
 import { useDialog } from "@/components/ui/Dialog";
@@ -266,6 +267,9 @@ export default function PayrollPage() {
 
     const [months, setMonths] = useState<MonthSummary[]>([]);
     const [monthId, setMonthId] = useState<string | null>(null);
+    // A notification names its month (?month=<id>); picking another month
+    // takes the parameter away again.
+    const [linkedMonth, setLinkedMonth] = useOpenParam("month");
     const [run, setRun] = useState<MonthRun | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -276,6 +280,16 @@ export default function PayrollPage() {
         setMonths(res.data);
         setMonthId((current) => current ?? res.data[0]?.id ?? null);
     }, []);
+
+    useEffect(() => {
+        if (!linkedMonth || months.length === 0) return;
+        if (months.some((m) => m.id === linkedMonth)) {
+            setMonthId(linkedMonth);
+        } else {
+            setError("That payroll month could not be found.");
+            setLinkedMonth(null);
+        }
+    }, [linkedMonth, months, setLinkedMonth]);
 
     const loadRun = useCallback(async (id: string) => {
         const res = await api.get<MonthRun>(`/payroll/months/${id}`);
@@ -556,7 +570,10 @@ export default function PayrollPage() {
                         <span className="dtg-eyebrow">Month</span>
                         <select
                             value={monthId ?? ""}
-                            onChange={(e) => setMonthId(e.target.value)}
+                            onChange={(e) => {
+                                setMonthId(e.target.value);
+                                setLinkedMonth(null);
+                            }}
                             className="dtg-input mt-1 w-60"
                         >
                             {months.map((m) => (

@@ -346,17 +346,27 @@ function joined(parts: ReactNode[]): ReactNode {
 
 /*
  * Notification kinds the band above already says, live and by name, so the
- * needs-action sentence leaves them out: IT's open tickets and the
- * investigation reviews and responses for everybody; and for management the
- * approval queues ("Awaiting your approval: ...") as well. What is left is
- * mostly a named manager outside management with leave to approve -- and
- * whatever kind is added next, until the band learns to say it.
+ * needs-action sentence leaves them out: IT's open tickets, the investigation
+ * reviews and responses, and what came back to finance, for everybody; and
+ * for management the approval queues ("Awaiting your approval: ...") and what
+ * was sent back to them as well. What is left is a named manager outside
+ * management with leave to approve, profile change requests and roster
+ * proposals -- and whatever kind is added next, until the band learns to say it.
  */
-const SAID_BY_BAND = ["ticket_raised", "investigation_review", "investigation_issued", "investigation_revised"];
+const SAID_BY_BAND = [
+    "ticket_raised",
+    "investigation_review",
+    "investigation_issued",
+    "investigation_revised",
+    "investigation_sent_back",
+    "payroll_changes_requested",
+    "finance_sent_back",
+];
 const SAID_BY_APPROVALS = [
     "leave_submitted",
     "payroll_submitted",
     "payroll_endorsed",
+    "payroll_returned",
     "salary_submitted",
     "kpi_submitted",
     "finance_submitted",

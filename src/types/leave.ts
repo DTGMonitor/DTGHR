@@ -57,6 +57,14 @@ export interface LeaveRequest {
     updated_at: string;
 }
 
+/** One request, as the detail panel reads it: who decided, and what you may do. */
+export interface LeaveRequestDetail extends LeaveRequest {
+    reviewed_by_name: string | null;
+    is_mine: boolean;
+    can_review: boolean;
+    can_cancel: boolean;
+}
+
 export interface LeaveRequestListResponse {
     items: LeaveRequest[];
     total: number;

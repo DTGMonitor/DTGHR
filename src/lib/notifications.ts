@@ -26,14 +26,20 @@ export interface AppNotification {
     source_table: string | null;
     source_id: string | null;
     payload: NotificationPayload;
+    /** Asks something of the recipient: waiting for them, or sent back to them. */
+    needs_action: boolean;
     created_at: string;
     read_at: string | null;
     resolved_at: string | null;
+    resolved_by_name: string | null;
+    /** The source's status when it was settled: "approved", "declined", ... */
+    resolved_status: string | null;
 }
 
 export type NotificationFilter = "all" | "unread" | "action";
 
-const COLUMNS = "id, kind, source_table, source_id, payload, created_at, read_at, resolved_at";
+const COLUMNS =
+    "id, kind, source_table, source_id, payload, needs_action, created_at, read_at, resolved_at, resolved_by_name, resolved_status";
 
 /** A page of the caller's notifications, newest first. */
 export async function listNotifications(opts: {
@@ -50,7 +56,7 @@ export async function listNotifications(opts: {
         .order("id", { ascending: true })
         .range(offset, offset + limit - 1);
     if (opts.filter === "unread") q = q.is("read_at", null);
-    if (opts.filter === "action") q = q.is("resolved_at", null).eq("payload->>tone", "action");
+    if (opts.filter === "action") q = q.is("resolved_at", null).eq("needs_action", true);
     return unwrap(await q) as AppNotification[];
 }
 
@@ -89,3 +95,35 @@ export function relativeTime(iso: string, now = Date.now()): string {
 }
 
 export const badgeText = (n: number) => (n > 9 ? "9+" : String(n));
+
+/** How a settled item was settled, by the source's new status. */
+const SETTLED: Record<string, [verb: string, byName: boolean]> = {
+    approved: ["Approved", true],
+    rejected: ["Rejected", true],
+    declined: ["Declined", true],
+    changes_requested: ["Sent back", true],
+    endorsed: ["Endorsed", true],
+    submitted: ["Resubmitted", true],
+    in_review: ["Submitted", true],
+    issued: ["Issued", true],
+    partially_approved: ["Partly approved", true],
+    paid: ["Paid", true],
+    closed: ["Closed", true],
+    resolved: ["Resolved", true],
+    acknowledged: ["Acknowledged", true],
+    accepted: ["Accepted", true],
+    disputed: ["Disputed", true],
+    cancelled: ["Cancelled", false],
+};
+
+/**
+ * "Approved by Nurhuda Teguh Santoso", "Cancelled", or -- when the status
+ * says nothing we know, or nobody did it -- "No action needed".
+ */
+export function settledLabel(n: Pick<AppNotification, "resolved_status" | "resolved_by_name">): string {
+    const known = n.resolved_status ? SETTLED[n.resolved_status] : undefined;
+    if (!known) return "No action needed";
+    const [verb, byName] = known;
+    if (!byName) return verb;
+    return n.resolved_by_name ? `${verb} by ${n.resolved_by_name}` : "No action needed";
+}

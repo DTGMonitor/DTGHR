@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 
 import { useAuth } from "@/contexts/AuthContext";
+import { revealElement, useOpenParam } from "@/lib/useOpenParam";
 import { employeeService } from "@/services/employeeService";
 import { kpiService } from "@/services/kpiService";
 import {
@@ -122,6 +123,16 @@ export default function SalaryPage() {
         if (mayBeHere) void load();
         else setLoading(false);
     }, [mayBeHere, load]);
+
+    // A notification names one review (?open=<id>): bring it into view and
+    // pick it out for a moment, then let the URL go.
+    const [linked, setLinked] = useOpenParam();
+    useEffect(() => {
+        if (!linked || loading) return;
+        if (rows.some((r) => r.id === linked)) revealElement(`salary-${linked}`, true);
+        else setError("That salary review could not be found.");
+        setLinked(null);
+    }, [linked, loading, rows, setLinked]);
 
     const act = async (id: string, fn: () => Promise<unknown>) => {
         setBusy(id);
@@ -282,6 +293,7 @@ export default function SalaryPage() {
                         return (
                             <article
                                 key={r.id}
+                                id={`salary-${r.id}`}
                                 className={`dtg-panel overflow-hidden ${
                                     waiting ? "ring-1 ring-signal/30" : ""
                                 }`}
