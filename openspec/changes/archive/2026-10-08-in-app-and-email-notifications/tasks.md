@@ -58,13 +58,13 @@ with the containers at the end.
 - [x] 3b.6 `.env.development.local` with the local URL and anon key (`npx supabase status`); `npm run dev`
 - [x] 3b.7 `npx supabase functions serve send-notifications --no-verify-jwt --env-file <scratch>/functions.env` with the MS secrets (a new client secret made for this, with the shortest expiry, kept only in the scratchpad file, and deleted in Entra at 3b.9); trigger it with curl and the local service-role key
 - [x] 3b.8 Walk through: two browsers, two accounts. Submit leave → approver's bell updates live → approve → approver's item shows "No action needed", requester gets a success item. Drawer dot and entry at 390px. `/notifications` filters. Dashboard sentence for a non-management manager. Email toggle off → in-app only. One email of each tone opened in Outlook desktop and on the web
-- [ ] 3b.9 Clean up: `npx supabase stop --no-backup`, delete the dumps, the connection-string file, `functions.env` and `.env.development.local`; delete the test client secret in Entra
+- [x] 3b.9 Clean up: `npx supabase stop --no-backup`, delete the dumps, the connection-string file, `functions.env` and `.env.development.local`; delete the test client secret in Entra
 
 ## 4. Apply to live
 
 - [x] 4.1 Back up, then apply the migration in the SQL editor
 - [x] 4.2 Check that `cron.job` has the retention job and that `notifications` is in the realtime publication
-- [ ] 4.3 Send one notification of each tone to a desktop Outlook mailbox and to Outlook on the web, and check the layout
+- [x] 4.3 Send one notification of each tone to a desktop Outlook mailbox and to Outlook on the web, and check the layout
 - [x] 4.4 Apply `20261008000100_finance_cc_in_app.sql`: 20260930001000 (finance requests go to Peter, the director copied in) landed on main alongside this change, and 20261007000100 had redefined `notifications_on_finance` from the older chain, dropping the copy. This restores it on the payload: the copy is `reminder` (for information) unless the director may approve
 
 ## 5. Frontend: provider and data
@@ -80,9 +80,9 @@ with the containers at the end.
 - [x] 6.3 `/notifications` route and `NotificationsPage`: All, Unread and Needs action filters driven by `?filter=all|unread|action`, paged by 20 with "load more", full details and note, "Mark all read", and an empty state
 - [x] 6.4 "Email me about notifications" switch on your own My profile, saved immediately with a confirmation and a line explaining that in-app notifications continue either way
 - [x] 6.4b Needs-action sentence in `DashboardPage.tsx`, next to the existing live approvals sentence, which stays unchanged. Exclude the live sentence's kinds when `is_management`. Name up to three headlines and count the rest, link to `/notifications?filter=action`, and show nothing when empty
-- [ ] 6.5 `npm run build`. Screenshot the bell and popover at 1495px, the dotted toggle and open drawer at 390px, the page at both widths, and the dashboard sentence for a management and an IT support account
+- [x] 6.5 `npm run build`. Screenshot the bell and popover at 1495px, the dotted toggle and open drawer at 390px, the page at both widths, and the dashboard sentence for a management and an IT support account
 
 ## 7. Release
 
-- [ ] 7.1 Deploy the frontend
-- [ ] 7.2 Smoke test in production with two accounts: submit leave, check the bell updates live and the email uses the new layout, approve it, check the approver's item shows "No action needed" and the requester gets a `success` item. On a phone, check the red dot and the drawer entry
+- [x] 7.1 Deploy the frontend
+- [x] 7.2 Smoke test in production with two accounts: submit leave, check the bell updates live and the email uses the new layout, approve it, check the approver's item shows "No action needed" and the requester gets a `success` item. On a phone, check the red dot and the drawer entry
