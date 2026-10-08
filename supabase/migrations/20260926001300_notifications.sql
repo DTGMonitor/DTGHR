@@ -2,7 +2,7 @@
 -- Email notifications: tell people when something is waiting for them.
 --
 -- Notifications only -- nobody approves by email. Every message is sent from
--- noreply@dtgeotech.com through Microsoft Graph by the Edge Function
+-- no-reply@dtgeotech.com through Microsoft Graph by the Edge Function
 -- `send-notifications`, which drains `email_outbox`. Postgres never calls out:
 -- triggers on the areas' tables write a row per recipient on the status
 -- changes below, and the function delivers them (pg_cron runs it each minute).
