@@ -14,7 +14,7 @@ Budget about 30 minutes, most of it waiting for a Vercel redeploy.
 | --- | --- |
 | Supabase project ref | `mapacifoqcybetzglhow` |
 | Supabase callback URL | `https://mapacifoqcybetzglhow.supabase.co/auth/v1/callback` |
-| Production frontend | `https://dtghr-fe.vercel.app` |
+| Production frontend | `https://people.digitaltwingeotechnical.com` |
 | Dev frontend | `http://localhost:5173` |
 
 You need someone who can register an application in Entra. In a default
@@ -132,12 +132,16 @@ Part 5 is what tells you which of the two you got — do not skip it.
 
 **Authentication** → **URL Configuration**.
 
-- **Site URL:** `https://dtghr-fe.vercel.app`
-- **Redirect URLs** — add both:
+- **Site URL:** `https://people.digitaltwingeotechnical.com`
+- **Redirect URLs** — add all three:
   ```
+  https://people.digitaltwingeotechnical.com/**
   https://dtghr-fe.vercel.app/**
   http://localhost:5173/**
   ```
+
+  The Vercel address stays on the list while it still serves the app: links
+  in emails sent before the move point there.
 
 The app asks to come back to `window.location.origin`. Anything not on this
 list is ignored and you land on the Site URL instead — so without the localhost

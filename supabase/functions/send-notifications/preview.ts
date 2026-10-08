@@ -49,7 +49,7 @@ const samples: Record<string, NotificationPayload> = {
 const out = (typeof Deno !== "undefined" ? Deno.args[0] : process.argv[2]) ?? "email-preview";
 mkdirSync(out, { recursive: true });
 for (const [name, payload] of Object.entries(samples)) {
-    const { html, text } = renderEmail(payload, "Nurhuda Teguh Santoso", "https://dtghr-fe.vercel.app");
+    const { html, text } = renderEmail(payload, "Nurhuda Teguh Santoso", "https://people.digitaltwingeotechnical.com");
     writeFileSync(join(out, `${name}.html`), html);
     writeFileSync(join(out, `${name}.txt`), text);
     console.log(`wrote ${join(out, name)}.html`);

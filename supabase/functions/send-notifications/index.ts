@@ -178,7 +178,7 @@ Deno.serve(async (req) => {
     // The payloads of the rows that have one, and where links point.
     const ids = rows.map((r) => r.notification_id).filter((x): x is string => !!x);
     const payloads = new Map<string, NotificationPayload>();
-    let siteUrl = "https://dtghr-fe.vercel.app";
+    let siteUrl = "https://people.digitaltwingeotechnical.com";
     if (ids.length) {
         const [n, s] = await Promise.all([
             admin.from("notifications").select("id, payload").in("id", ids),

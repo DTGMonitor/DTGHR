@@ -106,7 +106,11 @@ export default async ({ db, step, tx, people }) => {
     // each pointing at that recipient's notification -- rendered later by the
     // Edge Function, so no body yet. Every emailed person also has the
     // in-app row; `alsoInApp` names those who have only that (opted out).
+    const ITEM_LINK = { "/leaves": "/leaves?open=", "/support": "/support?open=",
+                        "/finance-requests": "/finance-requests?open=", "/payroll": "/payroll?month=",
+                        "/salary": "/salary?open=" };
     const expectSent = async (source, kind, mails, link, alsoInApp = []) => {
+        if (ITEM_LINK[link]) link = ITEM_LINK[link] + source;
         const rows = (await outbox(source)).filter((r) => r.kind === kind);
         eq(rows.map((r) => r.to_email).sort(), [...mails].sort(), `${kind} recipients`);
         const notes = await inbox(source, kind);
@@ -138,7 +142,8 @@ export default async ({ db, step, tx, people }) => {
         // The in-app migration and the finance rules after it, as the live
         // database has them. 20260926001300 can no longer be replayed on top
         // (notifications_recipients changed shape).
-        for (const f of ["20261007000100_in_app_notifications.sql", "20261008000100_finance_cc_in_app.sql"])
+        for (const f of ["20261007000100_in_app_notifications.sql", "20261008000100_finance_cc_in_app.sql",
+                         "20261009000100_notifications_phase_3.sql"])
             await db.exec(readFileSync(join(import.meta.dirname, "..", "..", "migrations", f), "utf8"));
         const old = await db.query(`select count(*)::int n from pg_proc
             where proname = 'notifications_enqueue' and pg_get_function_identity_arguments(oid) like '%text[]%'`);
@@ -155,7 +160,7 @@ export default async ({ db, step, tx, people }) => {
             // Read by the Edge Function at send time; the payload holds paths only.
             const t = await call(U.REPORTER, "tickets_raise", ["Monitor flickers", "It flickers", "hardware"]);
             const [row] = await outbox(t.id);
-            eq(row.link_path, "/support", "path only");
+            eq(row.link_path, `/support?open=${t.id}`, "path only");
             eq((await db.query(`select value from public.app_settings where key = 'public_site_url'`)).rows[0].value,
                "https://hr.dtgeotech.com", "setting");
         } finally {
@@ -516,10 +521,13 @@ export default async ({ db, step, tx, people }) => {
 
     // A notification written straight in; `extra` sets created_at, read_at, resolved_at.
     const seed = async (uid, kind, tone, extra = null) => (await db.query(
-        `insert into public.notifications (user_id, kind, source_table, source_id, payload, created_at, read_at, resolved_at)
-         values ($1, $2::text, 'test_source', gen_random_uuid(),
-                 jsonb_build_object('tone', $3::text, 'headline', $2::text, 'link', jsonb_build_object('label','x','path','/')),
-                 coalesce($4::timestamptz, now()), $5::timestamptz, $6::timestamptz) returning id`,
+        `insert into public.notifications (user_id, kind, source_table, source_id, payload, created_at, read_at, resolved_at, needs_action)
+         select $1, $2::text, 'test_source', gen_random_uuid(), p,
+                coalesce($4::timestamptz, now()), $5::timestamptz, $6::timestamptz,
+                public.notifications_needs_action($2::text, p)
+           from (select jsonb_build_object('tone', $3::text, 'headline', $2::text,
+                                           'link', jsonb_build_object('label','x','path','/')) p) x
+         returning id`,
         [uid, kind, tone, extra?.created ?? null, extra?.read ?? null, extra?.resolved ?? null])).rows[0].id;
     const daysAgo = (d) => new Date(Date.now() - d * 86_400_000).toISOString();
     const NOW = () => new Date().toISOString();
@@ -603,15 +611,16 @@ export default async ({ db, step, tx, people }) => {
 
     await step("notifications: every table that gets action items carries the resolve trigger", async () => {
         const want = ["finance_requests", "investigation_outcomes", "investigations", "kpi_reviews", "leave_requests",
-                      "payroll_months", "salary_reviews", "support_tickets"];
+                      "payroll_months", "profile_change_requests", "salary_reviews", "shift_change_requests",
+                      "support_tickets"];
         const r = await db.query(`select c.relname t from pg_trigger g join pg_class c on c.oid = g.tgrelid
                                    where g.tgname = 'trg_notifications_resolve' and not g.tgisinternal order by 1`);
         eq(r.rows.map((x) => x.t), want, "tables");
         // And every 'action' payload in the migration names one of them as its source.
         const { readFileSync } = await import("node:fs");
         const { join } = await import("node:path");
-        const src = readFileSync(join(import.meta.dirname, "..", "..", "migrations",
-            "20261007000100_in_app_notifications.sql"), "utf8");
+        const src = ["20261007000100_in_app_notifications.sql", "20261009000100_notifications_phase_3.sql"]
+            .map((f) => readFileSync(join(import.meta.dirname, "..", "..", "migrations", f), "utf8")).join("\n");
         const calls = src.split("public.notifications_payload(").slice(1);
         let checked = 0;
         for (const c of calls) {
@@ -622,6 +631,181 @@ export default async ({ db, step, tx, people }) => {
             checked++;
         }
         if (checked < 8) throw new Error(`only ${checked} action payloads found`);
+    });
+
+
+    // --- phase 3: item links, needs_action, who resolved, new sources ---------
+
+    const one = async (sql, params) => (await db.query(sql, params)).rows[0];
+
+    await step("notifications: a settled item records who settled it and how", async () => {
+        await cleanLeave();
+        await clear();
+        const r = await leave(U.STAFF, "2026-12-01");
+        const [mine] = await inbox(r.id, "leave_submitted");
+        eq([mine.needs_action, mine.payload.link.path], [true, `/leaves?open=${r.id}`], "action item with the item link");
+        await call(U.MANAGER, "approve_leave_request", [r.id, "Fine"], ["uuid", "text"]);
+        const [after] = await inbox(r.id, "leave_submitted");
+        eq([after.resolved_status, after.resolved_by, after.resolved_by_name], ["approved", U.MANAGER, NAME.MANAGER], "who and how");
+        const [done] = await inbox(r.id, "leave_approved");
+        eq(done.needs_action, false, "an outcome is not work");
+        await cleanLeave();
+    });
+
+    await step("notifications: sent back to finance is work, and resubmitting settles it", async () => {
+        await clear();
+        const body = { title: "Phase 3 petty cash", due_date: "2026-12-10",
+                       items: [{ category: "petty_cash", description: "Office", amount: 1_000_000 }] };
+        const f = await call(HIMAWAN, "finance_create", [JSON.stringify(body)]);
+        await call(HIMAWAN, "finance_submit", [f.id]);
+        const cc = (await inbox(f.id, "finance_submitted_cc"))[0];
+        if (cc) eq(cc.needs_action, false, "the director's copy is for information");
+        await call(PETER, "finance_send_back", [f.id, "Attach the receipt", "finance"]);
+        const back = (await inbox(f.id, "finance_sent_back")).find((n) => n.user_id === HIMAWAN);
+        eq([back.payload.tone, back.needs_action], ["danger", true], "red but work");
+        const open = (await tx(HIMAWAN, `select kind from public.notifications_open_actions('{}'::text[])`)).rows.map((x) => x.kind);
+        if (!open.includes("finance_sent_back")) throw new Error(`open actions: ${open}`);
+        await call(HIMAWAN, "finance_submit", [f.id]);
+        const settled = (await inbox(f.id, "finance_sent_back")).find((n) => n.user_id === HIMAWAN);
+        eq([settled.resolved_status, settled.resolved_by], ["submitted", HIMAWAN], "settled on resubmit");
+        await db.query(`delete from public.finance_requests where id = $1`, [f.id]);
+    });
+
+    await step("notifications: existing rows are backfilled with needs_action", async () => {
+        const { readFileSync } = await import("node:fs");
+        const { join } = await import("node:path");
+        await clear();
+        const id = (await one(`insert into public.notifications (user_id, kind, source_table, source_id, payload, needs_action)
+            values ($1, 'investigation_sent_back', 'investigations', gen_random_uuid(),
+                    '{"tone":"danger","headline":"x","link":{"label":"x","path":"/"}}', false) returning id`, [U.STAFF])).id;
+        await db.exec(readFileSync(join(import.meta.dirname, "..", "..", "migrations",
+            "20261009000100_notifications_phase_3.sql"), "utf8"));
+        eq((await one(`select needs_action from public.notifications where id = $1`, [id])).needs_action, true, "backfilled");
+    });
+
+    await step("notifications: the old Vercel address moves to people.digitaltwingeotechnical.com; a chosen one stays", async () => {
+        const { readFileSync } = await import("node:fs");
+        const { join } = await import("node:path");
+        const rerun = () => db.exec(readFileSync(join(import.meta.dirname, "..", "..", "migrations",
+            "20261009000100_notifications_phase_3.sql"), "utf8"));
+        const url = async () => (await one(`select public.notifications_site_url() u`)).u;
+        try {
+            await db.query(`update public.app_settings set value = 'https://dtghr-fe.vercel.app/' where key = 'public_site_url'`);
+            await rerun();
+            eq(await url(), "https://people.digitaltwingeotechnical.com", "moved");
+            await db.query(`update public.app_settings set value = 'https://hr.example.test' where key = 'public_site_url'`);
+            await rerun();
+            eq(await url(), "https://hr.example.test", "a chosen address is kept");
+        } finally {
+            await db.query(`update public.app_settings set value = 'https://dtghr-fe.vercel.app' where key = 'public_site_url'`);
+        }
+    });
+
+    await step("notifications: profile change requests reach the reviewers; the decision reaches the requester", async () => {
+        await clear();
+        await db.exec(`delete from public.profile_change_requests where employee_id = '${E.STAFF}'`);
+        const req = await call(U.STAFF, "people_raise_profile_request", ["bank_account_number", "1234567890", "New bank"],
+                               ["text", "text", "text"]);
+        const reqId = req.id ?? (await one(`select id from public.profile_change_requests
+                                             where employee_id = $1 and status = 'pending'`, [E.STAFF])).id;
+        const want = (await db.query(`select email from public.notifications_recipients(
+                                          public.notifications_profile_reviewers(), array[$1::uuid])`, [U.STAFF]))
+            .rows.map((x) => x.email).sort();
+        const got = await inbox(reqId, "profile_request_submitted");
+        eq(got.map((n) => n.email).sort(), want, "reviewers");
+        if (!got.length) throw new Error("no reviewers");
+        const p = got[0].payload;
+        eq([got[0].needs_action, p.link.path, p.note.text], [true, "/settings", "New bank"], "submitted payload");
+        if (JSON.stringify(p).includes("1234567890")) throw new Error("the account number is in the notification");
+
+        await call(DIRECTOR, "people_decline_profile_request", [reqId, "Attach the bank letter"], ["uuid", "text"]);
+        const [decided] = await inbox(reqId, "profile_request_declined");
+        eq([decided.email, decided.payload.tone, decided.payload.note.text], [MAIL.STAFF, "danger", "Attach the bank letter"], "declined");
+        const left = (await inbox(reqId, "profile_request_submitted")).filter((n) => n.resolved_at === null);
+        eq(left.length, 0, "reviewers' items settled");
+        eq((await inbox(reqId, "profile_request_submitted"))[0].resolved_status, "declined", "how");
+        await db.exec(`delete from public.profile_change_requests where employee_id = '${E.STAFF}'`);
+    });
+
+    await step("notifications: a roster proposal lists its days; a partial decision reaches the proposer", async () => {
+        await clear();
+        const REQ = "0e0e0000-0000-0000-0000-0000000000c1";
+        const SCHED = "bbbbbbbb-0000-0000-0000-000000000001";
+        const items = ["0e0e0000-0000-0000-0000-0000000000c2", "0e0e0000-0000-0000-0000-0000000000c3",
+                       "0e0e0000-0000-0000-0000-0000000000c4"];
+        await db.exec(`delete from public.shift_change_requests where id = '${REQ}'`);
+        await db.exec(`
+            begin;
+            select set_config('request.jwt.claim.sub', '${U.STAFF}', true);
+            insert into public.shift_change_requests (id, schedule_id, status, reason, requested_by_id)
+            values ('${REQ}', '${SCHED}', 'pending', 'Family visit', '${U.STAFF}');
+            insert into public.shift_change_items (id, request_id, employee_id, date, current_code, requested_code, status)
+            values ('${items[0]}', '${REQ}', '${E.STAFF}', '2026-09-20', 'DS', 'AL', 'pending'),
+                   ('${items[1]}', '${REQ}', '${E.STAFF}', '2026-09-21', 'DS', 'AL', 'pending'),
+                   ('${items[2]}', '${REQ}', '${E.STAFF}', '2026-09-22', 'NS', 'B', 'pending');
+            commit;`);
+        const proposed = await inbox(REQ, "shift_change_proposed");
+        const approvers = (await db.query(`select email from public.notifications_recipients(
+                public.notifications_role_users('director') || public.notifications_role_users('executive'),
+                array[$1::uuid])`, [U.STAFF])).rows.map((x) => x.email).sort();
+        eq(proposed.map((n) => n.email).sort(), approvers, "approvers");
+        const p = proposed[0].payload;
+        eq([proposed[0].needs_action, p.details.length, p.note.text], [true, 3, "Family visit"], "three days listed");
+        if (!p.headline.includes("3 days")) throw new Error(p.headline);
+
+        await db.exec(`
+            begin;
+            select set_config('request.jwt.claim.sub', '${DIRECTOR}', true);
+            update public.shift_change_items set status = 'approved' where id in ('${items[0]}', '${items[1]}');
+            update public.shift_change_items set status = 'rejected' where id = '${items[2]}';
+            update public.shift_change_requests set status = 'partially_approved', review_note = 'Not the night'
+             where id = '${REQ}';
+            commit;`);
+        const [decided] = await inbox(REQ, "shift_change_decided");
+        eq([decided.email, decided.payload.tone, decided.payload.details],
+           [MAIL.STAFF, "reminder", [["Approved", "2 days"], ["Rejected", "1 day"]]], "partly approved");
+        const settled = await inbox(REQ, "shift_change_proposed");
+        eq(settled.every((n) => n.resolved_status === "partially_approved" && n.resolved_by === DIRECTOR), true, "settled");
+        await db.exec(`delete from public.shift_change_requests where id = '${REQ}'`);
+    });
+
+    await step("notifications: a payslip notifies its employee once, not on regeneration", async () => {
+        await clear();
+        const line = (await one(`select id from public.payroll_lines where month_id = $1 limit 1`, [monthId])).id;
+        const upsert = `insert into public.payslips (month_id, payroll_line_id, employee_id, year, month, issue_date, data)
+                        values ($1, $2, $3, 2041, 9, '2041-09-28', '{}'::jsonb)
+                        on conflict (month_id, payroll_line_id) do update set data = excluded.data
+                        returning id`;
+        const slip = (await one(upsert, [monthId, line, E.STAFF])).id;
+        const got = await inbox(slip, "payslip_ready");
+        eq(got.map((n) => n.email), [MAIL.STAFF], "the employee");
+        eq([got[0].needs_action, got[0].payload.link.path, got[0].payload.tone],
+           [false, `/employees/${E.STAFF}?tab=payslips`, "success"], "payload");
+        if (!got[0].payload.headline.includes("September 2041")) throw new Error(got[0].payload.headline);
+        await one(upsert, [monthId, line, E.STAFF]);
+        eq((await inbox(slip, "payslip_ready")).length, 1, "regenerating notifies nobody");
+        await db.query(`delete from public.payslips where id = $1`, [slip]);
+    });
+
+    await step("notifications: leaves_get serves the requester and the reviewers, and says what each may do", async () => {
+        await cleanLeave();
+        const r = await leave(U.STAFF, "2026-12-08");
+        const as = async (uid) => (await tx(uid, `select public.leaves_get($1::uuid) j`, [r.id])).rows[0].j;
+        const own = await as(U.STAFF);
+        eq([own.is_mine, own.can_review, own.can_cancel], [true, false, true], "requester");
+        const mgr = await as(U.MANAGER);
+        eq([mgr.is_mine, mgr.can_review, mgr.can_cancel], [false, true, false], "named manager");
+        eq((await as(DIRECTOR)).can_review, true, "director");
+        try {
+            await as(U.LONER);
+            throw new Error("a colleague read it");
+        } catch (e) {
+            if (!/Access denied/.test(e.message)) throw e;
+        }
+        await call(U.MANAGER, "approve_leave_request", [r.id, "Ok"], ["uuid", "text"]);
+        const after = await as(DIRECTOR);
+        eq([after.status, after.can_review, after.reviewed_by_name], ["approved", false, NAME.MANAGER], "decided, still readable");
+        await cleanLeave();
     });
 
     // --- delivery bookkeeping ------------------------------------------------
@@ -656,6 +840,7 @@ export default async ({ db, step, tx, people }) => {
         await db.exec(`
             delete from public.email_outbox;
             delete from public.notifications;
+            delete from public.payslips where year = 2041;
             delete from public.payroll_months where year = 2041;
             delete from public.finance_requests where id = '${requestId}';
             delete from public.salary_reviews where employee_id in (select id from public.employees where employee_id like 'NTF-%');
