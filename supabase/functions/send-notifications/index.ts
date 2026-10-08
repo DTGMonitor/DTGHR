@@ -2,13 +2,20 @@
  * send-notifications -- deliver the queued emails in public.email_outbox
  * through Microsoft Graph, from no-reply@dtgeotech.com.
  *
- * The rows are written by the triggers in
- * supabase/migrations/20260926001300_notifications.sql; pg_cron calls this
- * function once a minute (the same migration schedules it). Each run takes up
+ * Every notification is a row in public.notifications (the in-app record,
+ * with a structured payload); `notifications_enqueue` also queues an
+ * email_outbox row pointing at it for each recipient who takes email
+ * (20261007000100_in_app_notifications.sql). pg_cron calls this function once
+ * a minute (scheduled by 20260926001300_notifications.sql). Each run takes up
  * to 25 unsent rows, oldest first, with fewer than five attempts behind them
- * (`notifications_claim`), sends each one, and records the result
- * (`notifications_mark`). A failed row is retried on the next run, up to five
+ * (`notifications_claim`), renders each from its notification's payload
+ * (render.ts), sends it, keeps the HTML and text it sent on the row, and
+ * records the result (`notifications_mark`). A failed row -- Graph refused it,
+ * or its payload would not render -- is retried on the next run, up to five
  * attempts in all; its last error stays on the row.
+ *
+ * Rows queued before notifications existed have no notification_id and carry
+ * their finished body_html; they are sent as they are.
  *
  * ── Setup, once per project ────────────────────────────────────────────────
  *
@@ -55,6 +62,7 @@
  *        (the claimed rows are marked failed with that error)
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { type NotificationPayload, renderEmail } from "./render.ts";
 
 // A secret pasted into the dashboard often carries a trailing newline;
 // it would break a URL, a bearer comparison or a client secret.
@@ -68,8 +76,9 @@ type OutboxRow = {
     to_email: string;
     to_name: string | null;
     subject: string;
-    body_html: string;
-    body_text: string;
+    body_html: string | null;
+    body_text: string | null;
+    notification_id?: string | null;
 };
 
 const BATCH = 25;
@@ -115,14 +124,14 @@ async function graphToken(tenant: string, clientId: string, secret: string): Pro
     return body.access_token;
 }
 
-async function sendOne(token: string, sender: string, row: OutboxRow): Promise<void> {
+async function sendOne(token: string, sender: string, row: OutboxRow, html: string): Promise<void> {
     const res = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(sender)}/sendMail`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({
             message: {
                 subject: row.subject,
-                body: { contentType: "HTML", content: row.body_html },
+                body: { contentType: "HTML", content: html },
                 toRecipients: [{ emailAddress: { address: row.to_email, name: row.to_name ?? undefined } }],
             },
             saveToSentItems: false,
@@ -166,11 +175,34 @@ Deno.serve(async (req) => {
         return json({ detail: message, claimed: rows.length, sent: 0, failed: rows.length }, 500);
     }
 
+    // The payloads of the rows that have one, and where links point.
+    const ids = rows.map((r) => r.notification_id).filter((x): x is string => !!x);
+    const payloads = new Map<string, NotificationPayload>();
+    let siteUrl = "https://dtghr-fe.vercel.app";
+    if (ids.length) {
+        const [n, s] = await Promise.all([
+            admin.from("notifications").select("id, payload").in("id", ids),
+            admin.from("app_settings").select("value").eq("key", "public_site_url").maybeSingle(),
+        ]);
+        for (const r of n.data ?? []) payloads.set(r.id, r.payload);
+        if (s.data?.value?.trim()) siteUrl = s.data.value.trim();
+    }
+
     let sent = 0;
     let failed = 0;
     for (const row of rows) {
         try {
-            await sendOne(token, sender, row);
+            let html = row.body_html;
+            if (row.notification_id) {
+                const payload = payloads.get(row.notification_id);
+                if (!payload) throw new Error(`notification ${row.notification_id} not found`);
+                const out = renderEmail(payload, row.to_name, siteUrl);
+                html = out.html;
+                // Keep what was sent; a failure to record it does not stop the send.
+                await admin.from("email_outbox").update({ body_html: out.html, body_text: out.text }).eq("id", row.id);
+            }
+            if (!html) throw new Error("nothing to send: no notification and no body_html");
+            await sendOne(token, sender, row, html);
             await mark(row.id, null);
             sent++;
         } catch (e) {

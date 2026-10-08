@@ -221,7 +221,7 @@ export default async ({ db, step, tx, people }) => {
 
     // --- renewal emails ---------------------------------------------------------
     await step("po: renewal emails go once per item per threshold, to managers and finance", async () => {
-        const recips = (await db.query(`select count(*)::int n from public.notifications_recipients(public.contracts_renewal_recipients(), '{}')`)).rows[0].n;
+        const recips = (await db.query(`select count(*)::int n from public.notifications_recipients(public.contracts_renewal_recipients(), '{}') where email_notifications`)).rows[0].n;
         if (recips < 1) throw new Error("nobody to email");
         const finance = (await db.query(`select $1::uuid = any(public.contracts_renewal_recipients()) f`, [HIMAWAN])).rows[0].f;
         if (!finance) throw new Error("finance not among the recipients");
