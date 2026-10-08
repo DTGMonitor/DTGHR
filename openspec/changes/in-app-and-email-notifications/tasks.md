@@ -65,7 +65,7 @@ with the containers at the end.
 - [x] 4.1 Back up, then apply the migration in the SQL editor
 - [x] 4.2 Check that `cron.job` has the retention job and that `notifications` is in the realtime publication
 - [ ] 4.3 Send one notification of each tone to a desktop Outlook mailbox and to Outlook on the web, and check the layout
-- [ ] 4.4 Apply `20261008000100_finance_cc_in_app.sql`: 20260930001000 (finance requests go to Peter, the director copied in) landed on main alongside this change, and 20261007000100 had redefined `notifications_on_finance` from the older chain, dropping the copy. This restores it on the payload: the copy is `reminder` (for information) unless the director may approve
+- [x] 4.4 Apply `20261008000100_finance_cc_in_app.sql`: 20260930001000 (finance requests go to Peter, the director copied in) landed on main alongside this change, and 20261007000100 had redefined `notifications_on_finance` from the older chain, dropping the copy. This restores it on the payload: the copy is `reminder` (for information) unless the director may approve
 
 ## 5. Frontend: provider and data
 
