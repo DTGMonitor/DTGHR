@@ -60,7 +60,7 @@ pages. The Edge Function doesn't change.
   - a shift proposal lists its days;
   - a payslip notifies once
 - [x] 6.3 Apply the migration to production (SQL editor, after checking for a backup) and run the check query
-- [ ] 6.4 Push to `main` (Vercel deploys) and smoke test in production
+- [x] 6.4 Push to `main` (Vercel deploys) and smoke test in production
 - [x] 6.5 Outside the code, check the new address everywhere a link is made:
   - Supabase → Authentication → URL Configuration: Site URL and the redirect allow-list (invite, password reset and SSO return links);
   - `supabase/SSO_SETUP.md`;
