@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import Header from "./Header";
 import Sidebar from "./Sidebar";
+import { NotificationsProvider } from "@/contexts/NotificationsContext";
 
 export default function Layout() {
     // The sidebar is permanent from `lg` up and a drawer below it. Previously it
@@ -14,6 +15,7 @@ export default function Layout() {
     useEffect(() => setNavOpen(false), [pathname]);
 
     return (
+        <NotificationsProvider>
         <div className="min-h-screen bg-night text-paper">
             <Header onMenuClick={() => setNavOpen((open) => !open)} navOpen={navOpen} />
             <Sidebar open={navOpen} onClose={() => setNavOpen(false)} />
@@ -31,5 +33,6 @@ export default function Layout() {
                 </div>
             </main>
         </div>
+        </NotificationsProvider>
     );
 }

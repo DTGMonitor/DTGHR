@@ -12,6 +12,7 @@ import { NavLink } from "react-router-dom";
 import {
     Award,
     Banknote,
+    Bell,
     Calculator,
     BarChart3,
     CalendarClock,
@@ -33,6 +34,8 @@ import {
 } from "lucide-react";
 import { PeopleMark } from "@/components/brand/Logo";
 import { useAuth } from "@/contexts/AuthContext";
+import { useNotifications } from "@/contexts/NotificationsContext";
+import { badgeText } from "@/lib/notifications";
 
 interface NavItem {
     label: string;
@@ -218,6 +221,7 @@ const navItems: NavItem[] = [
 
 export default function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
     const { user } = useAuth();
+    const { unread } = useNotifications();
     const inReviewChain = user?.role === "director" || user?.role === "executive";
 
     /*
@@ -332,6 +336,40 @@ export default function Sidebar({ open, onClose }: { open: boolean; onClose: () 
                 }`}
             >
                 <nav className="flex-1 overflow-y-auto px-3 py-5">
+                    {/* Below lg there is no header bell: notifications are
+                        reached from here, first, with the count. */}
+                    <NavLink
+                        to="/notifications"
+                        onClick={onClose}
+                        className={({ isActive }) =>
+                            `group mb-4 flex items-center gap-3 rounded-r border-l-2 py-2.5 pl-4 pr-3 text-sm transition-colors lg:hidden ${
+                                isActive
+                                    ? "border-signal bg-white/[0.06] font-semibold text-paper"
+                                    : "border-transparent font-medium text-paper-soft hover:border-teal-500 hover:bg-white/[0.03] hover:text-paper"
+                            }`
+                        }
+                    >
+                        {({ isActive }) => (
+                            <>
+                                <Bell
+                                    className={`h-[1.125rem] w-[1.125rem] flex-shrink-0 ${
+                                        isActive ? "text-signal" : "text-teal-500 group-hover:text-teal-300"
+                                    }`}
+                                    strokeWidth={1.75}
+                                />
+                                <span className="flex-1">Notifications</span>
+                                {unread > 0 && (
+                                    <span
+                                        className="flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-danger px-1.5 font-mono text-[0.6875rem] font-bold leading-none text-deep"
+                                        aria-label={`${unread} unread`}
+                                    >
+                                        {badgeText(unread)}
+                                    </span>
+                                )}
+                            </>
+                        )}
+                    </NavLink>
+
                     <p className="dtg-eyebrow px-3 pb-3">Workspace</p>
 
                     <div className="space-y-0.5">

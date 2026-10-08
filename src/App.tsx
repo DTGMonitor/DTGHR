@@ -24,6 +24,7 @@ import ActivityLogPage from "@/pages/ActivityLogPage";
 import SettingsPage from "@/pages/SettingsPage";
 import BulletinAdminPage from "@/pages/BulletinAdminPage";
 import InvestigationsPage from "@/pages/InvestigationsPage";
+import NotificationsPage from "@/pages/NotificationsPage";
 
 export default function App() {
     return (
@@ -71,6 +72,7 @@ export default function App() {
                             <Route path="/activity" element={<ActivityLogPage />} />
                             <Route path="/bulletin" element={<BulletinAdminPage />} />
                             <Route path="/settings" element={<SettingsPage />} />
+                            <Route path="/notifications" element={<NotificationsPage />} />
                         </Route>
 
                         {/* Catch-all */}

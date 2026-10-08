@@ -16,6 +16,7 @@ import ProfileRequests from "@/components/employees/ProfileRequests";
 import Alert from "@/components/ui/Alert";
 import MyPayslips from "@/components/payslips/MyPayslips";
 import MyConduct from "@/components/investigations/MyConduct";
+import EmailPreference from "@/components/notifications/EmailPreference";
 
 type TabKey = "personal" | "employment" | "statutory" | "payslips" | "conduct";
 
@@ -434,8 +435,9 @@ export default function EmployeeProfilePage() {
                 profile only — raising a request on somebody else's behalf is
                 an administrator editing the record directly. */}
             {tab === "personal" && user?.employee_id === employee.id && (
-                <div className="mt-4">
+                <div className="mt-4 space-y-4">
                     <ProfileRequests mine />
+                    <EmailPreference />
                 </div>
             )}
 

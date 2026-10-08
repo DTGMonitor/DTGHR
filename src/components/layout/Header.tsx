@@ -5,6 +5,8 @@ import PhotoPreview from "@/components/employees/PhotoPreview";
 import { employeeService } from "@/services/employeeService";
 import { Link, useNavigate } from "react-router-dom";
 import { ProductLockup } from "@/components/brand/Logo";
+import NotificationBell from "@/components/notifications/NotificationBell";
+import { useNotifications } from "@/contexts/NotificationsContext";
 
 function initials(name?: string): string {
     if (!name) return "?";
@@ -22,6 +24,7 @@ export default function Header({
     navOpen: boolean;
 }) {
     const { user, logout } = useAuth();
+    const { unread } = useNotifications();
     const navigate = useNavigate();
     const [previewing, setPreviewing] = useState(false);
 
@@ -37,10 +40,22 @@ export default function Header({
                 <button
                     type="button"
                     onClick={onMenuClick}
-                    aria-label={navOpen ? "Close navigation" : "Open navigation"}
+                    aria-label={
+                        (navOpen ? "Close navigation" : "Open navigation") +
+                        (unread > 0 ? `, ${unread} unread notification${unread === 1 ? "" : "s"}` : "")
+                    }
                     aria-expanded={navOpen}
-                    className="-ml-1 rounded p-2 text-paper-soft transition-colors hover:bg-white/5 hover:text-paper lg:hidden"
+                    className="relative -ml-1 rounded p-2 text-paper-soft transition-colors hover:bg-white/5 hover:text-paper lg:hidden"
                 >
+                    {/* Below lg the notifications live in the drawer; the dot
+                        says there is something in there. No number: that is
+                        on the entry inside. */}
+                    {unread > 0 && (
+                        <span
+                            aria-hidden="true"
+                            className="absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full bg-danger ring-2 ring-deep"
+                        />
+                    )}
                     <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.75} stroke="currentColor">
                         {navOpen ? (
                             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
@@ -63,6 +78,8 @@ export default function Header({
             </div>
 
             <div className="flex items-center gap-3">
+                <NotificationBell />
+
                 <div className="hidden min-w-0 text-right sm:block">
                     <p className="truncate text-sm font-medium text-paper">{user?.full_name}</p>
                     <p className="truncate font-mono text-micro text-muted">{user?.email}</p>

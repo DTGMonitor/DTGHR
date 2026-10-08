@@ -9,6 +9,8 @@ import WeekStrip from "@/components/dashboard/WeekStrip";
 import { SHIFT_STYLES, type ShiftCode } from "@/types/schedule";
 import { overviewService, type Overview } from "@/services/dashboardService";
 import { money } from "@/services/salaryService";
+import { useNotifications } from "@/contexts/NotificationsContext";
+import { openActions, type AppNotification } from "@/lib/notifications";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -73,7 +75,7 @@ function Crew({ list, code }: { list: string[]; code: "DS" | "NS" }) {
  * Nurhuda asked for the crew on her dashboard too. She has a roster of her
  * own, so she gets both -- her shift, then who is covering the site.
  */
-function bandLines(o: Overview): { today: ReactNode[]; waiting: ReactNode[] } {
+function bandLines(o: Overview, actions: AppNotification[] = []): { today: ReactNode[]; waiting: ReactNode[] } {
     const today: ReactNode[] = [];
     const waiting: ReactNode[] = [];
     const mine = o.week.find((d) => d.is_today);
@@ -306,6 +308,19 @@ function bandLines(o: Overview): { today: ReactNode[]; waiting: ReactNode[] } {
         );
     }
 
+    // Anything else waiting on you that the lines above do not cover, from
+    // your notifications: up to three by name, the rest counted.
+    if (actions.length > 0) {
+        const heads = actions.map((a) => a.payload.headline.replace(/\.$/, ""));
+        const shown = heads.length > 3 ? [...heads.slice(0, 3), `${heads.length - 3} more`] : heads;
+        waiting.push(
+            <Link key="needs-action" to="/notifications?filter=action" className="underline">
+                {actions.length === 1 ? "Also waiting for you" : `${actions.length} more things need your action`}:{" "}
+                {names(shown)}.
+            </Link>,
+        );
+    }
+
     // Your own tickets, whoever you are. Said after the queue, so Bintang
     // reads what is waiting on him before what he is waiting on.
     if (o.my_tickets_open) {
@@ -329,6 +344,25 @@ function joined(parts: ReactNode[]): ReactNode {
     ));
 }
 
+/*
+ * Notification kinds the band above already says, live and by name, so the
+ * needs-action sentence leaves them out: IT's open tickets and the
+ * investigation reviews and responses for everybody; and for management the
+ * approval queues ("Awaiting your approval: ...") as well. What is left is
+ * mostly a named manager outside management with leave to approve -- and
+ * whatever kind is added next, until the band learns to say it.
+ */
+const SAID_BY_BAND = ["ticket_raised", "investigation_review", "investigation_issued", "investigation_revised"];
+const SAID_BY_APPROVALS = [
+    "leave_submitted",
+    "payroll_submitted",
+    "payroll_endorsed",
+    "salary_submitted",
+    "kpi_submitted",
+    "finance_submitted",
+    "finance_sent_back_director",
+];
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 
@@ -350,6 +384,8 @@ export default function DashboardPage() {
     // Kept so the effect can say when it has finished; the panels below
     // simply do not render until `overview` arrives.
     const [, setLoading] = useState(true);
+    const [actions, setActions] = useState<AppNotification[]>([]);
+    const { version } = useNotifications();
 
     useEffect(() => {
         (async () => {
@@ -369,7 +405,17 @@ export default function DashboardPage() {
     const today = new Date();
     const firstName = user?.full_name?.split(" ")[0];
 
-    const lines = overview ? bandLines(overview) : null;
+    // Re-read when a notification arrives or is settled, once we know whether
+    // this is a management account.
+    const isManagement = overview?.is_management;
+    useEffect(() => {
+        if (isManagement === undefined) return;
+        openActions(isManagement ? [...SAID_BY_BAND, ...SAID_BY_APPROVALS] : SAID_BY_BAND)
+            .then(setActions)
+            .catch(() => setActions([]));
+    }, [isManagement, version]);
+
+    const lines = overview ? bandLines(overview, actions) : null;
 
     /* Somebody with nothing published is not shown seven empty cards. For
        the founders that is permanent -- they carry no roster at all -- so they
