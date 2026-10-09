@@ -1,10 +1,6 @@
 import { useEffect, useRef } from "react";
-import {
-    SHIFT_CODE_ORDER,
-    SHIFT_STYLES,
-    ShiftCode,
-    type ShiftChangeItem,
-} from "@/types/schedule";
+import { useShiftCodes } from "@/lib/useShiftCodes";
+import type { ShiftChangeItem, ShiftCode } from "@/types/schedule";
 import { ShiftChip } from "./ShiftLegend";
 
 interface Props {
@@ -52,6 +48,7 @@ export default function CellEditor({
     anchor,
 }: Props) {
     const panelRef = useRef<HTMLDivElement>(null);
+    const { activeCodes } = useShiftCodes();
 
     useEffect(() => {
         const onKey = (e: KeyboardEvent) => {
@@ -156,20 +153,19 @@ export default function CellEditor({
             ) : (
                 <>
                     <div className="grid max-h-56 grid-cols-4 gap-1.5 overflow-y-auto pr-0.5">
-                        {SHIFT_CODE_ORDER.map((code) => {
-                            const style = SHIFT_STYLES[code];
+                        {activeCodes.map(({ code, label, bg, fg }) => {
                             const active = code === highlighted;
                             return (
                                 <button
                                     key={code}
                                     onClick={() => choose(code)}
                                     disabled={busy || !!pending}
-                                    title={style.label}
+                                    title={label}
                                     className={`flex h-8 items-center justify-center rounded-lg text-[11px] font-bold ring-1 transition disabled:cursor-not-allowed disabled:opacity-40 ${active
                                         ? "ring-2 ring-white"
                                         : "ring-black/25 hover:ring-white/60"
                                         }`}
-                                    style={{ background: style.bg, color: style.fg }}
+                                    style={{ background: bg, color: fg }}
                                 >
                                     {code}
                                 </button>

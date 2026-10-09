@@ -6,25 +6,40 @@ export enum ScheduleStatus {
 }
 
 /**
- * The absence-type key from the STAFF ROSTER workbook. Codes and colours are
- * kept identical to the spreadsheet so the grid reads the same to anyone who
- * has been living in that file.
+ * A code from the absence-type key of the STAFF ROSTER workbook. The codes,
+ * their labels and colours live in the database (public.shift_codes) and
+ * reach the screens through useShiftCodes(); a code is just its letters here.
  */
-export enum ShiftCode {
-    DS = "DS",   // Dayshift
-    NS = "NS",   // Night shift
-    C = "C",     // Cross (overnight)
-    B = "B",     // Break
-    D = "D",     // Day only
-    O = "O",     // Swap off
-    AL = "AL",   // Annual leave
-    SL = "SL",   // Sick leave
-    DL = "DL",   // Discretionary leave day
-    SP = "SP",   // Special leave: marriage, bereavement, paternity -- not annual leave
-    PH = "PH",   // Public holiday
-    TW = "TW",   // Travel work
-    ST = "ST",   // Study leave
-    T = "T",     // Training
+export type ShiftCode = string;
+
+/**
+ * The codes the screens name: the roster presets use DS, NS, D and B, and the
+ * annual-leave count AL. The database marks these is_system and never lets
+ * them go inactive.
+ */
+export const SystemShiftCode = {
+    DS: "DS",
+    NS: "NS",
+    D: "D",
+    B: "B",
+    AL: "AL",
+    PH: "PH",
+} as const;
+
+/** One row of public.shift_codes. */
+export interface ShiftCodeRow {
+    code: ShiftCode;
+    label: string;
+    /** Exact fill from the spreadsheet. */
+    bg: string;
+    /** Legible text colour on that fill. */
+    fg: string;
+    sort_order: number;
+    /** A break day is drawn as a plain block with no letter in it. */
+    blank_in_grid: boolean;
+    /** Inactive codes still show on old cells but cannot be chosen. */
+    active: boolean;
+    is_system: boolean;
 }
 
 export enum ShiftChangeStatus {
@@ -36,13 +51,12 @@ export enum ShiftChangeStatus {
     CANCELLED = "cancelled",
 }
 
-/** Codes that count towards the "Total days" column — matches the backend. */
-export const WORKING_DAY_CODES: ShiftCode[] = [
-    ShiftCode.DS,
-    ShiftCode.NS,
-    ShiftCode.C,
-    ShiftCode.D,
-];
+/**
+ * Codes that count towards the "Total days" column — matches the backend.
+ * A rule rather than a display detail; it moves to the table with the other
+ * code rules.
+ */
+export const WORKING_DAY_CODES: ShiftCode[] = ["DS", "NS", "C", "D"];
 
 export interface ShiftAssignment {
     id: string;
@@ -149,7 +163,7 @@ export interface WorkScheduleListResponse {
 }
 
 /**
- * Cell styling, lifted straight out of the workbook's fills.
+ * How a cell is drawn, from its shift_codes row (styleOf in useShiftCodes).
  *
  * `blankInGrid` reproduces the one quirk of the spreadsheet: a break day is
  * drawn as a plain cyan block with no letter in it.
@@ -162,41 +176,6 @@ export interface ShiftStyle {
     label: string;
     blankInGrid?: boolean;
 }
-
-export const SHIFT_STYLES: Record<ShiftCode, ShiftStyle> = {
-    [ShiftCode.DS]: { bg: "#FFFF00", fg: "#000000", label: "Dayshift" },
-    [ShiftCode.NS]: { bg: "#002060", fg: "#FFFFFF", label: "Night" },
-    [ShiftCode.C]: { bg: "#F59D87", fg: "#000000", label: "Cross" },
-    [ShiftCode.B]: { bg: "#00B0F0", fg: "#FFFFFF", label: "Break", blankInGrid: true },
-    [ShiftCode.D]: { bg: "#B8DFC9", fg: "#000000", label: "Day only" },
-    [ShiftCode.O]: { bg: "#591BB6", fg: "#FFFFFF", label: "Swap off" },
-    [ShiftCode.AL]: { bg: "#AFABAB", fg: "#FFFFFF", label: "Annual leave" },
-    [ShiftCode.SL]: { bg: "#D8A141", fg: "#000000", label: "Sick leave" },
-    [ShiftCode.DL]: { bg: "#0070C0", fg: "#FFFFFF", label: "Discretionary leave" },
-    [ShiftCode.SP]: { bg: "#C2185B", fg: "#FFFFFF", label: "Special leave" },
-    [ShiftCode.PH]: { bg: "#00B050", fg: "#000000", label: "Public holiday" },
-    [ShiftCode.TW]: { bg: "#CC3610", fg: "#FFFFFF", label: "Travel work" },
-    [ShiftCode.ST]: { bg: "#CC3610", fg: "#FFFFFF", label: "Study leave" },
-    [ShiftCode.T]: { bg: "#7030A0", fg: "#FFFFFF", label: "Training" },
-};
-
-/** Legend order, matching the "Absence type key" row of the workbook. */
-export const SHIFT_CODE_ORDER: ShiftCode[] = [
-    ShiftCode.DS,
-    ShiftCode.NS,
-    ShiftCode.C,
-    ShiftCode.D,
-    ShiftCode.B,
-    ShiftCode.AL,
-    ShiftCode.SL,
-    ShiftCode.DL,
-    ShiftCode.SP,
-    ShiftCode.PH,
-    ShiftCode.O,
-    ShiftCode.TW,
-    ShiftCode.ST,
-    ShiftCode.T,
-];
 
 
 /** A name for a roster row. Deliberately not the full employee record. */

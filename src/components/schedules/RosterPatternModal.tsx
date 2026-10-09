@@ -1,10 +1,9 @@
 import { useMemo, useState } from "react";
 
 import {
-    SHIFT_CODE_ORDER,
-    SHIFT_STYLES,
-    ShiftCode,
+    SystemShiftCode,
     type ScheduleEmployee,
+    type ShiftCode,
 } from "@/types/schedule";
 import {
     scheduleService,
@@ -12,6 +11,7 @@ import {
     type RosterPatternResult,
 } from "@/services/scheduleService";
 import { isoDate } from "@/lib/dates";
+import { useShiftCodes } from "@/lib/useShiftCodes";
 
 interface Props {
     employees: ScheduleEmployee[];
@@ -26,24 +26,24 @@ const PRESETS: { label: string; blocks: RosterPatternBlock[] }[] = [
     {
         label: "4 day / 4 night / 4 off",
         blocks: [
-            { shift_code: ShiftCode.DS, days: 4 },
-            { shift_code: ShiftCode.NS, days: 4 },
-            { shift_code: ShiftCode.B, days: 4 },
+            { shift_code: SystemShiftCode.DS, days: 4 },
+            { shift_code: SystemShiftCode.NS, days: 4 },
+            { shift_code: SystemShiftCode.B, days: 4 },
         ],
     },
     {
         label: "5 day only / 2 off",
         blocks: [
-            { shift_code: ShiftCode.D, days: 5 },
-            { shift_code: ShiftCode.B, days: 2 },
+            { shift_code: SystemShiftCode.D, days: 5 },
+            { shift_code: SystemShiftCode.B, days: 2 },
         ],
     },
     {
         label: "7 day / 7 night / 7 off",
         blocks: [
-            { shift_code: ShiftCode.DS, days: 7 },
-            { shift_code: ShiftCode.NS, days: 7 },
-            { shift_code: ShiftCode.B, days: 7 },
+            { shift_code: SystemShiftCode.DS, days: 7 },
+            { shift_code: SystemShiftCode.NS, days: 7 },
+            { shift_code: SystemShiftCode.B, days: 7 },
         ],
     },
 ];
@@ -72,6 +72,7 @@ export default function RosterPatternModal({
     onClose,
     onApplied,
 }: Props) {
+    const { activeCodes, styleOf } = useShiftCodes();
     const [blocks, setBlocks] = useState<RosterPatternBlock[]>(PRESETS[0]!.blocks);
     const [selected, setSelected] = useState<string[]>([]);
     const [startDate, setStartDate] = useState(defaultStart);
@@ -197,9 +198,9 @@ export default function RosterPatternModal({
                                     }
                                     className={`${inputClass} flex-1`}
                                 >
-                                    {SHIFT_CODE_ORDER.map((code) => (
+                                    {activeCodes.map(({ code, label }) => (
                                         <option key={code} value={code}>
-                                            {code} — {SHIFT_STYLES[code].label}
+                                            {code} — {label}
                                         </option>
                                     ))}
                                 </select>
@@ -222,7 +223,7 @@ export default function RosterPatternModal({
                             onClick={() =>
                                 setBlocks((prev) => [
                                     ...prev,
-                                    { shift_code: ShiftCode.B, days: 4 },
+                                    { shift_code: SystemShiftCode.B, days: 4 },
                                 ])
                             }
                             className="text-xs font-medium text-teal-300 hover:text-teal-300"
@@ -236,22 +237,18 @@ export default function RosterPatternModal({
 
                     {/* Cycle preview */}
                     <div className="mt-2 flex flex-wrap gap-0.5">
-                        {blocks.flatMap((block, bi) =>
-                            Array.from({ length: block.days }, (_, di) => (
+                        {blocks.flatMap((block, bi) => {
+                            const style = styleOf(block.shift_code);
+                            return Array.from({ length: block.days }, (_, di) => (
                                 <span
                                     key={`${bi}-${di}`}
                                     className="inline-flex h-5 w-6 items-center justify-center rounded-sm text-[9px] font-bold ring-1 ring-black/25"
-                                    style={{
-                                        background: SHIFT_STYLES[block.shift_code].bg,
-                                        color: SHIFT_STYLES[block.shift_code].fg,
-                                    }}
+                                    style={{ background: style.bg, color: style.fg }}
                                 >
-                                    {SHIFT_STYLES[block.shift_code].blankInGrid
-                                        ? ""
-                                        : block.shift_code}
+                                    {style.blankInGrid ? "" : block.shift_code}
                                 </span>
-                            )),
-                        )}
+                            ));
+                        })}
                     </div>
                 </div>
 

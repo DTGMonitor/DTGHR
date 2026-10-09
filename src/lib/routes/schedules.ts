@@ -3,10 +3,11 @@
 // Answers the /schedules paths from app/api/routes/schedules.py with the
 // functions in supabase/migrations/20260916000600_rpc_schedules.sql, as
 // replaced or extended by 20260926000400_schedules.sql. The fixed paths --
-// "employees", "change-requests", "roster-pattern", "public-holidays" -- are
+// "employees", "shift-codes", "change-requests", "roster-pattern",
+// "public-holidays" -- are
 // registered before `/schedules/:id` so none of them is read as an id.
 import { route } from "@/lib/api";
-import { ApiError, rpc } from "@/lib/supabase";
+import { ApiError, rpc, supabase, unwrap } from "@/lib/supabase";
 
 type Body = Record<string, unknown>;
 
@@ -30,6 +31,16 @@ const ids = (v: unknown): string[] | null => (Array.isArray(v) ? v.map(String) :
 // --- fixed paths ------------------------------------------------------------
 
 route("GET", "/schedules/employees", () => rpc("schedules_list_employees"));
+
+// The roster's codes, inactive ones included: old cells still show them.
+route("GET", "/schedules/shift-codes", async () =>
+    unwrap(
+        await supabase
+            .from("shift_codes")
+            .select("code, label, bg, fg, sort_order, blank_in_grid, active, is_system")
+            .order("sort_order"),
+    ),
+);
 
 route("GET", "/schedules/change-requests", ({ query }) =>
     rpc("list_change_requests", {

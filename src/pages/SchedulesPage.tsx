@@ -9,8 +9,9 @@ import type { ScheduleEmployee } from "@/types/schedule";
 import {
     ScheduleStatus,
     ShiftChangeStatus,
-    ShiftCode,
+    SystemShiftCode,
     type ShiftChangeItem,
+    type ShiftCode,
     type ShiftChangeRequest,
     type WorkingDaysSummary,
     type WorkSchedule,
@@ -305,8 +306,8 @@ export default function SchedulesPage() {
         for (const [key, code] of staged) {
             const [employeeId, iso] = key.split("|") as [string, string];
             if (employeeId !== myEmployeeId) continue;
-            if (code === ShiftCode.AL) net += 1;
-            if (codes.get(`${employeeId}|${iso}`) === ShiftCode.AL) net -= 1;
+            if (code === SystemShiftCode.AL) net += 1;
+            if (codes.get(`${employeeId}|${iso}`) === SystemShiftCode.AL) net -= 1;
         }
         const balance = totals.get(myEmployeeId)?.annual_leave_days ?? 0;
         return { net, remaining: balance - net };

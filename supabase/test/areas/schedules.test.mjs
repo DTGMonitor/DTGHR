@@ -2,6 +2,8 @@
 // proposals and review, the rotation generator, and the holiday calendar.
 // Ported from backend tests/test_schedule_routes.py and
 // tests/test_schedule_visibility.py.
+import { readFileSync } from "node:fs";
+
 export default async ({ db, step, tx, people }) => {
     const { DIRECTOR, PETER, HIMAWAN } = people;
 
@@ -379,5 +381,110 @@ export default async ({ db, step, tx, people }) => {
         await db.query(`delete from public.public_holidays where date = '2029-02-02'`);
         if (await code(E.OFFICE) !== "D") throw new Error("PH not reverted to D");
         if (await code(E.CREW) !== "DS") throw new Error("the crew was touched on removal");
+    });
+
+    // --- shift codes ------------------------------------------------------
+    // 20261010000100_shift_codes.sql: the table is the one list of codes.
+    const setActive = (code, active) =>
+        db.query(`update public.shift_codes set active = $2 where code = $1`, [code, active]);
+
+    await step("shift codes: the fourteen, six of them system codes", async () => {
+        const r = await db.query(`select code, is_system, active from public.shift_codes order by sort_order`);
+        const codes = r.rows.map((x) => x.code).join();
+        if (codes !== "DS,NS,C,D,B,AL,SL,DL,SP,PH,O,TW,ST,T") throw new Error(codes);
+        const system = r.rows.filter((x) => x.is_system).map((x) => x.code).sort().join();
+        if (system !== "AL,B,D,DS,NS,PH") throw new Error(system);
+        if (r.rows.some((x) => !x.active)) throw new Error("a code starts inactive");
+    });
+
+    await step("shift codes: a cell cannot hold an unknown code; a code in use is not renamed or deleted", async () => {
+        await expectError(() => db.query(`insert into public.shift_assignments (id, schedule_id, employee_id, date, shift_code)
+                                          values (gen_random_uuid(), $1, $2, '2029-06-20', 'XX')`, [DRAFT, E.CREW]),
+            "23503");
+        await expectError(() => db.query(`delete from public.shift_codes where code = 'DS'`), "23001");
+        await expectError(() => db.query(`update public.shift_codes set code = 'DX' where code = 'DS'`), "23001");
+    });
+
+    await step("shift codes: a system code cannot be made inactive", async () => {
+        for (const c of ["DS", "NS", "D", "B", "AL", "PH"]) {
+            await expectError(() => setActive(c, false), "23514");
+        }
+    });
+
+    await step("shift codes: SP is set on a cell; an unknown or inactive code is refused", async () => {
+        const cell = (c) => tx(DIRECTOR, `select public.set_schedule_cell($1::uuid, $2::uuid, '2029-06-21', $3)`,
+            [DRAFT, E.CREW, c]);
+        await cell("SP");
+        const r = await db.query(`select shift_code from public.shift_assignments
+                                   where schedule_id = $1 and employee_id = $2 and date = '2029-06-21'`, [DRAFT, E.CREW]);
+        if (r.rows[0]?.shift_code !== "SP") throw new Error(`cell is ${r.rows[0]?.shift_code}`);
+        await expectError(() => cell("XX"), "PT422", /^shift_code: 'XX' is not a shift code$/);
+        await setActive("T", false);
+        try {
+            await expectError(() => cell("T"), "PT422", /^shift_code: 'T' is not a shift code$/);
+        } finally {
+            await setActive("T", true);
+        }
+        await cell(null);
+    });
+
+    await step("shift codes: an inactive code is refused everywhere a code is set, and still shown", async () => {
+        // An existing T cell, then T goes inactive.
+        await tx(DIRECTOR, `select public.set_schedule_cell($1::uuid, $2::uuid, '2029-06-22', 'T')`, [DRAFT, E.CREW]);
+        await setActive("T", false);
+        try {
+            await expectError(() => tx(DIRECTOR, `select public.save_schedule_assignments($1::uuid, $2::jsonb)`, [DRAFT,
+                JSON.stringify([{ employee_id: E.CREW, date: "2029-06-23", shift_code: "T" }])]),
+                "PT422", /not a shift code: T/);
+            await expectError(() => tx(U.CREW, `select public.propose_shift_changes($1::uuid, $2::jsonb, null)`, [FEB,
+                JSON.stringify([{ employee_id: E.CREW, date: "2029-02-03", requested_code: "T" }])]),
+                "PT422");
+            await expectError(() => tx(DIRECTOR, `select public.schedules_apply_roster_pattern(
+                array[$1::uuid], '[{"shift_code":"T","days":1}]'::jsonb, '2029-06-24', '2029-06-25',
+                0, true, false, false, false)`, [E.CREW]),
+                "PT422", /each block needs a shift code/);
+
+            const d = (await tx(DIRECTOR, `select public.get_schedule_detail($1::uuid) j`, [DRAFT])).rows[0].j;
+            const kept = d.assignments.find((a) => a.employee_id === E.CREW && a.date === "2029-06-22");
+            if (kept?.shift_code !== "T") throw new Error(`cell shows ${kept?.shift_code}`);
+        } finally {
+            await setActive("T", true);
+        }
+        await tx(DIRECTOR, `select public.set_schedule_cell($1::uuid, $2::uuid, '2029-06-22', null)`, [DRAFT, E.CREW]);
+    });
+
+    await step("shift codes: signed-in users read them, nobody writes them through the API, anon sees nothing", async () => {
+        const r = await tx(U.CREW, `select count(*)::int n from public.shift_codes`);
+        if (r.rows[0].n !== 14) throw new Error(`employee read ${r.rows[0].n}`);
+        await expectError(() => tx(DIRECTOR, `insert into public.shift_codes (code, label, bg, fg, sort_order)
+                                              values ('ZZ', 'Z', '#000000', '#FFFFFF', 99)`), "42501");
+        await expectError(() => tx(DIRECTOR, `update public.shift_codes set label = 'Changed' where code = 'C'`), "42501");
+        await expectError(() => tx(DIRECTOR, `delete from public.shift_codes where code = 'C'`), "42501");
+        const c = await db.query(`select label from public.shift_codes where code = 'C'`);
+        if (c.rows[0].label !== "Cross") throw new Error(`label ${c.rows[0].label}`);
+
+        await db.exec("begin");
+        try {
+            await db.exec("set local role anon");
+            await expectError(() => db.query(`select 1 from public.shift_codes`), "42501");
+        } finally {
+            await db.exec("rollback");
+        }
+    });
+
+    await step("shift codes: the migration stops on a roster holding an unknown code, naming it", async () => {
+        const sql = readFileSync(new URL("../../migrations/20261010000100_shift_codes.sql", import.meta.url), "utf8");
+        await db.exec(`alter table public.shift_assignments drop constraint fk_shift_assignments_shift_code`);
+        await db.query(`insert into public.shift_assignments (id, schedule_id, employee_id, date, shift_code)
+                        values (gen_random_uuid(), $1, $2, '2029-06-26', 'ZZ')`, [DRAFT, E.CREW]);
+        try {
+            await expectError(() => db.exec(sql), null, /holds codes that are not shift codes: 'ZZ'/);
+            await db.exec("rollback");
+        } finally {
+            await db.query(`delete from public.shift_assignments where shift_code = 'ZZ'`);
+            await db.exec(sql);
+        }
+        const fk = await db.query(`select 1 from pg_constraint where conname = 'fk_shift_assignments_shift_code'`);
+        if (fk.rows.length !== 1) throw new Error("the foreign key was not restored");
     });
 };

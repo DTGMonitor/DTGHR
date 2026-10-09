@@ -1,4 +1,4 @@
-import { SHIFT_STYLES, type ShiftCode } from "@/types/schedule";
+import { useShiftCodes } from "@/lib/useShiftCodes";
 
 export interface OverviewDay {
     date: string;
@@ -17,6 +17,7 @@ export interface OverviewDay {
  * than inventing a second palette for the same codes.
  */
 export default function WeekStrip({ days }: { days: OverviewDay[] }) {
+    const { styleOf } = useShiftCodes();
     if (!days.length) {
         return (
             <p className="px-5 py-8 text-center text-sm text-muted">
@@ -29,7 +30,7 @@ export default function WeekStrip({ days }: { days: OverviewDay[] }) {
      * The legend follows the week, not the codebook.
      *
      * Nurhuda: do not explain night shift in a week with no night shift. The
-     * full roster has a thirteen-code key because it has to; here only what
+     * full roster has a fourteen-code key because it has to; here only what
      * the person is actually working is worth a line, so the legend is built
      * from the days on screen and disappears entirely on a week with nothing
      * in it.
@@ -50,7 +51,7 @@ export default function WeekStrip({ days }: { days: OverviewDay[] }) {
         <div className="grid flex-1 grid-cols-7 gap-1.5 p-3 sm:gap-2 sm:p-4">
             {days.map((d) => {
                 const date = new Date(`${d.date}T00:00:00`);
-                const style = d.code ? SHIFT_STYLES[d.code as ShiftCode] : undefined;
+                const style = d.code ? styleOf(d.code) : undefined;
                 const off = !d.code || d.code === "O" || d.code === "B";
 
                 return (
@@ -118,7 +119,7 @@ export default function WeekStrip({ days }: { days: OverviewDay[] }) {
         {codes.length > 0 && (
             <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-white/[0.06] px-4 py-3">
                 {codes.map((code) => {
-                    const style = SHIFT_STYLES[code as ShiftCode];
+                    const style = styleOf(code);
                     const label = days.find((d) => d.code === code)?.label ?? code;
                     return (
                         <span key={code} className="flex items-center gap-2">
