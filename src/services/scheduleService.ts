@@ -6,6 +6,7 @@ import type {
     ShiftChangeStatus,
     ShiftAssignment,
     ShiftCode,
+    ShiftCodeRow,
     WorkSchedule,
     WorkScheduleDetail,
     WorkScheduleListResponse,
@@ -90,6 +91,11 @@ export const scheduleService = {
      */
     visibleEmployees(): Promise<{ data: ScheduleEmployee[] }> {
         return api.get("/schedules/employees");
+    },
+
+    /** Every roster code, in legend order. Read through useShiftCodes(). */
+    shiftCodes(): Promise<{ data: ShiftCodeRow[] }> {
+        return api.get("/schedules/shift-codes");
     },
 
     list(params?: {

@@ -1,10 +1,11 @@
 import { useMemo } from "react";
 
+import { useShiftCodes } from "@/lib/useShiftCodes";
 import {
-    SHIFT_STYLES,
-    ShiftCode,
     WORKING_DAY_CODES,
     type PublicHoliday,
+    type ShiftCode,
+    type ShiftStyle,
     type ShiftChangeItem,
     type WorkingDaysSummary,
     type ScheduleEmployee,
@@ -88,6 +89,7 @@ export default function RosterGrid({
     onCellClick,
     activeCell,
 }: Props) {
+    const { styleOf } = useShiftCodes();
     const monthLabel = useMemo(() => {
         const first = days[0];
         if (!first) return "";
@@ -237,6 +239,7 @@ export default function RosterGrid({
                                             isHoliday={!!d.holiday?.is_national}
                                             editable={editable}
                                             active={activeCell === key}
+                                            styleOf={styleOf}
                                             onClick={(rect) =>
                                                 onCellClick(employee.id, d.iso, rect)
                                             }
@@ -340,6 +343,7 @@ function RosterCell({
     isHoliday,
     editable,
     active,
+    styleOf,
     onClick,
 }: {
     cellKey: string;
@@ -350,9 +354,10 @@ function RosterCell({
     isHoliday: boolean;
     editable: boolean;
     active: boolean;
+    styleOf: (code: ShiftCode) => ShiftStyle;
     onClick: (rect: DOMRect) => void;
 }) {
-    const style = code ? SHIFT_STYLES[code] : null;
+    const style = code ? styleOf(code) : null;
     // The workbook draws a break day as a plain cyan block with no letter.
     const text = style?.blankInGrid ? "" : code ?? "";
 
@@ -385,7 +390,7 @@ function RosterCell({
                 }
                 : null;
 
-    const overlayStyle = overlay?.code ? SHIFT_STYLES[overlay.code] : null;
+    const overlayStyle = overlay?.code ? styleOf(overlay.code) : null;
 
     return (
         <td

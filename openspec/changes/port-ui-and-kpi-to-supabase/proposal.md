@@ -55,7 +55,8 @@ This change moves it across.
 - The `Salary_Forecast` sheet (BPJS, tax bearer, income tax, monthly and annual
   expense against revenue). A separate screen and a separate decision about who
   may see it.
-- Admin-editable absence codes. Proposed, not yet designed; needs a
-  `shift_codes` table before the thirteen hardcoded codes can move.
+- Admin-editable absence codes. The fourteen codes now live in the
+  `shift_codes` table (`shift-codes-table`); editing them from a screen, and
+  the per-code rules (leave, working day, field day), are still to come.
 - Applying migration 7 to live. Independent of this change and should happen
   first, on its own.

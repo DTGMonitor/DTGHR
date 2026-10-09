@@ -6,7 +6,7 @@ import StatTile from "@/components/ui/StatTile";
 import { Wordmark } from "@/components/brand/Logo";
 import BulletinSection from "@/components/articles/BulletinSection";
 import WeekStrip from "@/components/dashboard/WeekStrip";
-import { SHIFT_STYLES, type ShiftCode } from "@/types/schedule";
+import { useShiftCodes } from "@/lib/useShiftCodes";
 import { overviewService, type Overview } from "@/services/dashboardService";
 import { money } from "@/services/salaryService";
 import { useNotifications } from "@/contexts/NotificationsContext";
@@ -52,7 +52,7 @@ function firstName(full: string): string {
  * grid and the week strip, so a colour means one thing everywhere.
  */
 function Crew({ list, code }: { list: string[]; code: "DS" | "NS" }) {
-    const style = SHIFT_STYLES[code as ShiftCode];
+    const style = useShiftCodes().styleOf(code);
     return (
         <span
             className="mx-0.5 inline-block rounded px-1.5 py-px text-xs font-semibold ring-1 ring-white/20"
@@ -379,6 +379,7 @@ const SAID_BY_APPROVALS = [
 
 export default function DashboardPage() {
     const { user } = useAuth();
+    const { styleOf } = useShiftCodes();
 
     /*
      * Reading or writing an article takes over the page.
@@ -444,7 +445,7 @@ export default function DashboardPage() {
         ? {
               code: todayShift.code,
               label: todayShift.label ?? todayShift.code,
-              style: SHIFT_STYLES[todayShift.code as ShiftCode],
+              style: styleOf(todayShift.code),
           }
         : null;
 
