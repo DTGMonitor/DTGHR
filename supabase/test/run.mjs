@@ -407,10 +407,11 @@ await step("approving deducts, cancelling restores", async () => {
     const pend = await tx(ADMIN, `select id from public.leave_requests_view where status='pending' limit 1`);
     const id = pend.rows[0].id;
     // Annual is computed from the dates away: two roster AL cells already.
+    // 20-22 September 2026 is Sunday to Tuesday: two leave days, not three.
     await tx(ADMIN, `select public.approve_leave_request($1::uuid, 'ok')`, [id]);
     let bal = await tx(RINA, `select public.get_leave_balances(null, 2026) j`);
     let annual = bal.rows[0].j.find((b) => b.leave_type === "annual");
-    if (annual.used_days !== 5) throw new Error(`used after approve ${annual.used_days}`);
+    if (annual.used_days !== 4) throw new Error(`used after approve ${annual.used_days}`);
 
     await tx(RINA, `select public.cancel_leave_request($1::uuid)`, [id]);
     bal = await tx(RINA, `select public.get_leave_balances(null, 2026) j`);
