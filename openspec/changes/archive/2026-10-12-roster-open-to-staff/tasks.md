@@ -26,6 +26,6 @@
 
 ## 4. Ship
 
-- [ ] 4.1 Push the migration with migrations temporarily enabled in `config.toml`, after `migration list`. Then merge, so the front end deploys
-- [ ] 4.2 On live, as your own account: October 2026 shows Adib, Aris and Lintang. Colleagues' balances show a dash and yours shows a number
-- [ ] 4.3 Tell staff the roster now shows everyone
+- [x] 4.1 Push the migration with migrations temporarily enabled in `config.toml`, after `migration list`. Then merge, so the front end deploys
+- [x] 4.2 On live, as your own account: October 2026 shows Adib, Aris and Lintang. Colleagues' balances show a dash and yours shows a number
+- [x] 4.3 Tell staff the roster now shows everyone
