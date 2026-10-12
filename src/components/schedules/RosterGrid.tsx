@@ -442,14 +442,17 @@ function RosterCell({
  * leave remaining and public-holiday loading.
  */
 function TotalCells({ summary }: { summary: WorkingDaysSummary | undefined }) {
+    // A colleague's balance is theirs and the administrators': it arrives null.
+    const hidden = summary?.annual_leave_days === null;
     const leave = summary?.annual_leave_days ?? 0;
     const taken = summary?.annual_leave_taken ?? 0;
     const loading = summary?.public_holiday_loading ?? 0;
 
     // A negative balance means leave was granted beyond the entitlement, which
     // only a superuser can do. It should read as an exception, not an error.
-    const leaveColour =
-        leave < 0 ? "text-gold" : leave < 1 ? "text-danger" : "text-paper";
+    const leaveColour = hidden
+        ? "text-muted"
+        : leave < 0 ? "text-gold" : leave < 1 ? "text-danger" : "text-paper";
 
     return (
         <>
@@ -459,15 +462,17 @@ function TotalCells({ summary }: { summary: WorkingDaysSummary | undefined }) {
             <td
                 className={`sticky right-[3.75rem] z-10 border-b border-l border-white/10 bg-surface px-2 py-2 text-center font-semibold ${leaveColour}`}
                 title={
-                    `${leave.toFixed(2)} day(s) of annual leave remaining` +
-                    (taken ? `, ${taken} taken this month` : "")
+                    hidden
+                        ? "Shown to the employee and administrators only"
+                        : `${leave.toFixed(2)} day(s) of annual leave remaining` +
+                          (taken ? `, ${taken} taken this month` : "")
                 }
             >
                 {/* Two places, not one. The accrual is thirtieths and
                     thirty-firsts -- 11.67, 4.97, -3.45 -- and rounding to
                     11.7 or 12 throws away the part that shows there is a
                     calculation behind it. */}
-                {leave.toFixed(2)}
+                {hidden ? "—" : leave.toFixed(2)}
             </td>
             <td
                 className="sticky right-0 z-10 border-b border-l border-white/10 bg-surface px-2 py-2 text-center font-semibold text-paper"

@@ -239,15 +239,12 @@ export default function SchedulesPage() {
     }, [detail]);
 
     /**
-     * Rows the signed-in user may actually see.
+     * Rows to draw.
      *
-     * The employee list is the whole directory, but the schedule is filtered
-     * server-side: office staff get no roster rows and the rotating crew get no
-     * office-day rows. Rendering the directory unfiltered therefore drew an
-     * empty row for every colleague whose schedule the viewer is not allowed
-     * to read, which looked like a broken roster and advertised who was on the
-     * other one. Administrators still see everybody, including people with no
-     * cells yet, so they can fill them in.
+     * Everyone sees every active colleague's roster (20261013000100), but a
+     * colleague with no cells this month would be an empty row, so staff see
+     * only the people the month actually has. Administrators still see
+     * everybody, including people with no cells yet, so they can fill them in.
      */
     const visibleEmployees = useMemo(() => {
         if (!detail) return employees;
