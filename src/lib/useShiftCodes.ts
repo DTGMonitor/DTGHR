@@ -54,5 +54,8 @@ export function useShiftCodes() {
         [byCode],
     );
 
-    return { codes, activeCodes, styleOf };
+    /** The code's row -- what it means (is_working, is_off...) -- once loaded. */
+    const rowOf = useCallback((code: ShiftCode) => byCode.get(code), [byCode]);
+
+    return { codes, activeCodes, styleOf, rowOf };
 }
