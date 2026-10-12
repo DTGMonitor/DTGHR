@@ -53,4 +53,4 @@ roster already draws AL, SL, ST and SP.
 
 - [x] 7.1 Tell HR that annual balances will be recalculated (some go up), and that leave approved before go-live is not added to the roster by itself
 - [x] 7.2 Push the migration with migrations temporarily enabled in `supabase/config.toml`. Check `migration list` first. Done before the local test: `migration list` shows `20261011000100` on live. A local copy of production then confirmed that the day counts and all 13 annual balances are unchanged, and the approve, cancel and generator flows worked when clicked through
-- [ ] 7.3 On live: approve a test leave and check that the roster shows it. Cancel it and check that the roster is restored
+- [x] 7.3 On live: approve a test leave and check that the roster shows it. Cancel it and check that the roster is restored
