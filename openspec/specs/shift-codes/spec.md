@@ -1,7 +1,7 @@
 # shift-codes Specification
 
 ## Purpose
-The roster's shift codes, kept in one table: what each code is called and how it is drawn, which codes may be set on a cell, how codes are retired, who may read and change them, and how the roster and dashboard screens get them.
+The roster's shift codes, kept in one table: what each code is called, how it is drawn and what it means (working, leave, away, field day, rotation, off), which codes may be set on a cell, how codes are retired, who may read and change them, and how the roster and dashboard screens get them.
 ## Requirements
 ### Requirement: Shift codes are defined in one table
 
