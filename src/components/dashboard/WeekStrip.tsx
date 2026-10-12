@@ -17,7 +17,7 @@ export interface OverviewDay {
  * than inventing a second palette for the same codes.
  */
 export default function WeekStrip({ days }: { days: OverviewDay[] }) {
-    const { styleOf } = useShiftCodes();
+    const { styleOf, rowOf } = useShiftCodes();
     if (!days.length) {
         return (
             <p className="px-5 py-8 text-center text-sm text-muted">
@@ -52,7 +52,7 @@ export default function WeekStrip({ days }: { days: OverviewDay[] }) {
             {days.map((d) => {
                 const date = new Date(`${d.date}T00:00:00`);
                 const style = d.code ? styleOf(d.code) : undefined;
-                const off = !d.code || d.code === "O" || d.code === "B";
+                const off = !d.code || !!rowOf(d.code)?.is_off;
 
                 return (
                     <div

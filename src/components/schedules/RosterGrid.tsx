@@ -2,7 +2,6 @@ import { useMemo } from "react";
 
 import { useShiftCodes } from "@/lib/useShiftCodes";
 import {
-    WORKING_DAY_CODES,
     type PublicHoliday,
     type ShiftCode,
     type ShiftStyle,
@@ -89,7 +88,7 @@ export default function RosterGrid({
     onCellClick,
     activeCell,
 }: Props) {
-    const { styleOf } = useShiftCodes();
+    const { styleOf, rowOf } = useShiftCodes();
     const monthLabel = useMemo(() => {
         const first = days[0];
         if (!first) return "";
@@ -292,7 +291,7 @@ export default function RosterGrid({
                                     const code = staged.has(key)
                                         ? staged.get(key)
                                         : codes.get(key);
-                                    return code && WORKING_DAY_CODES.includes(code)
+                                    return code && rowOf(code)?.is_working
                                         ? count + 1
                                         : count;
                                 }, 0);

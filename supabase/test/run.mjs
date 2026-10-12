@@ -191,10 +191,11 @@ await step("accrued_annual_leave matches the workbook pro-ration", async () => {
     if (!near(c, 0)) throw new Error(`before joining: ${c}`);
 });
 
-await step("annual_leave_state nets opening balance, accrual and AL taken", async () => {
+await step("schedules_leave_and_loading nets opening balance, accrual and AL taken", async () => {
+    // annual_leave_state() did this until 20261012000100 dropped it.
     const r = await db.query(
-        `select * from public.annual_leave_state(array['aaaaaaaa-0000-0000-0000-000000000001'::uuid],
-                                                 '2026-09-01','2026-09-30')`);
+        `select * from public.schedules_leave_and_loading(array['aaaaaaaa-0000-0000-0000-000000000001'::uuid],
+                                                          '2026-09-01','2026-09-30')`);
     const row = r.rows[0];
     // opening 2.5 + accrual(2024-03-02 -> 2026-09-30) - 1 AL day taken
     const accrual = 30 / 31 + 30;
@@ -556,8 +557,8 @@ await step("2026 holidays match the SKB, 2027 is loaded", async () => {
 
 await step("PH loading carries a year-to-date figure and the dates", async () => {
     const r = await db.query(
-        `select * from public.annual_leave_state(array['aaaaaaaa-0000-0000-0000-000000000001'::uuid],
-                                                 '2026-09-01','2026-09-30')`);
+        `select * from public.schedules_leave_and_loading(array['aaaaaaaa-0000-0000-0000-000000000001'::uuid],
+                                                          '2026-09-01','2026-09-30')`);
     const row = r.rows[0];
     if (row.ph_loading !== 1 || row.ph_loading_ytd < 1) throw new Error(`${row.ph_loading}/${row.ph_loading_ytd}`);
     const d = await tx(RINA, `select public.get_schedule_detail('bbbbbbbb-0000-0000-0000-000000000001') j`);

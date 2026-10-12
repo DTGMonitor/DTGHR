@@ -40,6 +40,18 @@ export interface ShiftCodeRow {
     /** Inactive codes still show on old cells but cannot be chosen. */
     active: boolean;
     is_system: boolean;
+    /** Worked: counts in Total days and as on duty; leave replaces it. */
+    is_working: boolean;
+    /** Leave: a request covering the day is charged for it. */
+    is_leave: boolean;
+    /** Shown as away on the dashboard (leave, and permitted absence such as ST). */
+    is_away: boolean;
+    /** A shift for payroll's shift days. */
+    is_field_day: boolean;
+    /** Part of a rotation the generator continues from. */
+    in_rotation: boolean;
+    /** An off day on the dashboard week strip. */
+    is_off: boolean;
 }
 
 export enum ShiftChangeStatus {
@@ -50,13 +62,6 @@ export enum ShiftChangeStatus {
     PARTIALLY_APPROVED = "partially_approved",
     CANCELLED = "cancelled",
 }
-
-/**
- * Codes that count towards the "Total days" column — matches the backend.
- * A rule rather than a display detail; it moves to the table with the other
- * code rules.
- */
-export const WORKING_DAY_CODES: ShiftCode[] = ["DS", "NS", "C", "D"];
 
 export interface ShiftAssignment {
     id: string;

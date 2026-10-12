@@ -175,6 +175,7 @@ export default async ({ db, step, tx, people }) => {
         eq(o.has_employee_record, true, "has_employee_record");
         eq(o.week.length, 7, "seven days");
         eq(o.week[0], { date: "2090-06-26", code: "DS", label: "Dayshift", holiday: null, is_today: true }, "today");
+        // The label is shift_codes' since 20261012000100, the same as the legend.
         eq(o.week[1].label, "Night shift", "tomorrow");
         eq(o.week[2], { date: "2090-06-28", code: "AL", label: "Annual leave", holiday: "Overview Holiday", is_today: false }, "holiday");
         // A draft roster's cell is not shown.

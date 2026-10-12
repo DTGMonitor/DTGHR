@@ -37,7 +37,10 @@ route("GET", "/schedules/shift-codes", async () =>
     unwrap(
         await supabase
             .from("shift_codes")
-            .select("code, label, bg, fg, sort_order, blank_in_grid, active, is_system")
+            .select(
+                "code, label, bg, fg, sort_order, blank_in_grid, active, is_system, " +
+                    "is_working, is_leave, is_away, is_field_day, in_rotation, is_off",
+            )
             .order("sort_order"),
     ),
 );
