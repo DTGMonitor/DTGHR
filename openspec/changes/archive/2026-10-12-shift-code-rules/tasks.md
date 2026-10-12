@@ -55,6 +55,6 @@ end. The two screens change after it.
 
 ## 6. Ship
 
-- [ ] 6.1 Tell HR that Total days now count travel work and training (past months too), and that study leave shows as away
-- [ ] 6.2 Push the migration with migrations temporarily enabled in `config.toml`, after `migration list`. Then deploy the front end
-- [ ] 6.3 On live: check a roster with TW or T shows the higher Total days, and that the week strip labels SP
+- [x] 6.1 Tell HR that Total days now count travel work and training (past months too), and that study leave shows as away
+- [x] 6.2 Push the migration with migrations temporarily enabled in `config.toml`, after `migration list`. Then deploy the front end. The migration is on live (`migration list`, 12 Oct). The front end (the roster grid's on-duty count, the week strip's off days) deploys when the `feat/shift-code-rules` PR merges, along with this archive. The old front end works against the new database in the meantime
+- [x] 6.3 On live: check a roster with TW or T shows the higher Total days, and that the week strip labels SP
