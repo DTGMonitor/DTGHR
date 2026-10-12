@@ -120,7 +120,8 @@ export interface WorkingDaysSummary {
     working_days: number;
     by_code: Record<string, number>;
     /** Running annual-leave balance at the end of this period. */
-    annual_leave_days: number;
+    /** Only on the viewer's own row, or for an administrator; null otherwise. */
+    annual_leave_days: number | null;
     /** AL days falling inside this period alone. */
     annual_leave_taken: number;
     /** National public holidays this employee was rostered to work. */

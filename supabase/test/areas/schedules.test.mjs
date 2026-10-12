@@ -90,46 +90,30 @@ export default async ({ db, step, tx, people }) => {
         new Set((await detail(uid)).assignments.map((a) => a.employee_name));
 
     // --- visibility -------------------------------------------------------
-    await step("office-day staff cannot see the roster", async () => {
+    // Everyone sees the whole roster (20261013000100); former staff, leave
+    // reasons and colleagues' balances stay an administrator's.
+    await step("office-day staff see the roster crew too", async () => {
         const n = await names(U.OFFICE);
-        if (n.has("Lintang Test")) throw new Error("an office-day engineer saw the roster");
+        if (!n.has("Lintang Test")) throw new Error("an office-day engineer cannot see the crew");
         if (!n.has("Bintang Test")) throw new Error("lost their own schedule");
     });
 
-    await step("the roster crew cannot see the office-day schedule", async () => {
+    await step("the roster crew see the office-day staff too", async () => {
         const n = await names(U.CREW);
-        if (n.has("Bintang Test")) throw new Error("a roster engineer saw the office-day schedule");
+        if (!n.has("Bintang Test")) throw new Error("a roster engineer cannot see the office-day staff");
         if (!n.has("Lintang Test")) throw new Error("lost their own schedule");
     });
 
-    await step("the back-up engineer sees the roster only in a month she works it", async () => {
-        // February: Nessy is on office days (D), flag or no flag -- no roster.
-        const off = await names(U.BACKUP);
-        if (off.has("Lintang Test")) throw new Error("the flag alone opened the roster");
-        if (!off.has("Nessy Test")) throw new Error("lost their own schedule");
-
-        // Put her on a roster shift this month: now she reads the crew too.
-        await db.exec(`update public.shift_assignments set shift_code = 'NS'
-                        where schedule_id = '${FEB}' and employee_id = '${E.BACKUP}'`);
+    await step("the back-up engineer sees both, in any month", async () => {
+        // February: Nessy is on office days (D) -- the crew shows all the same.
+        const n = await names(U.BACKUP);
+        if (!n.has("Lintang Test") || !n.has("Nessy Test")) throw new Error([...n].join(","));
+        await db.exec(`update public.employees set is_backup_engineer = false where id = '${E.BACKUP}'`);
         try {
-            const on = await names(U.BACKUP);
-            if (!on.has("Lintang Test") || !on.has("Nessy Test")) throw new Error([...on].join(","));
-            const rows = await tx(U.BACKUP, `select count(*)::int n from public.shift_assignments
-                                              where schedule_id = $1 and employee_id = $2`, [FEB, E.CREW]);
-            if (rows.rows[0].n === 0) throw new Error("the table read disagrees with the detail");
-
-            // Without the back-up flag a roster shift does not open the crew's rows.
-            await db.exec(`update public.employees set is_backup_engineer = false where id = '${E.BACKUP}'`);
-            const after = await names(U.BACKUP);
-            await db.exec(`update public.employees set is_backup_engineer = true where id = '${E.BACKUP}'`);
-            if (after.has("Lintang Test")) throw new Error("clearing back-up kept the roster");
+            if (!(await names(U.BACKUP)).has("Lintang Test")) throw new Error("the flag still decides");
         } finally {
-            await db.exec(`update public.shift_assignments set shift_code = 'D'
-                            where schedule_id = '${FEB}' and employee_id = '${E.BACKUP}'`);
+            await db.exec(`update public.employees set is_backup_engineer = true where id = '${E.BACKUP}'`);
         }
-        const rows = await tx(U.BACKUP, `select count(*)::int n from public.shift_assignments
-                                          where schedule_id = $1 and employee_id = $2`, [FEB, E.CREW]);
-        if (rows.rows[0].n !== 0) throw new Error("a plain table read showed the crew in an office month");
     });
 
     await step("administrators see everyone, former staff included; colleagues do not", async () => {
@@ -157,15 +141,67 @@ export default async ({ db, step, tx, people }) => {
         if (by["Nessy Test"] !== "office_day") throw new Error("back-up is still office-day staff");
     });
 
-    await step("RLS on shift_assignments applies the same rule", async () => {
+    await step("RLS on shift_assignments: all active staff in published months, no drafts, no leavers", async () => {
         const r = await tx(U.CREW, `select distinct employee_id from public.shift_assignments
                                      where schedule_id = '${FEB}'`);
         const ids = r.rows.map((x) => x.employee_id);
-        if (ids.includes(E.OFFICE)) throw new Error("crew read an office-day row");
+        if (!ids.includes(E.OFFICE)) throw new Error("crew cannot read an office-day row");
         if (!ids.includes(E.CREW)) throw new Error("crew lost their own row");
+        if (ids.includes(E.FORMER)) throw new Error("crew read a former employee's row");
+
+        await db.query(`insert into public.shift_assignments (id, schedule_id, employee_id, date, shift_code)
+                        values (gen_random_uuid(), $1, $2, '2029-06-15', 'DS')
+                        on conflict (schedule_id, employee_id, date) do nothing`, [DRAFT, E.CREW]);
+        try {
+            const d = await tx(U.OFFICE, `select count(*)::int n from public.shift_assignments
+                                           where schedule_id = $1`, [DRAFT]);
+            if (d.rows[0].n !== 0) throw new Error("a draft's cells were readable");
+        } finally {
+            await db.query(`delete from public.shift_assignments
+                             where schedule_id = $1 and employee_id = $2 and date = '2029-06-15'`, [DRAFT, E.CREW]);
+        }
     });
 
-    await step("the grid's name list is scoped, active only, founders left out", async () => {
+    await step("a deactivated employee still sees their own row", async () => {
+        await db.exec(`update public.employees set is_active = false where id = '${E.OFFICE}'`);
+        try {
+            const n = await names(U.OFFICE);
+            if (!n.has("Bintang Test")) throw new Error("lost their own row");
+            if ((await names(U.CREW)).has("Bintang Test")) throw new Error("a colleague saw the leaver");
+        } finally {
+            await db.exec(`update public.employees set is_active = true where id = '${E.OFFICE}'`);
+        }
+    });
+
+    await step("the leave list, with its leave types, goes to administrators only", async () => {
+        const id = (await db.query(`insert into public.leave_requests
+                (id, employee_id, leave_type, start_date, end_date, days_requested, status)
+              values (gen_random_uuid(), $1, 'bereavement', '2029-02-20', '2029-02-21', 2, 'approved')
+              returning id`, [E.CREW])).rows[0].id;
+        try {
+            const staff = await detail(U.OFFICE);
+            if (staff.leaves.length !== 0) throw new Error(`staff got ${JSON.stringify(staff.leaves)}`);
+            const own = await detail(U.CREW);
+            if (own.leaves.length !== 0) throw new Error("the list goes to administrators only");
+            const admin = await detail(DIRECTOR);
+            if (!admin.leaves.some((l) => l.employee_id === E.CREW && l.leave_type === "bereavement"))
+                throw new Error(`admin got ${JSON.stringify(admin.leaves)}`);
+        } finally {
+            await db.query(`delete from public.leave_requests where id = $1`, [id]);
+        }
+    });
+
+    await step("the annual leave balance: own row and administrators only", async () => {
+        const staff = Object.fromEntries((await detail(U.OFFICE)).working_days
+            .map((x) => [x.employee_name, x.annual_leave_days]));
+        if (typeof staff["Bintang Test"] !== "number") throw new Error(`own balance ${staff["Bintang Test"]}`);
+        if (staff["Lintang Test"] !== null) throw new Error(`a colleague's balance ${staff["Lintang Test"]}`);
+        const admin = (await detail(DIRECTOR)).working_days;
+        if (admin.some((x) => typeof x.annual_leave_days !== "number"))
+            throw new Error(`admin balances ${JSON.stringify(admin.map((x) => x.annual_leave_days))}`);
+    });
+
+    await step("the grid's name list: everyone active, founders left out", async () => {
         const all = (await tx(DIRECTOR, `select public.schedules_list_employees() j`)).rows[0].j;
         const ids = all.map((x) => x.id);
         if (ids.includes(E.FOUNDER)) throw new Error("a founder is a roster row");
@@ -175,9 +211,11 @@ export default async ({ db, step, tx, people }) => {
         if (keys !== "employee_id,first_name,id,is_backup_engineer,last_name,position,work_pattern")
             throw new Error(`shape ${keys}`);
         const office = (await tx(U.OFFICE, `select public.schedules_list_employees() j`)).rows[0].j;
-        if (office.some((x) => x.id === E.CREW)) throw new Error("office user got a crew name");
+        if (!office.some((x) => x.id === E.CREW)) throw new Error("office user lacks a crew name");
+        if (office.some((x) => x.id === E.FORMER)) throw new Error("office user got a former employee");
+        // An account not yet linked to a row is still staff: it sees the roster.
         const nobody = (await tx(U.NOBODY, `select public.schedules_list_employees() j`)).rows[0].j;
-        if (nobody.length !== 0) throw new Error("an unlinked account saw names");
+        if (!nobody.some((x) => x.id === E.CREW)) throw new Error("an unlinked account saw no names");
     });
 
     await step("the period list pages, and hides drafts from employees", async () => {
