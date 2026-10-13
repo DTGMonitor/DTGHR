@@ -32,6 +32,9 @@ route("POST", "/tickets", ({ body }) => {
         p_category: text(b.category),
         p_priority: text(b.priority) ?? "normal",
         p_location: text(b.location),
+        p_reporter_id: text(b.reporter_id),
+        p_channel: text(b.channel),
+        p_related_ticket_id: text(b.related_ticket_id),
     });
 });
 
@@ -52,6 +55,32 @@ route("POST", "/tickets/:id/status", ({ path, body }) => {
         p_note: text(b.note),
     });
 });
+
+route("POST", "/tickets/:id/reopen", ({ path, body }) =>
+    rpc("tickets_reopen", { p_ticket_id: path.id, p_reason: text(asBody(body).reason) }),
+);
+
+route("POST", "/tickets/:id/extend", ({ path, body }) => {
+    const b = asBody(body);
+    return rpc("tickets_extend", {
+        p_ticket_id: path.id,
+        p_until: text(b.until),
+        p_reason: text(b.reason),
+    });
+});
+
+route("POST", "/tickets/:id/triage", ({ path, body }) => {
+    const b = asBody(body);
+    return rpc("tickets_triage", {
+        p_ticket_id: path.id,
+        p_priority: text(b.priority),
+        p_category: text(b.category),
+    });
+});
+
+route("POST", "/tickets/:id/link", ({ path, body }) =>
+    rpc("tickets_link", { p_ticket_id: path.id, p_related_id: text(asBody(body).related_id) }),
+);
 
 route("POST", "/tickets/:id/assign", ({ path, body }) => {
     const b = asBody(body);
