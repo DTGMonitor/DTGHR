@@ -298,10 +298,6 @@ export default async ({ db, step, tx, people }) => {
         const last = c.events[c.events.length - 1];
         if (last.to_status !== "closed" || last.body !== "Fixed it myself") throw new Error("trail");
         await fails(() => setStatus(NESSY, t.id, "closed", "Again"), "PT409", /already closed/);
-
-        const r = await raise(NESSY);
-        await resolve(BINTANG, r.id);
-        await fails(() => setStatus(NESSY, r.id, "closed", "Late"), "PT409", /already resolved/);
     });
 
     await step("tickets: assigning is IT support's, and only to somebody who works the queue", async () => {
@@ -320,6 +316,337 @@ export default async ({ db, step, tx, people }) => {
     await step("tickets: clients cannot read or write the tables directly", async () => {
         const r = await tx(RINA, `select count(*)::int n from public.support_tickets`).catch((e) => ({ err: e }));
         if (!r.err && r.rows[0].n !== 0) throw new Error("rows visible");
+    });
+
+    // --- the reporter loop (20261014000100) ----------------------------------
+
+    const reopen = (uid, id, reason) => j(uid, `public.tickets_reopen($1::uuid, $2)`, [id, reason]);
+    const extend = (uid, id, days, reason = null) =>
+        j(uid, `public.tickets_extend($1::uuid, now() + make_interval(days => $2::int), $3)`, [id, days, reason]);
+    const triage = (uid, id, priority, category) =>
+        j(uid, `public.tickets_triage($1::uuid, $2, $3)`, [id, priority, category]);
+    const link = (uid, id, related) => j(uid, `public.tickets_link($1::uuid, $2::uuid)`, [id, related]);
+    const raiseFor = (uid, reporter, channel, related = null, subject = "VPN keeps dropping") =>
+        j(uid, `public.tickets_raise($1, 'Drops', 'connection', 'normal', null, $2::uuid, $3, $4::uuid)`,
+          [subject, reporter, channel, related]);
+    const run = async () => (await db.query(`select public.tickets_auto_close_run() j`)).rows[0].j;
+    const row = async (id) => (await db.query(`select *,
+            extract(epoch from (auto_close_at - now())) / 86400.0 as days_left
+          from public.support_tickets where id = $1`, [id])).rows[0];
+    const daysLeft = async (id) => Number((await row(id)).days_left);
+    const notes = async (id, kind) => (await db.query(`select kind, user_id, needs_action, resolved_at, payload
+          from public.notifications where source_id = $1 and kind = $2 order by created_at`, [id, kind])).rows;
+    const near = (x, want, what) => {
+        if (Math.abs(x - want) > 0.01) throw new Error(`${what}: ${x}, expected about ${want}`);
+    };
+    const resolved = async (id) => {
+        await setStatus(BINTANG, id, "in_progress");
+        return setStatus(BINTANG, id, "resolved", "Replaced the charger");
+    };
+
+    await step("tickets: confirming a fix closes it and keeps the fix, and history still credits it", async () => {
+        await reset();
+        const t = await raise(NESSY);
+        const r = await resolved(t.id);
+        const c = await setStatus(NESSY, t.id, "closed");
+        if (c.status !== "closed" || !c.closed_at) throw new Error("not closed");
+        if (c.resolution !== "Replaced the charger" || c.resolved_at !== r.resolved_at || c.resolved_by !== "Bintang Test")
+            throw new Error(JSON.stringify(c));
+        if (c.events.at(-1).body !== "Confirmed fixed") throw new Error(c.events.at(-1).body);
+        const h = await j(PETER, `public.tickets_history()`);
+        if (h.resolvers[0]?.name !== "Bintang Test" || h.resolvers[0].resolved !== 1) throw new Error("resolvers");
+        const hw = cats(h).hardware;
+        if (`${hw.resolved},${hw.closed}` !== "1,0") throw new Error(JSON.stringify(hw));
+    });
+
+    await step("tickets: the migration re-runs, restores a lost fix, and gives waiting tickets a fresh 5 days", async () => {
+        await reset();
+        const { readFileSync } = await import("node:fs");
+        const { join } = await import("node:path");
+        // Closed the old way: the resolution was cleared on closing.
+        const lost = await raise(NESSY);
+        await resolved(lost.id);
+        await setStatus(BINTANG, lost.id, "closed");
+        await db.query(`update public.support_tickets set resolution = null, resolved_at = null, closed_at = null
+                         where id = $1`, [lost.id]);
+        // Closed without a fix: stays unfixed.
+        const dup = await raise(NESSY);
+        await setStatus(BINTANG, dup.id, "closed", "Duplicate");
+        // Waiting since long before the change.
+        const old = await raise(NESSY);
+        await setStatus(BINTANG, old.id, "waiting", "Which site?");
+        await db.query(`update public.support_tickets set auto_close_at = null where id = $1`, [old.id]);
+
+        await db.exec(readFileSync(join(import.meta.dirname, "..", "..", "migrations",
+                                        "20261014000100_ticket_reporter_loop.sql"), "utf8"));
+
+        const l = await row(lost.id);
+        if (l.resolution !== "Replaced the charger" || !l.resolved_at || !l.closed_at) throw new Error(JSON.stringify(l));
+        const d = await row(dup.id);
+        if (d.resolution !== null || d.resolved_at !== null) throw new Error("duplicate gained a fix");
+        near(await daysLeft(old.id), 5, "fresh deadline");
+        const ran = await run();
+        if (ran.closed !== 0) throw new Error("closed on deploy");
+    });
+
+    await step("tickets: a reporter's reply hands a waiting ticket back to IT", async () => {
+        await reset();
+        const t = await raise(NESSY);
+        await setStatus(BINTANG, t.id, "waiting", "Can you send the error message?");
+        const it = await comment(BINTANG, t.id, "Any news?");
+        if (it.status !== "waiting") throw new Error("IT reply moved it");
+        const r = await comment(NESSY, t.id, "Here is the error message");
+        const last2 = r.events.slice(-2).map((e) => `${e.kind}:${e.body}`);
+        if (r.status !== "in_progress" || r.auto_close_at !== null) throw new Error(JSON.stringify(r));
+        if (last2.join("|") !== "commented:Here is the error message|status:Reply received") throw new Error(last2.join("|"));
+        const before = (await row(t.id)).updated_at;
+        await comment(NESSY, t.id, "And a screenshot");
+        const after = await row(t.id);
+        if (after.status !== "in_progress" || !(after.updated_at > before)) throw new Error("reply on in progress");
+    });
+
+    await step("tickets: still broken reopens a resolved ticket, with a reason, and only for its reporter", async () => {
+        await reset();
+        const t = await raise(NESSY);
+        await resolved(t.id);
+        await fails(() => reopen(NESSY, t.id, "  "), "PT422", /^reason:/);
+        await fails(() => reopen(PETER, t.id, "Me too"), "PT404");
+        await fails(() => setStatus(NESSY, t.id, "open"), "PT403");
+        const o = await reopen(NESSY, t.id, "VPN dropped again this morning");
+        if (o.status !== "open" || o.resolution !== null || o.resolved_at !== null || o.auto_close_at !== null)
+            throw new Error(JSON.stringify(o));
+        const e = o.events.at(-1);
+        if (e.kind !== "reopened" || e.body !== "VPN dropped again this morning" || e.from_status !== "resolved")
+            throw new Error(JSON.stringify(e));
+        await fails(() => reopen(NESSY, t.id, "Again"), "PT409", /still open/);
+    });
+
+    await step("tickets: waiting and resolved tickets close themselves after 5 quiet days", async () => {
+        await reset();
+        const w = await raise(NESSY, "Printer offline");
+        await setStatus(BINTANG, w.id, "waiting", "Which floor?");
+        near(await daysLeft(w.id), 5, "set on entering waiting");
+        const s = await raise(NESSY);
+        await resolved(s.id);
+        near(await daysLeft(s.id), 5, "set on resolving");
+        const p = await raise(NESSY, "Slow laptop");
+        await setStatus(BINTANG, p.id, "in_progress");
+        if ((await row(p.id)).auto_close_at !== null) throw new Error("in progress has a deadline");
+
+        // An internal note is no update; a public reply restarts the 5 days.
+        await db.query(`update public.support_tickets set auto_close_at = now() + interval '2 days' where id = $1`, [s.id]);
+        await comment(BINTANG, s.id, "Check the cable next time", true);
+        near(await daysLeft(s.id), 2, "internal note");
+        await comment(NESSY, s.id, "Seems fine for now");
+        near(await daysLeft(s.id), 5, "public reply");
+        const back = await row(s.id);
+        if (back.status !== "resolved") throw new Error("reply on resolved changed status");
+
+        // The day before: one reminder, never two.
+        await db.query(`update public.support_tickets set auto_close_at = now() + interval '12 hours'
+                         where id in ($1, $2)`, [w.id, s.id]);
+        await db.query(`update public.support_tickets set updated_at = now() - interval '30 days' where id = $1`, [p.id]);
+        let ran = await run();
+        if (ran.reminded !== 2 || ran.closed !== 0) throw new Error(JSON.stringify(ran));
+        ran = await run();
+        if (ran.reminded !== 0) throw new Error("reminded twice");
+
+        await db.query(`update public.support_tickets set auto_close_at = now() - interval '1 minute'
+                         where id in ($1, $2)`, [w.id, s.id]);
+        ran = await run();
+        if (ran.closed !== 2) throw new Error(JSON.stringify(ran));
+        const wc = await j(BINTANG, `public.tickets_get($1::uuid)`, [w.id]);
+        const we = wc.events.at(-1);
+        if (wc.status !== "closed" || wc.resolved_at !== null || !wc.closed_at) throw new Error(JSON.stringify(wc));
+        if (we.actor_name !== "Automatic" || we.body !== "Closed automatically: no reply before the deadline.")
+            throw new Error(JSON.stringify(we));
+        if (wc.last_public_actor !== "system") throw new Error(wc.last_public_actor);
+        const sc = await j(BINTANG, `public.tickets_get($1::uuid)`, [s.id]);
+        if (sc.status !== "closed" || sc.resolution !== "Replaced the charger" || !sc.resolved_at)
+            throw new Error(JSON.stringify(sc));
+        if ((await row(p.id)).status !== "in_progress") throw new Error("in progress was closed");
+    });
+
+    await step("tickets: either side extends the deadline, later and within 30 days", async () => {
+        await reset();
+        const t = await raise(NESSY);
+        await resolved(t.id);
+        const x = await extend(NESSY, t.id, 10, "On site until the 20th");
+        near(await daysLeft(t.id), 10, "extended");
+        const e = x.events.at(-1);
+        if (e.kind !== "extended" || !/^Auto-close moved to \d+ \w+ \d{4}: On site until the 20th$/.test(e.body))
+            throw new Error(e.body);
+        await fails(() => extend(NESSY, t.id, 45), "PT422", /30 days/);
+        await fails(() => extend(BINTANG, t.id, 3), "PT422", /later than the current deadline/);
+        await extend(BINTANG, t.id, 12);
+        await fails(() => extend(PETER, t.id, 14), "PT404");
+        const p = await raise(NESSY);
+        await setStatus(BINTANG, p.id, "in_progress");
+        await fails(() => extend(NESSY, p.id, 7), "PT409", /waiting or resolved/);
+    });
+
+    await step("tickets: a closed ticket reopens for 14 days for its reporter, any time for IT", async () => {
+        await reset();
+        const t = await raise(NESSY);
+        await setStatus(BINTANG, t.id, "closed", "No reply");
+        await db.query(`update public.support_tickets set closed_at = now() - interval '6 days' where id = $1`, [t.id]);
+        const o = await reopen(NESSY, t.id, "It came back");
+        if (o.status !== "open" || o.closed_at !== null) throw new Error(JSON.stringify(o));
+        await setStatus(BINTANG, t.id, "closed", "No reply");
+        await db.query(`update public.support_tickets set closed_at = now() - interval '20 days' where id = $1`, [t.id]);
+        await fails(() => reopen(NESSY, t.id, "Again"), "PT409", /more than 14 days ago\. Raise it again instead\./);
+        const it = await reopen(BINTANG, t.id, "Found the cause");
+        if (it.status !== "open") throw new Error("IT reopen");
+    });
+
+    await step("tickets: each side hears about the other's moves, and items settle per side", async () => {
+        await reset();
+        const t = await raise(NESSY);
+        const raised = await notes(t.id, "ticket_raised");
+        const mine = raised.find((n) => n.user_id === BINTANG);
+        if (!mine || !mine.needs_action) throw new Error("IT not told");
+
+        await comment(BINTANG, t.id, "Restarting the router remotely", true);
+        await setStatus(BINTANG, t.id, "in_progress");
+        const quiet = (await db.query(`select count(*)::int n from public.notifications
+            where source_id = $1 and user_id = $2`, [t.id, NESSY])).rows[0].n;
+        if (quiet !== 0) throw new Error("internal note or in progress notified the reporter");
+
+        await comment(BINTANG, t.id, "Try again now?");
+        const replied = await notes(t.id, "ticket_replied");
+        if (replied.length !== 1 || replied[0].user_id !== NESSY || replied[0].needs_action) throw new Error("replied");
+
+        await setStatus(BINTANG, t.id, "waiting", "Which site are you at?");
+        const [w] = await notes(t.id, "ticket_waiting");
+        if (w.user_id !== NESSY || !w.needs_action || w.payload.note?.text !== "Which site are you at?")
+            throw new Error(JSON.stringify(w));
+
+        await comment(NESSY, t.id, "Site office");
+        if ((await notes(t.id, "ticket_waiting"))[0].resolved_at === null) throw new Error("reporter's item open");
+        if ((await notes(t.id, "ticket_raised")).find((n) => n.user_id === BINTANG).resolved_at !== null)
+            throw new Error("IT's item settled by the reporter's reply");
+        const back = await notes(t.id, "ticket_reporter_replied");
+        if (!back.some((n) => n.user_id === BINTANG)) throw new Error("IT not told of the reply");
+        if (back.some((n) => n.user_id === NESSY)) throw new Error("reporter told of their own reply");
+
+        await setStatus(BINTANG, t.id, "resolved", "Replaced the charger");
+        const [r] = await notes(t.id, "ticket_resolved");
+        if (r.needs_action || r.payload.tone !== "success" || r.payload.note?.text !== "Replaced the charger")
+            throw new Error(JSON.stringify(r));
+        if ((await notes(t.id, "ticket_raised")).find((n) => n.user_id === BINTANG).resolved_at === null)
+            throw new Error("IT's item open after resolving");
+
+        await db.query(`update public.support_tickets set auto_close_at = now() + interval '6 hours' where id = $1`, [t.id]);
+        await run();
+        const [soon] = await notes(t.id, "ticket_closing_soon");
+        if (!soon || soon.user_id !== NESSY || !soon.needs_action) throw new Error("no reminder");
+        await extend(NESSY, t.id, 5);
+        if ((await notes(t.id, "ticket_closing_soon"))[0].resolved_at === null) throw new Error("reminder not settled");
+
+        await reopen(NESSY, t.id, "Still broken");
+        const re = await notes(t.id, "ticket_reopened");
+        if (!re.some((n) => n.user_id === BINTANG && n.needs_action)) throw new Error("reopen not sent to IT");
+
+        await setStatus(NESSY, t.id, "closed", "Sorted it myself");
+        if (!(await notes(t.id, "ticket_closed_by_reporter")).some((n) => n.user_id === BINTANG))
+            throw new Error("close not sent to IT");
+        if ((await notes(t.id, "ticket_reopened")).some((n) => n.resolved_at === null)) throw new Error("reopen item open");
+    });
+
+    await step("tickets: IT raises a ticket for someone, saying how it arrived", async () => {
+        await reset();
+        const t = await raiseFor(BINTANG, E_NESSY, "whatsapp");
+        if (t.reporter_id !== E_NESSY || t.channel !== "whatsapp") throw new Error(JSON.stringify(t));
+        const e = t.events[0];
+        if (e.actor_name !== "Bintang Test" || e.body !== "Logged for Nessy Test from WhatsApp: VPN keeps dropping")
+            throw new Error(JSON.stringify(e));
+        const told = await notes(t.id, "ticket_logged_for_you");
+        if (told.length !== 1 || told[0].user_id !== NESSY) throw new Error("reporter not told");
+        if ((await notes(t.id, "ticket_raised")).some((n) => n.user_id === BINTANG || n.user_id === NESSY))
+            throw new Error("raiser or reporter got ticket_raised");
+        const seen = await j(NESSY, `public.tickets_list(false, false)`);
+        if (seen.items[0]?.id !== t.id) throw new Error("reporter cannot see it");
+
+        await fails(() => raiseFor(NESSY, E_LINTANG, "whatsapp"), "PT403", /Only IT support/);
+        await fails(() => raiseFor(BINTANG, E_NESSY, "portal"), "PT422", /^channel:/);
+        await fails(() => raiseFor(BINTANG, E_NESSY, null), "PT422", /^channel:/);
+        await fails(() => raiseFor(NESSY, null, "phone"), "PT422", /^channel:/);
+        const own = await raise(NESSY);
+        if (own.channel !== "portal") throw new Error("own ticket not portal");
+    });
+
+    await step("tickets: raise it again links back; IT links and unlinks; colleagues see only the reference", async () => {
+        await reset();
+        const old = await raise(NESSY, "VPN disconnects", "connection");
+        await resolved(old.id);
+        await setStatus(NESSY, old.id, "closed");
+        const again = await j(NESSY, `public.tickets_raise('VPN disconnects again', 'Again', 'connection',
+            'normal', null, null, null, $1::uuid)`, [old.id]);
+        if (again.related?.reference !== old.reference || again.related.resolution !== "Replaced the charger")
+            throw new Error(JSON.stringify(again.related));
+        const o = await j(NESSY, `public.tickets_get($1::uuid)`, [old.id]);
+        if (o.recurrences.length !== 1 || o.recurrences[0].id !== again.id) throw new Error(JSON.stringify(o.recurrences));
+
+        const lintangs = await raise(LINTANG, "Monitor flickers");
+        await fails(() => j(NESSY, `public.tickets_raise('Mine flickers too', 'Same', 'hardware',
+            'normal', null, null, null, $1::uuid)`, [lintangs.id]), "PT403", /only link a ticket you raised/);
+
+        const fresh = await raise(NESSY, "Monitor flickers");
+        await fails(() => link(NESSY, fresh.id, lintangs.id), "PT403");
+        await fails(() => link(BINTANG, lintangs.id, fresh.id), "PT422", /raised before this one/);
+        await fails(() => link(BINTANG, fresh.id, fresh.id), "PT422", /raised before this one/);
+        const l = await link(BINTANG, fresh.id, lintangs.id);
+        if (l.events.at(-1).body !== `Comes back to ${lintangs.reference}`) throw new Error(l.events.at(-1).body);
+        const seen = await j(NESSY, `public.tickets_get($1::uuid)`, [fresh.id]);
+        const r = seen.related;
+        if (r.reference !== lintangs.reference || r.status !== "open" || r.subject !== null || r.id !== null)
+            throw new Error(JSON.stringify(r));
+        await fails(() => link(BINTANG, fresh.id, lintangs.id), "PT422", /Nothing to change/);
+        const u = await link(BINTANG, fresh.id, null);
+        if (u.related !== null || u.events.at(-1).body !== `No longer linked to ${lintangs.reference}`)
+            throw new Error(JSON.stringify(u.related));
+    });
+
+    await step("tickets: IT changes priority and category; the reference stays", async () => {
+        await reset();
+        const t = await raise(NESSY, "No internet", "connection");
+        const x = await triage(BINTANG, t.id, "high", "hardware");
+        if (x.reference !== t.reference || x.category !== "hardware" || x.priority !== "high") throw new Error(JSON.stringify(x));
+        if (x.events.at(-1).body !== "Priority: Normal → High · Category: Connectivity → Hardware")
+            throw new Error(x.events.at(-1).body);
+        const y = await triage(BINTANG, t.id, "urgent", null);
+        if (y.events.at(-1).body !== "Priority: High → Urgent") throw new Error(y.events.at(-1).body);
+        await fails(() => triage(BINTANG, t.id, "urgent", "hardware"), "PT422", /Nothing to change/);
+        await fails(() => triage(NESSY, t.id, "low", null), "PT403");
+    });
+
+    await step("tickets: who spoke last ignores internal notes; history counts channels and recurrences", async () => {
+        await reset();
+        const t = await raise(NESSY, "No internet", "connection");
+        let g = await j(BINTANG, `public.tickets_get($1::uuid)`, [t.id]);
+        if (g.last_public_actor !== "reporter" || g.last_public_kind !== "raised") throw new Error("raised");
+        await comment(BINTANG, t.id, "Looking", false);
+        await comment(NESSY, t.id, "Thanks");
+        await comment(BINTANG, t.id, "Router is old", true);
+        const list = await j(BINTANG, `public.tickets_list(false, false)`);
+        g = list.items.find((x) => x.id === t.id);
+        if (g.last_public_actor !== "reporter" || g.last_public_kind !== "commented" || !g.last_public_at)
+            throw new Error(JSON.stringify(g));
+
+        await raiseFor(BINTANG, E_NESSY, "whatsapp");
+        await raiseFor(BINTANG, E_NESSY, "phone");
+        await j(NESSY, `public.tickets_raise('Again', 'Again', 'connection', 'normal', null, null, null, $1::uuid)`, [t.id]);
+        const h = await j(PETER, `public.tickets_history()`);
+        if (h.channels.length !== 6) throw new Error(`${h.channels.length} months`);
+        const now = h.channels.at(-1);
+        if (`${now.total},${now.portal},${now.whatsapp},${now.phone}` !== "4,2,1,1") throw new Error(JSON.stringify(now));
+        if (cats(h).connection.recurrences !== 1) throw new Error(JSON.stringify(cats(h).connection));
+    });
+
+    await step("tickets: the hourly run is not for clients", async () => {
+        await fails(() => tx(BINTANG, `select public.tickets_auto_close_run()`), null, /permission denied/);
+        await fails(() => tx(BINTANG, `select public.notifications_resolve_kinds('support_tickets', null, '{}', null)`),
+            null, /permission denied/);
     });
 
     await reset();

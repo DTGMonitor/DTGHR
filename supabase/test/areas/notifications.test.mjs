@@ -236,15 +236,18 @@ export default async ({ db, step, tx, people }) => {
         never(await outbox(t.id), MAIL.ITGUY);
     });
 
-    await step("notifications: working a ticket enqueues nothing and keeps it open; closing settles it", async () => {
+    await step("notifications: working a ticket tells the reporter only of public replies, and keeps it open; resolving settles it", async () => {
         await clear();
         const t = await call(U.REPORTER, "tickets_raise", ["Printer", "Jammed", "hardware"]);
         const before = (await open(t.id, "ticket_raised")).length;
         if (!before) throw new Error("no in-app item");
         await db.exec(`delete from public.email_outbox`);
         await call(U.ITGUY, "tickets_set_status", [t.id, "in_progress", null], ["uuid", "text", "text"]);
+        await call(U.ITGUY, "tickets_comment", [t.id, "Checking the toner", true], ["uuid", "text", "boolean"]);
+        eq(await count(), 0, "in progress and internal notes are not sent");
         await call(U.ITGUY, "tickets_comment", [t.id, "On it", false], ["uuid", "text", "boolean"]);
-        eq(await count(), 0, "outbox rows");
+        await expectSent(t.id, "ticket_replied", [MAIL.REPORTER], "/support");
+        eq(await count(), 1, "outbox rows");
         eq((await open(t.id, "ticket_raised")).length, before, "still IT's to do while in progress");
         await call(U.ITGUY, "tickets_set_status", [t.id, "resolved", "Cleared"], ["uuid", "text", "text"]);
         eq((await open(t.id, "ticket_raised")).length, 0, "settled when resolved");

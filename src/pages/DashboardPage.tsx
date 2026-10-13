@@ -355,6 +355,8 @@ function joined(parts: ReactNode[]): ReactNode {
  */
 const SAID_BY_BAND = [
     "ticket_raised",
+    // A reopened ticket is back in IT's open count.
+    "ticket_reopened",
     "investigation_review",
     "investigation_issued",
     "investigation_revised",

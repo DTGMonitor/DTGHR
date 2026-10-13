@@ -133,6 +133,12 @@ export default function CategoryInsights({ categories }: { categories: CategoryS
                             <th className="px-3 py-2 text-right font-semibold">Open</th>
                             <th className="px-3 py-2 text-right font-semibold">Resolved</th>
                             <th className="px-3 py-2 text-right font-semibold">Closed</th>
+                            <th
+                                className="px-3 py-2 text-right font-semibold"
+                                title="Raised as the return of an earlier ticket"
+                            >
+                                Came back
+                            </th>
                             <th className="px-3 py-2 text-right font-semibold">Avg. to resolve</th>
                             <th className="px-5 py-2 text-right font-semibold">Longest</th>
                         </tr>
@@ -148,6 +154,7 @@ export default function CategoryInsights({ categories }: { categories: CategoryS
                                 <td className="px-3 py-1.5 text-right font-mono">{c.open}</td>
                                 <td className="px-3 py-1.5 text-right font-mono">{c.resolved}</td>
                                 <td className="px-3 py-1.5 text-right font-mono">{c.closed}</td>
+                                <td className="px-3 py-1.5 text-right font-mono">{c.recurrences}</td>
                                 <td className="px-3 py-1.5 text-right font-mono">
                                     {c.average_hours === null ? "—" : duration(c.average_hours)}
                                 </td>
