@@ -1,4 +1,5 @@
 import { useEffect, useRef, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import Icon from "./icons";
 
 /**
@@ -69,7 +70,11 @@ export default function Modal({
 
     const toneStyle = tone ? TONES[tone] : null;
 
-    return (
+    // Rendered on <body>, not where it is declared. A page root animates in
+    // with a transform (.dtg-fade-in), and a transformed ancestor becomes
+    // what `position: fixed` is measured against: the overlay was cut to the
+    // page's height instead of the window's.
+    return createPortal(
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:items-center sm:p-6">
             <div
                 className="fixed inset-0 bg-deep/80 backdrop-blur-sm"
@@ -124,6 +129,7 @@ export default function Modal({
                     </footer>
                 )}
             </div>
-        </div>
+        </div>,
+        document.body,
     );
 }

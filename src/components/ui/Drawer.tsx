@@ -1,4 +1,5 @@
 import { useEffect, useRef, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 /**
  * Right-edge drawer, for forms long enough that a centred dialog would scroll.
@@ -42,7 +43,11 @@ export default function Drawer({
         };
     }, [onClose]);
 
-    return (
+    // Rendered on <body>, not where it is declared. A page root animates in
+    // with a transform (.dtg-fade-in), and a transformed ancestor becomes
+    // what `position: fixed` is measured against: the overlay was cut to the
+    // page's height instead of the window's.
+    return createPortal(
         <div className="fixed inset-0 z-50 flex justify-end">
             <div
                 className="fixed inset-0 bg-deep/80 backdrop-blur-sm"
@@ -83,6 +88,7 @@ export default function Drawer({
                     </footer>
                 )}
             </div>
-        </div>
+        </div>,
+        document.body,
     );
 }
