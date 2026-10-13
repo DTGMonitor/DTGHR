@@ -157,8 +157,8 @@ ship on their own. Groups 6–8 are check-in rounds and leavers.
 
 ## 9. Ship
 
-- [ ] 9.1 Push the migration with migrations temporarily enabled in `config.toml`, after `migration list`. Then merge, so the front end deploys
+- [x] 9.1 Push the migration with migrations temporarily enabled in `config.toml`, after `migration list`. Then merge, so the front end deploys
 - [ ] 9.2 On live, with a test item: register and assign it to a staff account, confirm from that account, link it to a ticket, return it, and retire it. Check the history and the notifications
-- [ ] 9.3 Check that the daily job is scheduled (`cron.job`)
+- [x] 9.3 Check that the daily job is scheduled (`cron.job`)
 - [ ] 9.4 Hand over to IT for the stocktake: register, label and assign every item, sensors included. Tell staff to confirm their handovers
 - [ ] 9.5 Remind IT to start the first check-in round about a month after the stocktake
