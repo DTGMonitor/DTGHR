@@ -377,8 +377,9 @@ export default async ({ db, step, tx, people }) => {
         await setStatus(BINTANG, old.id, "waiting", "Which site?");
         await db.query(`update public.support_tickets set auto_close_at = null where id = $1`, [old.id]);
 
-        await db.exec(readFileSync(join(import.meta.dirname, "..", "..", "migrations",
-                                        "20261014000100_ticket_reporter_loop.sql"), "utf8"));
+        // Both, as live has them: the second redefines what the first does.
+        for (const f of ["20261014000100_ticket_reporter_loop.sql", "20261015000100_ticket_trail_order.sql"])
+            await db.exec(readFileSync(join(import.meta.dirname, "..", "..", "migrations", f), "utf8"));
 
         const l = await row(lost.id);
         if (l.resolution !== "Replaced the charger" || !l.resolved_at || !l.closed_at) throw new Error(JSON.stringify(l));
@@ -641,6 +642,28 @@ export default async ({ db, step, tx, people }) => {
         const now = h.channels.at(-1);
         if (`${now.total},${now.portal},${now.whatsapp},${now.phone}` !== "4,2,1,1") throw new Error(JSON.stringify(now));
         if (cats(h).connection.recurrences !== 1) throw new Error(JSON.stringify(cats(h).connection));
+    });
+
+    await step("tickets: the trail keeps the order events were written in, even within one clock tick", async () => {
+        await reset();
+        const t = await raise(NESSY);
+        // Twenty events sharing one timestamp: ordered by the random id, as
+        // before 20261015000100, they would almost never come back in order.
+        await db.query(`insert into public.ticket_events (ticket_id, actor_name, kind, body, created_at)
+                        select $1, 'Test', 'commented', n::text, timestamp '2030-01-01 00:00:00'
+                          from generate_series(1, 20) n`, [t.id]);
+        const g = await j(BINTANG, `public.tickets_get($1::uuid)`, [t.id]);
+        const bodies = g.events.slice(1).map((e) => e.body).join(",");
+        if (bodies !== Array.from({ length: 20 }, (_, i) => i + 1).join(",")) throw new Error(bodies);
+        if (g.last_public_kind !== "commented" || g.last_public_at !== g.events.at(-1).created_at)
+            throw new Error("last public event");
+
+        // Raise it again: raised, then linked.
+        await resolved(t.id);
+        await setStatus(NESSY, t.id, "closed");
+        const again = await j(NESSY, `public.tickets_raise('Again', 'Again', 'hardware',
+            'normal', null, null, null, $1::uuid)`, [t.id]);
+        if (again.events.map((e) => e.kind).join() !== "raised,linked") throw new Error(again.events.map((e) => e.kind).join());
     });
 
     await step("tickets: the hourly run is not for clients", async () => {
