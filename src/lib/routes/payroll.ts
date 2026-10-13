@@ -96,6 +96,15 @@ route("GET", "/payroll/staff/:employeeId", ({ path, query }) =>
 
 // ── The pay forecast ─────────────────────────────────────────────────────
 
+// ── The pay forecast workbook ────────────────────────────────────────────
+
+route("GET", "/pay-forecast", () => rpc("pay_forecast_get"));
+
+route("PUT", "/pay-forecast", ({ body }) => {
+    const b = object(body);
+    return rpc("pay_forecast_save", { p_inputs: b.inputs ?? null, p_seen: b.seen ?? null });
+});
+
 route("GET", "/compensation", ({ query }) =>
     rpc("compensation_list", { p_year: int(query.year, "year") }),
 );
