@@ -281,6 +281,11 @@ export function computeForecast(m: ForecastInputs): Forecast {
     const gmVar = range().map((i) => variance(at(gm, i), at(aGm, i)));
 
     const pair = (b: Val[], a: Val[]): [Row, Row] => [row(b), row(a)];
+    const fyRatio = (g: Val, rev: Val): Val => {
+        const c = or(isZero(rev), count(rev) === 0);
+        if (typeof c === "object") return c;
+        return c ? "" : div(g, rev);
+    };
     const bRev = pair(revTotal, aRev);
     const bCogs = pair(cogs, aCogs);
     const bGm = pair(gm, aGm);
@@ -310,9 +315,12 @@ export function computeForecast(m: ForecastInputs): Forecast {
             cogs: bCogs,
             costVar: { values: costVar, fy: fyVariance(bCogs[0].fy, bCogs[1].fy) },
             gm: bGm,
-            // The workbook's FY cell for both GM % rows is =SUM(I:T) of the
-            // monthly percentages, not total GM over total revenue. Kept as it is.
-            gmPct: [row(gmPct), row(aGmPct)],
+            // FY GM %: total GM over total revenue,
+            // =IF(OR(U9=0,COUNT(U9)=0),"",U25/U9) and the same for Actual.
+            gmPct: [
+                { values: gmPct, fy: fyRatio(bGm[0].fy, bRev[0].fy) },
+                { values: aGmPct, fy: fyRatio(bGm[1].fy, bRev[1].fy) },
+            ],
             gmVar: { values: gmVar, fy: fyVariance(bGm[0].fy, bGm[1].fy) },
         },
     };
@@ -358,9 +366,6 @@ export function forecastCells(f: Forecast): Record<string, Val> {
         put(B, r, bud);
         put(B, r + 1, act);
     }
-    // The workbook's FY GM % cells (U27, U28) sum the monthly percentages.
-    out[`${B}!U27`] = sum(b.gmPct[0].values.slice(6));
-    out[`${B}!U28`] = sum(b.gmPct[1].values.slice(6));
     put(B, 11, b.revenueVar);
     put(B, 23, b.costVar);
     put(B, 29, b.gmVar);
