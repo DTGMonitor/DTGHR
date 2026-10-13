@@ -21,6 +21,7 @@ import {
     FileSearch,
     FileText,
     History,
+    Laptop,
     LayoutDashboard,
     Newspaper,
     ReceiptText,
@@ -206,6 +207,13 @@ const navItems: NavItem[] = [
         label: "IT support",
         to: "/support",
         Icon: LifeBuoy,
+    },
+    {
+        // Everybody: staff confirm what they hold and answer the check-ins
+        // here. IT, finance and management also get the whole register.
+        label: "Assets",
+        to: "/equipment",
+        Icon: Laptop,
     },
     {
         // The platform administrator only -- the director -- to match what

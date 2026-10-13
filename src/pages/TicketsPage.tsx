@@ -6,6 +6,7 @@ import Spinner from "@/components/ui/Spinner";
 import { useDialog } from "@/components/ui/Dialog";
 import { revealElement, useOpenParam } from "@/lib/useOpenParam";
 import { useAuth } from "@/contexts/AuthContext";
+import AssetLink from "@/components/tickets/AssetLink";
 import AutoClose from "@/components/tickets/AutoClose";
 import CategoryInsights, { CATEGORY_NAMES, duration } from "@/components/tickets/CategoryInsights";
 import ChannelShare from "@/components/tickets/ChannelShare";
@@ -955,6 +956,12 @@ export default function TicketsPage() {
                                             )}
                                         </div>
                                     )}
+
+                                    <AssetLink
+                                        ticket={openTicket}
+                                        onChange={(t) => void show({ data: t })}
+                                        onError={(e) => complain(e, "Could not link that asset.")}
+                                    />
 
                                     {(openTicket.can_work || isMine(openTicket)) && (
                                         <AutoClose
