@@ -77,6 +77,8 @@ export interface Ticket {
     created_at: string;
     updated_at: string;
     can_work: boolean;
+    /** The asset it concerns, linked by IT (20261016000100). */
+    asset: { id: string; tag: string; name: string } | null;
     related: RelatedTicket | null;
     recurrences: Recurrence[];
     /** Who wrote the latest event that is not an internal note. */
@@ -185,5 +187,9 @@ export const ticketService = {
     /** The earlier ticket this one comes back to; null unlinks. */
     link(id: string, relatedId: string | null) {
         return api.post<Ticket>(`/tickets/${id}/link`, { related_id: relatedId });
+    },
+    /** The asset this ticket concerns; null unlinks. IT only. */
+    linkAsset(id: string, assetId: string | null) {
+        return api.post<Ticket>(`/tickets/${id}/asset`, { asset_id: assetId });
     },
 };
