@@ -131,9 +131,12 @@ export default function SchedulesPage() {
                 ]);
                 if (cancelled) return;
                 setEmployees(empRes.data);
+                // A nicety for administrators: never the reason the roster fails to load.
                 if (isAdmin) {
-                    const hid = await scheduleService.hiddenEmployees();
-                    if (!cancelled) setHiddenRows(hid.data);
+                    scheduleService
+                        .hiddenEmployees()
+                        .then((hid) => !cancelled && setHiddenRows(hid.data))
+                        .catch(() => undefined);
                 }
 
                 const newest = items[0];

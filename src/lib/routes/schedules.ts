@@ -145,8 +145,13 @@ route("POST", "/schedules", async ({ body: b }) => {
         p_end_date: opt(r.end_date),
     });
     // Office-day staff follow the office pattern from the start: their rows
-    // are filled as the period is created.
-    await rpc("schedules_fill_office_days_now", { p_employee_id: null, p_schedule_id: created.id });
+    // are filled as the period is created. The period stands even if this
+    // does not; "Fill office days" on the roster does the same.
+    try {
+        await rpc("schedules_fill_office_days_now", { p_employee_id: null, p_schedule_id: created.id });
+    } catch {
+        /* filled later from the roster */
+    }
     return created;
 });
 
