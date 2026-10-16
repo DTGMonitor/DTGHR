@@ -36,13 +36,30 @@ route("GET", "/employees", ({ query }) =>
     }),
 );
 
-route("POST", "/employees", ({ body }) => rpc("people_create_employee", { p_payload: body ?? {} }));
+/** After an employee is saved, fill any empty office-day rows of theirs. */
+async function fillOfficeDays<T>(saved: T, id: string | undefined): Promise<T> {
+    if (id) {
+        try {
+            await rpc("schedules_fill_office_days_now", { p_employee_id: id, p_schedule_id: null });
+        } catch {
+            // Not everyone who edits a record may write the roster; the
+            // record is saved regardless, and the roster screen can fill later.
+        }
+    }
+    return saved;
+}
+
+route("POST", "/employees", async ({ body }) => {
+    const saved = await rpc<{ id?: string }>("people_create_employee", { p_payload: body ?? {} });
+    return fillOfficeDays(saved, saved?.id);
+});
 
 route("GET", "/employees/:id", ({ path }) => rpc("people_get_employee", { p_employee_id: path.id }));
 
-route("PUT", "/employees/:id", ({ path, body }) =>
-    rpc("people_update_employee", { p_employee_id: path.id, p_payload: body ?? {} }),
-);
+route("PUT", "/employees/:id", async ({ path, body }) => {
+    const saved = await rpc("people_update_employee", { p_employee_id: path.id, p_payload: body ?? {} });
+    return fillOfficeDays(saved, path.id);
+});
 
 route("DELETE", "/employees/:id", async ({ path }) => {
     await rpc("people_deactivate_employee", { p_employee_id: path.id });

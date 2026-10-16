@@ -35,6 +35,8 @@ interface Props {
     onCellClick: (employeeId: string, iso: string, rect: DOMRect) => void;
     /** Cell currently showing the editor, as `employeeId|iso`. */
     activeCell: string | null;
+    /** Administrators: take a row off the roster. */
+    onHide?: (employeeId: string) => void;
 }
 
 /*
@@ -87,6 +89,7 @@ export default function RosterGrid({
     isCellEditable,
     onCellClick,
     activeCell,
+    onHide,
 }: Props) {
     const { styleOf, rowOf } = useShiftCodes();
     const monthLabel = useMemo(() => {
@@ -218,7 +221,20 @@ export default function RosterGrid({
                                         } text-paper`}
                                     title={`${employeeName(employee)} — ${employee.position}`}
                                 >
-                                    {employeeName(employee)}
+                                    <span className="group flex items-center justify-between gap-1">
+                                        <span className="truncate">{employeeName(employee)}</span>
+                                        {onHide && (
+                                            <button
+                                                type="button"
+                                                onClick={() => onHide(employee.id)}
+                                                aria-label={`Hide ${employeeName(employee)} from the roster`}
+                                                title="Hide from the roster"
+                                                className="flex-shrink-0 rounded px-1 text-[10px] font-semibold uppercase tracking-wide text-muted opacity-0 transition hover:bg-white/10 hover:text-paper focus:opacity-100 group-hover:opacity-100"
+                                            >
+                                                Hide
+                                            </button>
+                                        )}
+                                    </span>
                                 </th>
 
                                 {days.map((d) => {

@@ -93,6 +93,20 @@ export const scheduleService = {
         return api.get("/schedules/employees");
     },
 
+    /** Active staff an administrator has taken off the roster. */
+    hiddenEmployees(): Promise<{ data: { id: string; first_name: string; last_name: string }[] }> {
+        return api.get("/schedules/hidden");
+    },
+
+    setOnRoster(employeeId: string, onRoster: boolean) {
+        return api.put(`/schedules/employees/${employeeId}/on-roster`, { on_roster: onRoster });
+    },
+
+    /** Fill the empty office-day rows of a period. Returns how many days were written. */
+    fillOfficeDays(scheduleId: string): Promise<{ data: { filled: number } }> {
+        return api.post("/schedules/office-days", { schedule_id: scheduleId });
+    },
+
     /** Every roster code, in legend order. Read through useShiftCodes(). */
     shiftCodes(): Promise<{ data: ShiftCodeRow[] }> {
         return api.get("/schedules/shift-codes");

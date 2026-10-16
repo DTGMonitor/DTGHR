@@ -32,6 +32,22 @@ const ids = (v: unknown): string[] | null => (Array.isArray(v) ? v.map(String) :
 
 route("GET", "/schedules/employees", () => rpc("schedules_list_employees"));
 
+// Rows an administrator has taken off the roster, and putting them back.
+route("GET", "/schedules/hidden", () => rpc("schedules_list_hidden"));
+
+route("PUT", "/schedules/employees/:id/on-roster", ({ path, body: b }) =>
+    rpc("schedules_set_on_roster", { p_employee_id: path.id, p_on: bool(body(b).on_roster, true) }),
+);
+
+// Fill the empty office-day rows of a period (or of every period).
+route("POST", "/schedules/office-days", ({ body: b }) => {
+    const r = body(b);
+    return rpc("schedules_fill_office_days_now", {
+        p_employee_id: opt(r.employee_id),
+        p_schedule_id: opt(r.schedule_id),
+    });
+});
+
 // The roster's codes, inactive ones included: old cells still show them.
 route("GET", "/schedules/shift-codes", async () =>
     unwrap(
@@ -121,13 +137,17 @@ route("GET", "/schedules", ({ query }) =>
     }),
 );
 
-route("POST", "/schedules", ({ body: b }) => {
+route("POST", "/schedules", async ({ body: b }) => {
     const r = body(b);
-    return rpc("create_schedule", {
+    const created = await rpc<{ id: string }>("create_schedule", {
         p_name: opt(r.name),
         p_start_date: opt(r.start_date),
         p_end_date: opt(r.end_date),
     });
+    // Office-day staff follow the office pattern from the start: their rows
+    // are filled as the period is created.
+    await rpc("schedules_fill_office_days_now", { p_employee_id: null, p_schedule_id: created.id });
+    return created;
 });
 
 route("GET", "/schedules/:id", ({ path }) =>

@@ -54,6 +54,8 @@ export default function SchedulesPage() {
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [detail, setDetail] = useState<WorkScheduleDetail | null>(null);
     const [employees, setEmployees] = useState<ScheduleEmployee[]>([]);
+    /* Administrators: who has been taken off the roster. */
+    const [hiddenRows, setHiddenRows] = useState<{ id: string; first_name: string; last_name: string }[]>([]);
     const [inbox, setInbox] = useState<ShiftChangeRequest[]>([]);
 
     const [loading, setLoading] = useState(true);
@@ -129,6 +131,10 @@ export default function SchedulesPage() {
                 ]);
                 if (cancelled) return;
                 setEmployees(empRes.data);
+                if (isAdmin) {
+                    const hid = await scheduleService.hiddenEmployees();
+                    if (!cancelled) setHiddenRows(hid.data);
+                }
 
                 const newest = items[0];
                 if (!didAutoSelect.current && newest) {
@@ -450,6 +456,49 @@ export default function SchedulesPage() {
         }
     };
 
+    /* A row on or off the roster, then the names and hidden list again. */
+    const setOnRoster = async (employeeId: string, onRoster: boolean) => {
+        setBusy(true);
+        setError("");
+        try {
+            await scheduleService.setOnRoster(employeeId, onRoster);
+            const [emp, hid] = await Promise.all([
+                scheduleService.visibleEmployees(),
+                scheduleService.hiddenEmployees(),
+            ]);
+            setEmployees(emp.data);
+            setHiddenRows(hid.data);
+            if (onRoster && detail) {
+                await scheduleService.fillOfficeDays(detail.id);
+                await loadDetail(detail.id);
+            }
+        } catch (err) {
+            setError(errorMessage(err, "Could not change that row."));
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    /* Office-day staff whose row in this period is empty get the office pattern. */
+    const fillOfficeDays = async () => {
+        if (!detail) return;
+        setBusy(true);
+        setError("");
+        try {
+            const res = await scheduleService.fillOfficeDays(detail.id);
+            await loadDetail(detail.id);
+            setNotice(
+                res.data.filled > 0
+                    ? `Filled ${res.data.filled} office day${res.data.filled === 1 ? "" : "s"}.`
+                    : "Every office-day row in this period already has days.",
+            );
+        } catch (err) {
+            setError(errorMessage(err, "Could not fill the office days."));
+        } finally {
+            setBusy(false);
+        }
+    };
+
     const createSchedule = async () => {
         const { name, start, end } = newSchedule;
         if (!name || !start || !end) return;
@@ -668,6 +717,14 @@ export default function SchedulesPage() {
                         {isAdmin && detail && (
                             <div className="flex items-center gap-2">
                                 <button
+                                    onClick={() => void fillOfficeDays()}
+                                    disabled={busy}
+                                    title="Office-day staff with an empty row in this period get D on weekdays, B at weekends and PH on national holidays. Back-up engineers and rows already drawn are left alone."
+                                    className="rounded-lg border border-white/10 px-3 py-1.5 text-xs font-medium text-paper-soft transition hover:bg-white/5 disabled:opacity-50"
+                                >
+                                    Fill office days
+                                </button>
+                                <button
                                     onClick={togglePublish}
                                     disabled={busy}
                                     className="rounded-lg border border-white/10 px-3 py-1.5 text-xs font-medium text-paper-soft transition hover:bg-white/5 disabled:opacity-50"
@@ -710,6 +767,7 @@ export default function SchedulesPage() {
                                 totals={totals}
                                 isCellEditable={isCellEditable}
                                 activeCell={openCellKey}
+                                onHide={isAdmin ? (id) => void setOnRoster(id, false) : undefined}
                                 onCellClick={(employeeId, iso, rect) => {
                                     if (!isCellEditable(employeeId)) {
                                         setOpenCell(null);
@@ -741,6 +799,29 @@ export default function SchedulesPage() {
                                     {!h.is_national && (
                                         <span className="text-muted"> (cuti bersama)</span>
                                     )}
+                                </span>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Administrators: rows taken off the roster, and the way back. */}
+                    {isAdmin && hiddenRows.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-white/10 px-5 py-3">
+                            <span className="text-xs font-semibold text-paper-soft">Hidden from the roster</span>
+                            {hiddenRows.map((h) => (
+                                <span
+                                    key={h.id}
+                                    className="inline-flex items-center gap-1.5 rounded-full border border-white/10 py-0.5 pl-2.5 pr-1 text-[11px] text-paper-soft"
+                                >
+                                    {h.first_name} {h.last_name}
+                                    <button
+                                        type="button"
+                                        disabled={busy}
+                                        onClick={() => void setOnRoster(h.id, true)}
+                                        className="rounded-full px-1.5 text-[10px] font-semibold uppercase tracking-wide text-teal-200 hover:bg-white/10 disabled:opacity-50"
+                                    >
+                                        Show
+                                    </button>
                                 </span>
                             ))}
                         </div>
