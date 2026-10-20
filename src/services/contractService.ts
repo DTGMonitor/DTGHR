@@ -160,7 +160,17 @@ export interface ContractDraft {
     reminder_days?: number[];
 }
 
+/** A name for the Employee picker: no more of the record than that. */
+export interface ContractPerson {
+    id: string;
+    first_name: string;
+    last_name: string;
+    position: string | null;
+}
+
 export const contractService = {
+    /** Active staff, for whoever manages contracts. */
+    people: () => api.get<ContractPerson[]>("/contracts/employees"),
     list: (kind?: ContractKind) =>
         api.get<ContractList>("/contracts", { params: kind ? { kind } : undefined }),
     create: (body: ContractDraft) => api.post<Contract>("/contracts", body),

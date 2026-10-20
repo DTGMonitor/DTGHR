@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Navigate, useSearchParams } from "react-router-dom";
 
 import { useAuth } from "@/contexts/AuthContext";
-import { employeeService } from "@/services/employeeService";
 import {
     BILLING_CYCLES,
     CURRENCIES,
@@ -18,11 +17,11 @@ import {
     type ComingUpItem,
     type Contract,
     type ContractKind,
+    type ContractPerson,
 } from "@/services/contractService";
 import DocumentViewer from "@/components/contracts/DocumentViewer";
 import PurchaseOrders, { type ViewDocument } from "@/components/contracts/PurchaseOrders";
 import { useDialog } from "@/components/ui/Dialog";
-import type { Employee } from "@/types/employee";
 import Alert from "@/components/ui/Alert";
 import MoneyInput from "@/components/ui/MoneyInput";
 import Spinner from "@/components/ui/Spinner";
@@ -103,7 +102,7 @@ export default function ContractsPage() {
 
     const [rows, setRows] = useState<Contract[]>([]);
     const [canManage, setCanManage] = useState(false);
-    const [people, setPeople] = useState<Employee[]>([]);
+    const [people, setPeople] = useState<ContractPerson[]>([]);
     const [tab, setTab] = useState<ContractKind>("manpower");
     const [loading, setLoading] = useState(true);
     const [busy, setBusy] = useState<string | null>(null);
@@ -143,8 +142,10 @@ export default function ContractsPage() {
             setCanManage(res.data.can_manage);
             setComingUp(upcoming?.data.items ?? []);
             if (res.data.can_manage) {
-                const emps = await employeeService.list({ page: 1, page_size: 100 });
-                setPeople(emps.data.items.filter((e) => e.is_active));
+                // Not the staff directory: that is management's, and Nessy, who
+                // manages contracts, got an empty list from it.
+                const emps = await contractService.people();
+                setPeople(emps.data);
             }
         } catch {
             setError("Could not load contracts.");
@@ -815,7 +816,7 @@ function NewContract({
     onError,
 }: {
     kind: ContractKind;
-    people: Employee[];
+    people: ContractPerson[];
     onCancel: () => void;
     onDone: () => Promise<void>;
     onError: (m: string) => void;

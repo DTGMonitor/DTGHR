@@ -252,4 +252,25 @@ export default async ({ db, step, tx, people }) => {
             where relname in ('contracts','contract_reminders','contract_documents') and relkind = 'r'`);
         if (r.rows.length !== 3 || r.rows.some((x) => !x.relrowsecurity)) throw new Error(JSON.stringify(r.rows));
     });
+
+    await step("contracts: the Employee picker is open to whoever manages contracts", async () => {
+        const names = async (uid) =>
+            (await tx(uid, `select public.contracts_employee_choices() j`)).rows[0].j;
+        // Ordinary staff: refused.
+        const refused = await names(RINA).then(() => null, (e) => e);
+        if (!refused || refused.code !== "PT403") throw new Error("staff read the picker");
+        // With the contracts flag, though not the staff directory: the names.
+        await db.exec(`update public.employees set can_manage_contracts = true where user_id = '${RINA}'`);
+        try {
+            const list = await names(RINA);
+            if (!Array.isArray(list) || list.length === 0) throw new Error("empty picker");
+            const keys = Object.keys(list[0]).sort().join(",");
+            if (keys !== "first_name,id,is_active,last_name,position") throw new Error(`fields ${keys}`);
+            const dir = await tx(RINA, `select public.people_list_employees(1, 20, null, null, false) j`).then(() => null, (e) => e);
+            if (!dir) throw new Error("the test assumes no directory access");
+        } finally {
+            await db.exec(`update public.employees set can_manage_contracts = false where user_id = '${RINA}'`);
+        }
+        if (!(await names(DIRECTOR)).length) throw new Error("the director's picker is empty");
+    });
 };

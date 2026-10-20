@@ -38,6 +38,10 @@ route("GET", "/contracts", ({ query }) =>
     rpc("contracts_list", { p_kind: query.kind ?? null }),
 );
 
+// Active staff for the Employee picker, for whoever manages contracts --
+// not the staff directory, which is management's.
+route("GET", "/contracts/employees", () => rpc("contracts_employee_choices"));
+
 // Renewals and PO ends in the next 90 / 60 days, soonest first.
 route("GET", "/contracts/coming-up", () => rpc("contracts_coming_up"));
 
