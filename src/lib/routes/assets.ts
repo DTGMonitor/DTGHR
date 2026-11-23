@@ -23,6 +23,12 @@ route("GET", "/assets/categories", () => rpc("assets_categories"));
 route("POST", "/assets/categories", ({ body }) => rpc("assets_category_save", { p: asBody(body) }));
 route("GET", "/assets/leavers", () => rpc("assets_leavers"));
 
+// Bought on a purchase and not yet registered (20261017000100). IT only.
+route("GET", "/assets/awaiting", () => rpc("assets_awaiting_registration"));
+route("POST", "/assets/from-line/:lineId", ({ path, body }) =>
+    rpc("assets_register_from_line", { p_line_id: path.lineId, p: asBody(body) }),
+);
+
 route("GET", "/assets/rounds", () => rpc("assets_rounds"));
 route("POST", "/assets/rounds", ({ body }) => {
     const b = asBody(body);

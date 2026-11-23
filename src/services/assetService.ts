@@ -81,6 +81,8 @@ export interface Asset {
     can_manage?: boolean;
     moves?: AssetMove[];
     tickets?: { id: string; reference: string; subject: string; status: string; created_at: string }[];
+    /** The purchase it was bought on, if any. */
+    purchase?: { id: string; reference: string; order_number: string | null; line_id: string } | null;
 }
 
 export interface AssetList {
@@ -181,6 +183,10 @@ export const assetService = {
     },
     register(data: AssetInput & { assign_to?: string; note?: string }) {
         return api.post<Asset>("/assets", data);
+    },
+    /** Register one item bought on a purchase line; the asset keeps the line. */
+    registerFromLine(lineId: string, data: AssetInput & { assign_to?: string; note?: string }) {
+        return api.post<Asset>(`/assets/from-line/${lineId}`, data);
     },
     update(id: string, data: Partial<AssetInput>) {
         return api.patch<Asset>(`/assets/${id}`, data);

@@ -22,6 +22,7 @@ import {
     FileText,
     History,
     Laptop,
+    ShoppingCart,
     LayoutDashboard,
     Newspaper,
     ReceiptText,
@@ -214,6 +215,14 @@ const navItems: NavItem[] = [
         label: "Assets",
         to: "/equipment",
         Icon: Laptop,
+    },
+    {
+        // Everybody: anybody may need to buy something, and anybody may be
+        // named to check a delivery in. Finance, the director and Peter also
+        // get the register, the vendors and the approvals there.
+        label: "Purchasing",
+        to: "/purchasing",
+        Icon: ShoppingCart,
     },
     {
         // The platform administrator only -- the director -- to match what

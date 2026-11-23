@@ -242,6 +242,15 @@ export default function AssetDrawer({
                         </div>
                     ))}
                 </dl>
+                {full && asset.purchase && (
+                    <p className="text-sm text-paper-soft">
+                        Bought on{" "}
+                        <Link to={`/purchasing?open=${asset.purchase.id}`} className="dtg-link font-mono text-xs">
+                            {asset.purchase.reference}
+                            {asset.purchase.order_number && ` / ${asset.purchase.order_number}`}
+                        </Link>
+                    </p>
+                )}
                 {full && asset.notes && (
                     <p className="whitespace-pre-wrap text-sm leading-relaxed text-paper-soft">{asset.notes}</p>
                 )}

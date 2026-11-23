@@ -17,6 +17,7 @@ import PayslipsPage from "@/pages/PayslipsPage";
 import FinanceRequestsPage from "@/pages/FinanceRequestsPage";
 import TicketsPage from "@/pages/TicketsPage";
 import AssetsPage from "@/pages/AssetsPage";
+import PurchasingPage from "@/pages/PurchasingPage";
 import ContractsPage from "@/pages/ContractsPage";
 import MyScorecardPage from "@/pages/MyScorecardPage";
 import CompensationPage from "@/pages/CompensationPage";
@@ -66,6 +67,7 @@ export default function App() {
                             <Route path="/finance-requests" element={<FinanceRequestsPage />} />
                             <Route path="/support" element={<TicketsPage />} />
                             <Route path="/equipment" element={<AssetsPage />} />
+                            <Route path="/purchasing" element={<PurchasingPage />} />
                             <Route path="/investigations" element={<InvestigationsPage />} />
                             <Route path="/contracts" element={<ContractsPage />} />
                             <Route path="/my-scorecard" element={<MyScorecardPage />} />

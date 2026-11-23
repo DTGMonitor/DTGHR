@@ -605,6 +605,10 @@ export default async ({ db, step, tx, people }) => {
         await register("LAP", "ThinkPad");
         await db.exec(readFileSync(join(import.meta.dirname, "..", "..", "migrations",
             "20261016000100_office_asset_register.sql"), "utf8"));
+        // The purchasing flow redefines assets_serialise; replay it too, so the
+        // suites after this one see the current definition.
+        await db.exec(readFileSync(join(import.meta.dirname, "..", "..", "migrations",
+            "20261017000100_purchasing_flow.sql"), "utf8"));
         const n = await db.query(`select count(*)::int n from public.asset_categories`);
         if (n.rows[0].n !== 10) throw new Error(`${n.rows[0].n} categories`);
         if ((await register("LAP", "Second")).tag !== "DTG-LAP-0002") throw new Error("numbering reset");
