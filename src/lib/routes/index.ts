@@ -12,6 +12,7 @@ import "./salary";
 import "./finance";
 import "./tickets";
 import "./assets";
+import "./purchases";
 import "./contracts";
 import "./articles";
 import "./overview";

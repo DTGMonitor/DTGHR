@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { Check, CornerUpLeft, FileText, Paperclip, Plus, Send, Trash2 } from "lucide-react";
 
 import { useAuth } from "@/contexts/AuthContext";
@@ -373,6 +373,20 @@ function RequestCard({
                             </Alert>
                         )}
 
+                    {r.purchase && (
+                        <Alert tone="info">
+                            Pays purchase{" "}
+                            <Link to={`/purchasing?open=${r.purchase.id}`} className="font-mono font-semibold underline-offset-2 hover:underline">
+                                {r.purchase.reference}
+                                {r.purchase.order_number && ` / ${r.purchase.order_number}`}
+                            </Link>
+                            : the order, the goods received note and the invoice are in its file. The amount comes from the
+                            purchase and can't be edited here.
+                            {isFinance && r.status === "approved" && r.documents.length === 0 &&
+                                " Attach the transfer proof before marking it paid."}
+                        </Alert>
+                    )}
+
                     {/* The items, and the total by category. */}
                     <table className="w-full text-left text-xs">
                         <thead className="text-micro uppercase tracking-label text-muted">
@@ -594,7 +608,8 @@ function RequestCard({
                                     />
                                 </label>
                                 <button
-                                    disabled={busy || !paidOn}
+                                    disabled={busy || !paidOn || (r.purchase !== null && r.purchase !== undefined && r.documents.length === 0)}
+                                    title={r.purchase && r.documents.length === 0 ? "Attach the transfer proof first" : undefined}
                                     onClick={() =>
                                         void onAct(
                                             r.id,

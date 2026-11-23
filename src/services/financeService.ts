@@ -72,6 +72,8 @@ export interface FinanceRequest {
     awaiting: "director" | "executive" | null;
     is_editable: boolean;
     created_at: string;
+    /** The purchase this request pays, when it came from the purchasing flow. */
+    purchase: { id: string; reference: string; order_number: string | null; title: string } | null;
 }
 
 export interface FinanceRequestList {

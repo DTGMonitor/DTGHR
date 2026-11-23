@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Laptop, Plus, ShieldCheck, UserMinus } from "lucide-react";
+import { Laptop, Plus, ShieldCheck, ShoppingCart, UserMinus } from "lucide-react";
 
 import Alert from "@/components/ui/Alert";
 import Spinner from "@/components/ui/Spinner";
@@ -19,6 +19,7 @@ import {
     type Leaver,
     type MyEquipment,
 } from "@/services/assetService";
+import { purchaseService, type AwaitingLine } from "@/services/purchaseService";
 import type { ScheduleEmployee } from "@/types/schedule";
 
 /*
@@ -60,7 +61,8 @@ export default function AssetsPage() {
     const [roundId, setRoundId] = useOpenParam("round");
     const [holderParam, setHolderParam] = useOpenParam("holder");
     const [open, setOpen] = useState<Asset | null>(null);
-    const [form, setForm] = useState<{ editing: Asset | null } | null>(null);
+    const [form, setForm] = useState<{ editing: Asset | null; line?: AwaitingLine } | null>(null);
+    const [awaiting, setAwaiting] = useState<AwaitingLine[]>([]);
 
     const [search, setSearch] = useState("");
     const [status, setStatus] = useState<AssetStatus | "">("");
@@ -111,6 +113,18 @@ export default function AssetsPage() {
     useEffect(() => {
         if (canViewAll) void loadRegister();
     }, [canViewAll, loadRegister]);
+
+    // Bought on a purchase, received, and not registered yet: IT's to do.
+    const loadAwaiting = useCallback(async () => {
+        try {
+            setAwaiting((await purchaseService.awaitingAssets()).data);
+        } catch {
+            setAwaiting([]);
+        }
+    }, []);
+    useEffect(() => {
+        if (canManage) void loadAwaiting();
+    }, [canManage, loadAwaiting]);
 
     // The people IT hands items to: the roster's names, which every member
     // of staff may read.
@@ -270,6 +284,34 @@ export default function AssetsPage() {
                 <Categories categories={categories} onChange={setCategories} />
             ) : (
                 <div className="space-y-4">
+                    {/* Bought on a purchase and waiting for a tag. */}
+                    {canManage && awaiting.length > 0 && (
+                        <div id="awaiting" className={`dtg-panel px-5 py-4 ${tabParam === "awaiting" ? "ring-1 ring-signal/40" : ""}`}>
+                            <p className="dtg-eyebrow flex items-center gap-1.5">
+                                <ShoppingCart className="h-3.5 w-3.5" />
+                                Awaiting registration
+                            </p>
+                            <ul className="mt-2 space-y-1.5">
+                                {awaiting.map((l) => (
+                                    <li key={l.line_id} className="flex flex-wrap items-center gap-2 text-sm">
+                                        <span className="font-mono text-micro text-muted">{l.reference}</span>
+                                        <span className="text-paper">{l.description}</span>
+                                        <span className="text-micro text-muted">
+                                            {l.category.name} · {l.registered} of {l.qty_received} registered · arrived {day(l.grn_at)}
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => setForm({ editing: null, line: l })}
+                                            className="dtg-btn-secondary ml-auto px-3 py-1 text-xs"
+                                        >
+                                            Register
+                                        </button>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+
                     {/* Who is leaving with company equipment. */}
                     {leavers.length > 0 && !holderParam && (
                         <div className="dtg-panel px-5 py-4">
@@ -432,12 +474,14 @@ export default function AssetsPage() {
             {form && (
                 <AssetForm
                     editing={form.editing}
+                    line={form.line}
                     categories={categories}
                     staff={staff}
                     onSaved={(a) => {
                         if (form.editing) setOpen(a);
                         void loadRegister();
                         void loadMine();
+                        if (form.line) void loadAwaiting();
                     }}
                     onClose={() => setForm(null)}
                 />

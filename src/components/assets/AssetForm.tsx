@@ -4,6 +4,7 @@ import Alert from "@/components/ui/Alert";
 import Drawer from "@/components/ui/Drawer";
 import MoneyInput from "@/components/ui/MoneyInput";
 import { assetService, type Asset, type AssetCategory, type AssetInput } from "@/services/assetService";
+import type { AwaitingLine } from "@/services/purchaseService";
 import type { ScheduleEmployee } from "@/types/schedule";
 import { detail } from "./labels";
 
@@ -49,8 +50,17 @@ const fromAsset = (a: Asset): AssetInput => ({
     notes: a.notes ?? "",
 });
 
+/** A purchase line's defaults: what was bought, when it arrived, what it cost. */
+const fromLine = (l: AwaitingLine): AssetInput => ({
+    ...blank(l.category.id),
+    name: l.description,
+    purchase_date: l.grn_at ? l.grn_at.slice(0, 10) : "",
+    purchase_value: String(l.unit_price ?? ""),
+});
+
 export default function AssetForm({
     editing,
+    line,
     categories,
     staff,
     onSaved,
@@ -58,13 +68,18 @@ export default function AssetForm({
 }: {
     /** The asset being corrected, or null to register a new one. */
     editing: Asset | null;
+    /** Registering an item bought on this purchase line. */
+    line?: AwaitingLine | null;
     categories: AssetCategory[];
     staff: ScheduleEmployee[];
     onSaved: (a: Asset) => void;
     onClose: () => void;
 }) {
     const active = categories.filter((c) => c.is_active !== false);
-    const [form, setForm] = useState<AssetInput>(editing ? fromAsset(editing) : blank(active[0]?.id));
+    const [form, setForm] = useState<AssetInput>(
+        editing ? fromAsset(editing) : line ? fromLine(line) : blank(active[0]?.id),
+    );
+    const [left, setLeft] = useState(line ? line.qty_received - line.registered : 0);
     const [assignTo, setAssignTo] = useState("");
     const [error, setError] = useState<string | null>(null);
     const [saved, setSaved] = useState<string[]>([]);
@@ -87,10 +102,22 @@ export default function AssetForm({
                 onClose();
                 return;
             }
-            const res = await assetService.register({ ...form, assign_to: assignTo || undefined });
+            const res = line
+                ? await assetService.registerFromLine(line.line_id, { ...form, assign_to: assignTo || undefined })
+                : await assetService.register({ ...form, assign_to: assignTo || undefined });
             onSaved(res.data);
             setError(null);
-            if (another) {
+            if (line) {
+                // One per item received on the line: keep going until they are all in.
+                if (another && left > 1) {
+                    setLeft(left - 1);
+                    setSaved((s) => [`${res.data.tag} · ${res.data.name}`, ...s]);
+                    setForm({ ...form, serial_number: "", notes: "" });
+                    setAssignTo("");
+                } else {
+                    onClose();
+                }
+            } else if (another) {
                 setSaved((s) => [`${res.data.tag} · ${res.data.name}`, ...s]);
                 setForm({
                     ...blank(form.category_id),
@@ -115,12 +142,12 @@ export default function AssetForm({
 
     return (
         <Drawer
-            title={editing ? `Edit ${editing.tag}` : "Register an item"}
+            title={editing ? `Edit ${editing.tag}` : line ? `Register from ${line.reference}` : "Register an item"}
             eyebrow="Asset register"
             onClose={onClose}
             footer={
                 <>
-                    {!editing && (
+                    {!editing && (!line || left > 1) && (
                         <button type="button" disabled={busy} onClick={() => void save(true)} className="dtg-btn-primary">
                             Save & add another
                         </button>
@@ -138,6 +165,14 @@ export default function AssetForm({
         >
             <div className="flex-1 space-y-4 overflow-y-auto px-5 py-5 sm:px-6">
                 {error && <Alert tone="danger">{error}</Alert>}
+                {line && (
+                    <Alert tone="info">
+                        Bought on {line.reference}
+                        {line.order_number && ` / ${line.order_number}`}
+                        {line.vendor_name && ` from ${line.vendor_name}`}. {left} of {line.qty_received} still to
+                        register.
+                    </Alert>
+                )}
                 {saved.length > 0 && (
                     <Alert tone="success">
                         Registered {saved[0]}
