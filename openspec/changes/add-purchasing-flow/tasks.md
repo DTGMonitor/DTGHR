@@ -262,13 +262,13 @@ end. Group 9 ships it.
 - [x] 9.9 Neutral wording on every screen: "Awaiting approval", "Sent for approval", "Send for approval", "the approver" in finance's panels, the settings, the page intro and the urgent notice. Rename the "Approvals" tab only if it names a person. `npm run build` passes
 
 ## 10. Ship
-- [ ] 10.1 Peter confirms the three limits, and they are set on live
-- [ ] 10.2 Push the migration with migrations temporarily enabled in `config.toml`, after `migration list`. Then merge, so the front end deploys
-- [ ] 10.3 On live, with test accounts, run the full chain:
+- [x] 10.1 Peter confirms the three limits, and they are set on live
+- [x] 10.2 Push the migration with migrations temporarily enabled in `config.toml`, after `migration list`. Then merge, so the front end deploys
+- [x] 10.3 On live, with test accounts, run the full chain:
   - a request through approval, order, GRN by a second account, match, payment with transfer proof, and asset registration from the line;
   - an urgent request;
   - a split order caught by the month total.
 
   Check the history and the notifications.
-- [ ] 10.4 Finance enters the vendors in use, with their bank accounts
-- [ ] 10.5 Tell staff: purchases above Rp 500,000 start as a request on the platform, and the requester never checks in their own goods
+- [x] 10.4 Finance enters the vendors in use, with their bank accounts
+- [x] 10.5 Tell staff: purchases above Rp 500,000 start as a request on the platform, and the requester never checks in their own goods
