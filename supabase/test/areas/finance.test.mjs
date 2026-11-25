@@ -109,6 +109,50 @@ export default async ({ db, step, tx, people }) => {
         await expectError(call(RINA, "finance_settings_get"), "PT404");
     });
 
+    // openspec/changes/role-assignment: the switch is the director's own, so
+    // the executives are told whenever it moves.
+    await step("finance: switching the director's approval on or off tells the executives", async () => {
+        // Only what each switch writes: the ids from before it are set aside.
+        const told = async (fn) => {
+            const before = (await db.query(`select id from public.notifications
+                where kind = 'finance_settings_changed'`)).rows.map((x) => x.id);
+            await fn();
+            const rows = (await db.query(`select id, user_id, payload, needs_action, source_table
+                from public.notifications where kind = 'finance_settings_changed'`)).rows;
+            return rows.filter((x) => !before.includes(x.id));
+        };
+        const execs = (await db.query(`select public.notifications_role_users('executive') a`)).rows[0].a;
+
+        const on = await told(() => setFinal(true));
+        const peter = on.filter((x) => x.user_id === PETER);
+        if (peter.length !== 1) throw new Error(`Peter got ${peter.length}`);
+        if (on.some((x) => x.user_id === DIRECTOR)) throw new Error("the director was notified");
+        if (on.some((x) => !execs.includes(x.user_id))) throw new Error("someone who is not an executive was told");
+        const p = peter[0].payload;
+        if (p.tone !== "reminder" || p.headline !== "The director can now approve finance requests")
+            throw new Error(JSON.stringify(p));
+        if (peter[0].needs_action !== false || peter[0].source_table !== "finance_settings" || p.link.path !== "/activity")
+            throw new Error(`${peter[0].needs_action}/${peter[0].source_table}/${p.link.path}`);
+        const d = Object.fromEntries(p.details);
+        if (d.Setting !== "The Director can approve finance requests" || d.Now !== "On" || d["Changed by"] !== "HR Admin")
+            throw new Error(JSON.stringify(p.details));
+
+        // Saving the value it already holds is not news.
+        const same = await told(() => setFinal(true));
+        if (same.length !== 0) throw new Error(`${same.length} written for an unchanged save`);
+
+        const off = await told(() => setFinal(false));
+        const back = off.filter((x) => x.user_id === PETER);
+        if (back.length !== 1) throw new Error(`Peter got ${back.length} on switching off`);
+        if (back[0].payload.headline !== "The director can no longer approve finance requests")
+            throw new Error(back[0].payload.headline);
+        if (Object.fromEntries(back[0].payload.details).Now !== "Off") throw new Error("Now is not Off");
+        if (off.some((x) => x.user_id === DIRECTOR)) throw new Error("the director was notified");
+
+        const s = await call(PETER, "finance_settings_get");
+        if (s.director_final_approval !== false) throw new Error("left switched on");
+    });
+
     await step("finance: Peter sends back to finance; a resubmit clears the reason", async () => {
         let r = await raise();
         const back = await call(PETER, "finance_send_back", [r.id, "Attach the BPJS invoice.", "finance"]);

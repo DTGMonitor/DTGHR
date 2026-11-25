@@ -4,6 +4,7 @@
  * file is what puts them in the table. See supabase/PORTING.md.
  */
 import "./people";
+import "./roles";
 import "./leaves";
 import "./schedules";
 import "./kpi";
