@@ -1,12 +1,21 @@
 import { useCallback, useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 
-import { employeeService } from "@/services/employeeService";
+import { employeeService, type CreateAccountResult } from "@/services/employeeService";
 import { kpiService } from "@/services/kpiService";
 import { financeService } from "@/services/financeService";
+import {
+    ASSIGNABLE_ROLES,
+    ROLE_LABELS,
+    roleService,
+    type AccountRole,
+    type RoleEntry,
+} from "@/services/roleService";
 import type { KpiTemplateSummary } from "@/types/kpi";
 import { useAuth } from "@/contexts/AuthContext";
 import type { Employee } from "@/types/employee";
+import { useDialog } from "@/components/ui/Dialog";
+import CreateAccountModal from "@/components/employees/CreateAccountModal";
 import Spinner from "@/components/ui/Spinner";
 import HolidayCalendar from "@/components/settings/HolidayCalendar";
 import ProfileRequests from "@/components/employees/ProfileRequests";
@@ -84,6 +93,82 @@ const CAPABILITIES: Capability[] = [
     },
 ];
 
+const ROLE_HELP =
+    "The account's place in the approval chain. Finance prepares finance requests and purchases and reads pay; Director administers the platform and approves leave. Executive is the final signature on pay and purchases, so it is set outside the app. Every change is in the activity log, and the executive is told.";
+
+/*
+ * One person's role.
+ *
+ * A login with no role entry is one the server will not touch -- switched
+ * off, or never created -- so the cell says which rather than offering a
+ * dropdown that would only be refused.
+ */
+function RoleCell({
+    employee,
+    entry,
+    isMe,
+    busy,
+    onChange,
+    onCreateAccount,
+}: {
+    employee: Employee;
+    entry: RoleEntry | undefined;
+    isMe: boolean;
+    busy: boolean;
+    onChange: (next: AccountRole) => void;
+    onCreateAccount: () => void;
+}) {
+    const name = `${employee.first_name} ${employee.last_name}`;
+
+    if (!employee.has_account) {
+        return (
+            <span className="flex items-center gap-2 text-xs text-muted">
+                No login
+                <button
+                    type="button"
+                    disabled={busy}
+                    onClick={onCreateAccount}
+                    className={`font-medium text-signal hover:underline ${busy ? "opacity-50" : ""}`}
+                >
+                    Create account
+                </button>
+            </span>
+        );
+    }
+    if (!entry) {
+        return <span className="text-xs text-muted">Sign-in off</span>;
+    }
+    if (entry.role === "executive") {
+        return (
+            <span className="text-xs font-medium text-paper-soft" title="Set outside the app">
+                Executive <span className="text-muted">· locked</span>
+            </span>
+        );
+    }
+    if (isMe) {
+        return (
+            <span className="text-xs font-medium text-paper-soft" title="Nobody changes their own role">
+                {ROLE_LABELS[entry.role]}
+            </span>
+        );
+    }
+    return (
+        <select
+            value={entry.role}
+            disabled={busy}
+            aria-label={`Role for ${name}`}
+            onChange={(ev) => onChange(ev.target.value as AccountRole)}
+            className={`dtg-input w-32 text-xs ${busy ? "opacity-50" : ""}`}
+        >
+            {ASSIGNABLE_ROLES.map((r) => (
+                <option key={r} value={r}>
+                    {ROLE_LABELS[r]}
+                </option>
+            ))}
+        </select>
+    );
+}
+
 export default function SettingsPage() {
     const { user, refreshUser } = useAuth();
     // The platform administrator: the director, as the server enforces. Peter
@@ -97,10 +182,25 @@ export default function SettingsPage() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
+    // Roles live on the login, not the employee record: keyed here by the
+    // employee they are linked to, so the matrix can show them in its rows.
+    const [roles, setRoles] = useState<Record<string, RoleEntry>>({});
+    const [financeCount, setFinanceCount] = useState(0);
+    const [accountResult, setAccountResult] = useState<CreateAccountResult | null>(null);
+    const { confirm } = useDialog();
+
+    const loadRoles = useCallback(async () => {
+        const r = await roleService.list();
+        setRoles(Object.fromEntries(r.data.items.map((i) => [i.employee_id, i])));
+        setFinanceCount(r.data.finance_count);
+    }, []);
 
     const load = useCallback(async () => {
         try {
-            const res = await employeeService.list({ page: 1, page_size: 100 });
+            const [res] = await Promise.all([
+                employeeService.list({ page: 1, page_size: 100 }),
+                loadRoles(),
+            ]);
             const active = res.data.items.filter((e) => e.is_active);
             setPeople(active);
 
@@ -137,7 +237,7 @@ export default function SettingsPage() {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [loadRoles]);
 
     useEffect(() => {
         if (isAdmin) void load();
@@ -154,6 +254,62 @@ export default function SettingsPage() {
         } catch {
             setDetail((d) => ({ ...d, [employeeId]: { ...d[employeeId]!, [key]: !next } }));
             setError("That change did not save.");
+        } finally {
+            setSaving(null);
+        }
+    };
+
+    /*
+     * Changing somebody's role.
+     *
+     * Saved on change and reverted on failure, like the switches. The server
+     * holds every rule (director only, never your own, never executive); the
+     * one thing it does not refuse is leaving nobody on finance, so that is
+     * asked here instead.
+     */
+    const changeRole = async (employee: Employee, next: AccountRole) => {
+        const entry = roles[employee.id];
+        if (!entry || entry.role === next) return;
+        const name = `${employee.first_name} ${employee.last_name}`;
+
+        if (entry.role === "finance" && financeCount <= 1) {
+            const ok = await confirm({
+                title: `Take Finance away from ${name}?`,
+                body: "Nobody will hold Finance. Finance requests and purchases will have nobody to prepare them until someone does.",
+                confirmLabel: `Make ${ROLE_LABELS[next]}`,
+                tone: "danger",
+            });
+            if (!ok) return;
+        }
+
+        const key = `${employee.id}:role`;
+        setSaving(key);
+        setError(null);
+        setRoles((m) => ({ ...m, [employee.id]: { ...entry, role: next } }));
+        try {
+            await roleService.set(entry.user_id, next);
+            // The finance count, and anything else the server settled.
+            await loadRoles().catch(() => {});
+        } catch (e) {
+            setRoles((m) => ({ ...m, [employee.id]: entry }));
+            setError(e instanceof Error && e.message ? e.message : "That role change did not save.");
+        } finally {
+            setSaving(null);
+        }
+    };
+
+    const createAccount = async (employee: Employee) => {
+        setSaving(`${employee.id}:role`);
+        setError(null);
+        try {
+            const res = await employeeService.createAccount(employee.id);
+            setAccountResult(res.data);
+            setPeople((list) => list.map((p) => (p.id === employee.id ? { ...p, has_account: true } : p)));
+            await loadRoles().catch(() => {});
+        } catch {
+            setError(
+                `Could not create an account for ${employee.first_name} ${employee.last_name}. They may already have one.`,
+            );
         } finally {
             setSaving(null);
         }
@@ -244,10 +400,13 @@ export default function SettingsPage() {
                     </div>
                 ) : (
                     <div className="overflow-x-auto">
-                        <table className="w-full min-w-[46rem]">
+                        <table className="w-full min-w-[54rem]">
                             <thead>
                                 <tr className="border-b border-white/[0.08]">
                                     <th className="dtg-th">Employee</th>
+                                    <th className="dtg-th" title={ROLE_HELP}>
+                                        Role
+                                    </th>
                                     {CAPABILITIES.map((c) => (
                                         <th key={c.key} className="dtg-th text-center" title={c.help}>
                                             {c.label}
@@ -270,6 +429,16 @@ export default function SettingsPage() {
                                             <p className="font-mono text-micro text-muted">
                                                 {e.employee_id} · {e.position}
                                             </p>
+                                        </td>
+                                        <td className="dtg-td">
+                                            <RoleCell
+                                                employee={e}
+                                                entry={roles[e.id]}
+                                                isMe={e.id === user?.employee_id}
+                                                busy={saving === `${e.id}:role`}
+                                                onChange={(next) => void changeRole(e, next)}
+                                                onCreateAccount={() => void createAccount(e)}
+                                            />
                                         </td>
                                         {CAPABILITIES.map((c) => {
                                             const on = detail[e.id]?.[c.key] ?? false;
@@ -308,6 +477,9 @@ export default function SettingsPage() {
                 )}
 
                 <div className="space-y-2 border-t border-white/[0.08] px-5 py-4">
+                    <p className="text-xs leading-relaxed text-muted">
+                        <span className="font-semibold text-paper-soft">Role</span> — {ROLE_HELP}
+                    </p>
                     {CAPABILITIES.map((c) => (
                         <p key={c.key} className="text-xs leading-relaxed text-muted">
                             <span className="font-semibold text-paper-soft">{c.label}</span> — {c.help}
@@ -387,6 +559,14 @@ export default function SettingsPage() {
             <ProfileRequests />
 
             <HolidayCalendar />
+
+            {accountResult && (
+                <CreateAccountModal
+                    email={accountResult.email}
+                    tempPassword={accountResult.temp_password}
+                    onClose={() => setAccountResult(null)}
+                />
+            )}
 
             <section className="dtg-panel p-5">
                 <p className="dtg-eyebrow">Bulletin</p>
