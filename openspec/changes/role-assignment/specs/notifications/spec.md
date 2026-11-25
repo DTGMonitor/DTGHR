@@ -20,3 +20,19 @@ Neither notification SHALL need action. The director SHALL NOT be notified about
 #### Scenario: Changed in the SQL editor
 - **WHEN** a role is changed by an `update` statement in the SQL editor
 - **THEN** no `role_changed` notification is written
+
+### Requirement: The finance approval setting notifies the executives
+When the director turns the "Director can approve finance requests" setting on or off, a `finance_settings_changed` notification SHALL be written for every active executive, with tone `reminder`, a headline saying whether the director can now approve finance requests or no longer can, details naming who changed it and what the setting now is, and a link to `/activity`. The notification SHALL NOT need action, and the director SHALL NOT be notified about their own change. Saving the value the setting already holds SHALL NOT notify.
+
+#### Scenario: Switched on
+- **WHEN** the director turns the setting on
+- **THEN** Peter gets one `finance_settings_changed` notification with tone `reminder`, the headline "The director can now approve finance requests" and `needs_action = false`
+- **AND** the director gets none
+
+#### Scenario: Switched off
+- **WHEN** the director turns the setting off
+- **THEN** Peter gets one `finance_settings_changed` notification with the headline "The director can no longer approve finance requests"
+
+#### Scenario: Saved unchanged
+- **WHEN** the director saves the setting with the value it already holds
+- **THEN** no `finance_settings_changed` notification is written

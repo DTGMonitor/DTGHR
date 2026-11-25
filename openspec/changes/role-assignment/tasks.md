@@ -52,9 +52,25 @@
 - [x] 4.6 Show a confirmation before moving the last finance holder (`finance_count = 1`) to another role, with the wording from the design
 - [x] 4.7 Run the type check and lint
 
-## 5. Verify and ship
+## 5. The finance approval switch tells the executives
 
-- [ ] 5.1 Manual check in the running app as the director: set someone to Finance; confirm that the activity log shows it, that Peter and the person get notifications, and that after a refresh the person sees the Finance navigation
-- [ ] 5.2 Manual check: the executive row is locked, the director's own row is read-only, and the last-finance confirmation appears
-- [ ] 5.3 Push the migration to production, then deploy the frontend. Run `migration list` first, and see the memory note on toggling migrations for `db push`.
-- [ ] 5.4 After deploying, run a direct role `update` in the SQL editor on a test account and confirm the "(outside the app)" activity entry appears
+- [x] 5.1 In the role-assignment migration, redefine `finance_settings_update` from its only definition (`20260926000800_finance.sql`). Keep everything as it is, and add:
+  - read the current value before the update;
+  - when the value really changes, enqueue `finance_settings_changed` for the executives, excluding the caller, in a `begin … exception when others → raise warning` block;
+  - payload: tone `reminder`, eyebrow "Finance requests", headline "The director can now approve finance requests" or "The director can no longer approve finance requests", details Setting, Now and Changed by, link `/activity`, `source_table = 'finance_settings'`.
+- [x] 5.2 Update the migration's header comment: it now redefines one existing function, and names where from
+- [x] 5.3 Point the gate in `roles_set_user_role` and `roles_list` at `is_platform_admin()` in place of `is_hr_admin()`
+- [x] 5.4 Add tests next to the existing settings checks in `supabase/test/areas/finance.test.mjs`:
+  - switching on notifies each executive once, with the "can now approve" headline, tone `reminder` and `needs_action = false`;
+  - switching off notifies with the "can no longer approve" headline;
+  - the director gets none, and saving the value it already holds notifies nobody;
+  - the suite leaves the setting as it found it.
+- [x] 5.5 Run `node supabase/test/run.mjs` and get the whole suite green
+
+## 6. Verify and ship
+
+- [ ] 6.1 Manual check in the running app as the director: set someone to Finance; confirm that the activity log shows it, that Peter and the person get notifications, and that after a refresh the person sees the Finance navigation
+- [ ] 6.2 Manual check: the executive row is locked, the director's own row is read-only, and the last-finance confirmation appears
+- [ ] 6.3 Manual check: switch "The Director can approve finance requests" on and off, confirm the executive gets a notification each time, and leave the setting as it was
+- [ ] 6.4 Push the migration to production, then deploy the frontend. Run `migration list` first, and see the memory note on toggling migrations for `db push`.
+- [ ] 6.5 After deploying, run a direct role `update` in the SQL editor on a test account and confirm the "(outside the app)" activity entry appears

@@ -18,8 +18,16 @@
 --   * A trigger on public.users logs every change to role or is_active,
 --     whoever made it and however -- the app, the SQL editor, the dashboard,
 --     a migration. Logged, not notified: only an app change notifies.
+--   * finance_settings_update(): turning "The Director can approve finance
+--     requests" on or off now tells the executives. It is the director's own
+--     switch, so with role assignment the director could pick who prepares a
+--     finance request, hand themselves the approval and approve it. The role
+--     change and each submitted request already reach the executives; the
+--     switch was the one silent step.
 --
--- Redefines nothing that already exists. Safe to re-run.
+-- Redefined here, from its only definition:
+--   finance_settings_update   (20260926000800) + tells the executives
+-- Everything else is new. Safe to re-run.
 -- ===========================================================================
 
 begin;
@@ -128,9 +136,9 @@ begin
     if v_me is null then
         raise exception 'Not authenticated' using errcode = 'PT401';
     end if;
-    -- The director alone: not the executive, whose independence this
-    -- protects, and not the people-admin flag.
-    if not public.is_hr_admin() then
+    -- Whoever runs the platform -- the director alone: not the executive, who
+    -- approves but does not administer, and not the people-admin flag.
+    if not public.is_platform_admin() then
         raise exception 'Only the director can change roles.' using errcode = 'PT403';
     end if;
     if p_role is null then
@@ -236,7 +244,7 @@ begin
     if auth.uid() is null then
         raise exception 'Not authenticated' using errcode = 'PT401';
     end if;
-    if not public.is_hr_admin() then
+    if not public.is_platform_admin() then
         raise exception 'Only the director can see roles.' using errcode = 'PT403';
     end if;
 
@@ -261,8 +269,85 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------
--- 5. Grants. Supabase grants new functions to anon and authenticated by
+-- 5. The finance approval switch tells the executives.
+--
+-- As in 20260926000800_finance.sql, plus the notification: the value is read
+-- before the update, and only a real change is news. Saving the value the
+-- setting already holds still writes its activity entry, as it always did.
+-- ---------------------------------------------------------------------------
+create or replace function public.finance_settings_update(p_director_final_approval boolean)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+    v_was boolean;
+    v_id uuid;
+    v_headline text;
+begin
+    if not public.is_platform_admin() then
+        raise exception 'Only the platform administrator can change this.' using errcode = 'PT403';
+    end if;
+    if p_director_final_approval is null then
+        raise exception 'director_final_approval is required.' using errcode = 'PT422';
+    end if;
+    v_was := public.finance_director_final_approval();
+    if exists (select 1 from public.finance_settings) then
+        update public.finance_settings
+           set director_final_approval = p_director_final_approval,
+               updated_by = auth.uid(),
+               updated_at = now()
+         where id = (select id from public.finance_settings order by created_at limit 1)
+        returning id into v_id;
+    else
+        insert into public.finance_settings (director_final_approval, updated_by)
+        values (p_director_final_approval, auth.uid())
+        returning id into v_id;
+    end if;
+    perform public.log_activity(
+        'FINANCE_SETTINGS_CHANGED',
+        case when p_director_final_approval
+             then 'The director''s review is now the final approval on finance requests'
+             else 'Finance requests go to the executive for final approval again' end,
+        null, null);
+
+    -- Tell the executives. A failure never undoes the change.
+    if v_was is distinct from p_director_final_approval then
+        begin
+            v_headline := case when p_director_final_approval
+                               then 'The director can now approve finance requests'
+                               else 'The director can no longer approve finance requests' end;
+            perform public.notifications_enqueue(
+                public.notifications_role_users('executive'),
+                array_remove(array[auth.uid()], null),
+                'finance_settings_changed',
+                v_headline,
+                public.notifications_payload(
+                    'reminder', 'Finance requests',
+                    v_headline,
+                    case when p_director_final_approval
+                         then 'The director can approve or send back a finance request, as you can.'
+                         else 'Finance requests need your approval again. The director is copied in for information only.' end,
+                    array['Setting', 'The Director can approve finance requests',
+                          'Now', case when p_director_final_approval then 'On' else 'Off' end,
+                          'Changed by', coalesce(public.notifications_actor_name(), 'The director')],
+                    null, null,
+                    '/activity', 'Open the activity log'),
+                'finance_settings', v_id);
+        exception when others then
+            raise warning 'finance_settings_update notify: %', sqlerrm;
+        end;
+    end if;
+
+    return jsonb_build_object('director_final_approval', p_director_final_approval);
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 6. Grants. Supabase grants new functions to anon and authenticated by
 -- default, so the internal ones are revoked from both by name.
+-- finance_settings_update keeps the grants it already has.
 -- ---------------------------------------------------------------------------
 revoke all on function public.roles_label(public.user_role)          from public;
 revoke all on function public.roles_person_name(uuid)                from public;

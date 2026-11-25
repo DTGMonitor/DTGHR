@@ -12,6 +12,7 @@ An account's role (`employee`, `director`, `executive` or `finance`) decides who
 - **`executive` stays outside the app.** It is the final signature on pay and purchases. A row that holds it shows the role locked. If the director could grant it, the director could create a second approver.
 - **Every change to a role or to account activation is recorded.** A trigger on `public.users` writes the old value, the new value and who made the change to `activity_logs`. Because it is a trigger, it also catches edits made in the SQL editor or dashboard, which are recorded as having no app user.
 - **The executive and the person are told.** When a role changes in the app, the executives and the person whose role changed each get an in-app notification. Neither needs action.
+- **The executives are told when the director's finance approval is switched on or off.** "The Director can approve finance requests" is a setting only the director can change. Combined with role assignment, the director alone could give someone Finance, switch that setting on, and approve that person's finance requests. The role change and each submitted request already reach the executives; the switch itself only wrote an activity-log entry. It now notifies them too.
 - **The director is warned before removing the last finance holder.** If nobody would then hold `finance`, the dropdown asks for confirmation first, because purchases and finance requests would have nobody to prepare them.
 - **Employees with no login show "No login" in the Role column.** It links to the existing Create account action. Logins with no employee record are out of scope here; they belong to a separate `employee-login-linking` change.
 
@@ -21,20 +22,21 @@ An account's role (`employee`, `director`, `executive` or `finance`) decides who
 - `role-assignment`: who may change an account's role, from what to what, the guards that refuse a change, and the audit record of every role and activation change however it was made.
 
 ### Modified Capabilities
-- `notifications`: adds the role-change notifications to the executives and to the person whose role changed.
+- `notifications`: adds the role-change notifications to the executives and to the person whose role changed, and a notification to the executives when the director's finance approval is switched on or off.
 
 ## Impact
 
 - **Database:** a new migration with:
   - `roles_set_user_role(p_user_id, p_role)` and `roles_list()`;
   - an audit trigger on `public.users`;
-  - the notification kind `role_changed`.
+  - `finance_settings_update`, redefined from its only definition (`20260926000800_finance.sql`) so that it notifies; nothing else about it changes;
+  - the notification kinds `role_changed` and `finance_settings_changed`.
 
   There is no schema change to `users`. The role enum and the `users_sync_superuser` trigger stay as they are.
 - **Frontend:**
   - [SettingsPage.tsx](../../../src/pages/SettingsPage.tsx) gets the Role column;
   - a new route file `src/lib/routes/roles.ts` and a service method.
 
-  Notifications render from their payload, so `role_changed` needs no frontend work.
+  Notifications render from their payload, so neither new kind needs frontend work.
 - **Sessions:** a change takes effect on the person's next `bootstrap_session()`, when they refresh or log in again. The server checks the role on every call, so until then only the screens are stale; the server doesn't grant the old powers.
-- **Tests:** a new `supabase/test/areas/roles.test.mjs`.
+- **Tests:** a new `supabase/test/areas/roles.test.mjs`, and notification checks added to the settings tests in `finance.test.mjs`.
